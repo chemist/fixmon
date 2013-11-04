@@ -1,0 +1,66 @@
+hosts:
+  - db01.ubank.su
+  - db02.ubank.su
+  - ubank.su
+  - app01.ubank.su
+  - app02.ubank.su
+
+groups:
+  - name: web
+    hosts:
+      - ubank.su
+    triggers:
+      - processing
+  - name: db
+    hosts:
+      - db01.ubank.su
+      - db02.ubank.su
+    triggers:
+      - oracle
+  - name: app
+    hosts:
+      - app01.ubank.su
+      - app02.ubank.su
+    triggers:
+      - java
+  - name: all-linux
+    hosts: 
+      - *
+    triggers:
+      - disk-root
+
+triggers: 
+  - name: processing
+    period: * * * * *
+    check: http-processing
+    description: Проверка процессинга по админке
+  - name: oracle
+    period: * * * * *
+    check: base-check
+    description: Проверка базы
+  - name: java
+    period: * * * * *
+    check: process-java
+    description: Проверяем что java работает
+  - name: disk
+    period: * * * * *
+    check: disk-root
+    description: Проверка свободного места
+
+checks:
+  - name: http-processing
+    type: httpByStatus
+    url: http://localhost/ok
+    good: 
+      - 200 Ok
+      - 303 Ok
+  - name: base-check
+    type: shell
+    good: ok
+  - name: disk-root
+    type: shell
+    good: 100
+  - name: process-java
+    type: shell
+    good: true
+
