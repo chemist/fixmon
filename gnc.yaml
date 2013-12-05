@@ -1,26 +1,26 @@
 hosts:
-  - db01.ubank.su
-  - db02.ubank.su
-  - ubank.su
-  - app01.ubank.su
-  - app02.ubank.su
+  - db01.example.ru
+  - db02.example.ru
+  - example.ru
+  - app01.example.ru
+  - app02.example.ru
 
 groups:
   - name: web
     hosts:
-      - ubank.su
+      - example.ru
     triggers:
-      - processing
+      - process
   - name: db
     hosts:
-      - db01.ubank.su
-      - db02.ubank.su
+      - db01.example.ru
+      - db02.example.ru
     triggers:
       - oracle
   - name: app
     hosts:
-      - app01.ubank.su
-      - app02.ubank.su
+      - app01.example.ru
+      - app02.example.ru
     triggers:
       - java
   - name: all-linux
@@ -30,37 +30,38 @@ groups:
       - disk-root
 
 triggers: 
-  - name: processing
+  - name: process
     period: * * * * *
-    check: http-processing
+    check: http-process
     description: Проверка процессинга по админке
+    result: code not eq 500
   - name: oracle
     period: * * * * *
     check: base-check
     description: Проверка базы
+    result: return eq 1
   - name: java
     period: * * * * *
     check: process-java
     description: Проверяем что java работает
+    result: return eq 1
   - name: disk
     period: * * * * *
     check: disk-root
     description: Проверка свободного места
+    result: free gt 1000000
 
 checks:
-  - name: http-processing
+  - name: http-process
     type: httpByStatus
     url: http://localhost/ok
-    good: 
-      - 200 Ok
-      - 303 Ok
   - name: base-check
+    command: uptime
     type: shell
-    good: ok
   - name: disk-root
+    command: uptime
     type: shell
-    good: 100
   - name: process-java
+    command: uptime
     type: shell
-    good: true
 
