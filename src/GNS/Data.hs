@@ -62,7 +62,11 @@ data Config = Config
 ----------------------------------------------------------------------------------------------------
 -- check type
 ----------------------------------------------------------------------------------------------------
-data Return = CI Number | CB Bool deriving (Show)
+data Return = CI Number | CB Bool 
+
+instance Show Return where
+    show (CI x) = show x
+    show (CB x) = show x
 
 instance Typeable Return where
     typeOf (CI x) = typeOf x
@@ -92,7 +96,10 @@ data TypeError = TypeError String deriving (Show, Typeable)
 
 instance Exception TypeError
 
-newtype Name = Name Text deriving (Show, Eq, Ord)
+newtype Name = Name Text deriving (Eq, Ord)
+
+instance Show Name where
+    show (Name x) = unpack x
 
 instance IsString Name where
     fromString x = Name . pack $ x

@@ -1,5 +1,6 @@
+{-# LANGUAGE TemplateHaskell, QuasiQuotes, FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-module GNS.Fun (parseFun) where
+module GNS.Fun where
 
 import           Control.Applicative hiding (empty)
 import           Data.Attoparsec.Text (parseOnly, Parser)
@@ -11,6 +12,8 @@ import Data.Map (lookup)
 import Prelude hiding (lookup, not, and, or)
 import qualified Prelude as P
 import Debug.Trace (trace)
+import Text.Peggy hiding  (Not, And)
+import qualified Text.Peggy as Peg
 
 parseFun :: Text -> TriggerFun
 parseFun x = trace (unpack x) $ si
@@ -43,6 +46,45 @@ data GnsFun = Less { name :: Name, return :: Return }
             | Or [GnsFun]
             | And [GnsFun]
 
+instance Show GnsFun where
+    show (Less n r) = show n ++ " less " ++ show r
+    show (More n r) = show n ++ " more " ++ show r
+    show (Equal n r) = show n ++ " equal " ++ show r
+    show (Not x ) = "not " ++ show x
+    show (Or x) = Prelude.foldl1 (\a b -> a ++ " or " ++ b) $ map show x
+    show (And x) = Prelude.foldl1 (\a b -> a ++ " and " ++ b) $ map show x
+
+[peggy|
+top :: GnsFun = expr 
+
+expr :: GnsFun
+  = expr "or" fact { Or [$1, $2] }
+  / expr "and" fact { And [$1, $2] }
+  / "not" expr { Not $1 }
+  / fact { $1 }
+
+fact :: GnsFun
+  = pName "equal" pReturn { Equal $1 $2 }
+  / pName "more" pReturn { More $1 $2 }
+  / pName "less" pReturn { Less $1 $2 }
+
+pName :: Name
+  = pChar* { Name (pack $1) }
+
+pChar :: Char = [0-9a-zA-Z]
+
+pReturn :: Return
+  = "true" { CB True }
+  / "True" { CB True }
+  / "false" { CB False }
+  / "False" { CB False }
+  / num     { CI $1 }
+  
+num ::: A.Number
+  = [1-9]* { A.I (read $1) }
+
+|]
+
 evalGns :: GnsFun -> Complex -> Status
 evalGns (Less n r) (Complex c) = Status $ maybe False (< r) (lookup n c)
 evalGns (More n r) (Complex c) = Status $ maybe False (> r) (lookup n c)
@@ -54,61 +96,8 @@ evalGns (And g) c = and $ map (\x -> evalGns x c) g
 tf :: GnsFun -> TriggerFun
 tf x = TriggerFun $ evalGns x
 
+a :: String
+a = show $ And [ Less (Name $ pack "name") (CB True), Equal (Name $ pack "eqname") (CB True)]
 
-bool :: Parser Return
-bool =  sp (A.string "True" <|> A.string "true" <|> A.string "ok") *> pure (CB True)
-     <|> sp (A.string "False"  <|> A.string "false") *> pure (CB False)
-
-num :: Parser Return
-num = CI <$> (sp A.number)
-
-sp :: Parser a -> Parser a
-sp a = A.skipSpace *> a <* A.skipSpace
-
-less :: Parser GnsFun
-less = do
-    sp (A.string "less") *> pure (<)
-    undefined
-
-pname :: Parser Name
-pname = A.takeWhile1 (not isSpace) 
-
-{--
-or :: Parser ([Bool] -> Bool)
-or = sp (A.string "or")  *> pure Prelude.or 
-
-not :: Parser (Bool -> Bool)
-not = sp (A.string "not") *> pure Prelude.not
-
-and :: Parser ([Bool] -> Bool)
-and = sp (A.string "and") *> pure Prelude.and
-
-
-more :: Parser (Return -> Return -> Bool)
-more = sp (A.string "more") *> pure (>)
-
-equal :: Parser (Return -> Return -> Bool)
-equal = sp (A.string "equal") *> pure (==)
-
-end :: Parser () 
-end = A.endOfInput
-
-cm :: Complex 
-cm = Complex $ Map.fromList [("return", CI 1), ("status", CB True)]
-
-
-parseReturn :: Text -> Return
-parseReturn x = let (Right a) = trace (unpack x) $ parseOnly parse' x 
-                in a
-
-simple :: Parser Return
-simple = let simple' = bool <|> num -- <|> parserText 
-         in simple' <|> (Not <$> (not *> simple'))
-
-parseOr = Or <$> (A.sepBy1 simple or) <* end 
-
-parse' = (simple <* end ) <|> parseOr
-
-parserText = undefined
-
---}
+main :: IO ()
+main = print . parseString top "<stdin>" =<< getContents
