@@ -1,40 +1,33 @@
-{-# LANGUAGE TemplateHaskell, QuasiQuotes, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
-module GNS.Fun where
+{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE TemplateHaskell   #-}
+module GNS.Fun
+(
+parseFun
+)
+where
 
-import           Control.Applicative hiding (empty)
-import           Data.Attoparsec.Text (parseOnly, Parser)
+import           Control.Applicative  hiding (empty)
+import           Data.Attoparsec.Text (Parser, parseOnly)
 import qualified Data.Attoparsec.Text as A
-import           Data.Text            hiding (filter, head, map, empty, foldl1)
+import qualified Data.ListLike        as LL
+import           Data.Map             (lookup)
+import qualified Data.Map             as Map
+import           Data.Text            hiding (empty, filter, foldl1, head, map)
+import           Data.Text.Encoding   (encodeUtf8)
+import           Debug.Trace          (trace)
 import           GNS.Data
-import qualified Data.Map as Map 
-import Data.Map (lookup)
-import Prelude hiding (lookup, not, and, or)
-import qualified Prelude as P
-import Debug.Trace (trace)
-import Text.Peggy hiding  (Not, And)
-import qualified Text.Peggy as Peg
-
-parseFun :: Text -> TriggerFun
-parseFun x = trace (unpack x) $ si
-
-
-si :: TriggerFun 
-si = TriggerFun (\_ -> Status True)
-
-{--
-names: less more equal 
-bool logic: or and not
-
-str : Name Fun Return or Name Fun Return
-
---}
+import           Prelude              hiding (and, lookup, not, or)
+import qualified Prelude              as P
+import           Text.Peggy           hiding (And, Not)
+import qualified Text.Peggy           as Peg
 
 not :: Status -> Status
 not (Status x) = Status $ P.not x
 
 or :: [Status] -> Status
-or = foldl1 $ \(Status a) (Status b) -> Status $ a || b 
+or = foldl1 $ \(Status a) (Status b) -> Status $ a || b
 
 and :: [Status] -> Status
 and = foldl1 $ \(Status a) (Status b) -> Status $ a && b
@@ -55,7 +48,8 @@ instance Show GnsFun where
     show (And x) = Prelude.foldl1 (\a b -> a ++ " and " ++ b) $ map show x
 
 [peggy|
-top :: GnsFun = expr 
+
+top :: GnsFun = expr
 
 expr :: GnsFun
   = expr "or" fact { Or [$1, $2] }
@@ -79,9 +73,9 @@ pReturn :: Return
   / "false" { CB False }
   / "False" { CB False }
   / num     { CI $1 }
-  
+
 num ::: A.Number
-  = [1-9]* { A.I (read $1) }
+  = [0-9]* { A.I (read $1) }
 
 |]
 
@@ -93,11 +87,9 @@ evalGns (Not g) c = not $ evalGns g c
 evalGns (Or g) c = or $ map (\x -> evalGns x c) g
 evalGns (And g) c = and $ map (\x -> evalGns x c) g
 
-tf :: GnsFun -> TriggerFun
-tf x = TriggerFun $ evalGns x
+parseFun :: Text -> Either ParseError TriggerFun
+-- parseFun x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return . TriggerFun . evalGns
+parseFun x = do
+    y <- (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x)
+    trace (show y) $ P.return . TriggerFun . evalGns $ y
 
-a :: String
-a = show $ And [ Less (Name $ pack "name") (CB True), Equal (Name $ pack "eqname") (CB True)]
-
-main :: IO ()
-main = print . parseString top "<stdin>" =<< getContents

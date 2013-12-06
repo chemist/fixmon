@@ -1,18 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 module GNS.Parser where
 
-import           Control.Applicative hiding (empty)
-import           Data.Attoparsec.Text (parseOnly, Parser)
+import           Control.Applicative  hiding (empty)
+import           Data.Attoparsec.Text (Parser, parseOnly)
 import qualified Data.Attoparsec.Text as A
-import           Data.Text            hiding (filter, head, map, empty)
+import           Data.Map             (empty)
+import           Data.Text            hiding (empty, filter, head, map)
 import           Data.Yaml.Syck
+import           Debug.Trace
 import           GNS.Data
+import           GNS.Fun              (parseFun)
+import           Prelude              hiding (not, or)
 import           System.Cron
 import           System.Cron.Parser
-import Prelude hiding (or, not)
-import Data.Map (empty)
-import Debug.Trace
-import GNS.Fun (parseFun)
 
 main' = do
     EMap root <- n_elem <$> parseYamlFile "gnc.yaml"
@@ -20,9 +20,8 @@ main' = do
     putStrLn ""
     print $ unpackGroups root
     putStrLn ""
-    print $ unpackTriggers root
-    putStrLn ""
-    return $ unpackChecks root
+    print $ unpackChecks root
+    return $ unpackTriggers root
 
 
 -----------------------------------------------------------------------------------------
@@ -75,14 +74,20 @@ unpackTrigger trigger = let EMap ls = n_elem trigger
                             [(_, triggerPeriod)] = filter (\(x,_) -> n_elem x == EStr "period") $ ls
                             [(_, triggerCheck)] = filter (\(x,_) -> n_elem x == EStr "check") $ ls
                             [(_, triggerDescription)] = filter (\(x,_) -> n_elem x == EStr "description") $ ls
-                            [(_, triggerResult)] = filter (\(x,_) -> n_elem x == EStr "resutl") $ ls
+                            [(_, triggerResult)] = filter (\(x,_) -> n_elem x == EStr "result") $ ls
+                            pp = parseFun $ (unpackEStr . n_elem) triggerResult
+                            p = case pp of
+                                     Left y -> error $ show y
+                                     Right y -> y
                         in Trigger
                              { _name = (unpackEStr . n_elem) triggerName
                              , _period = parseSchedule $  (unpackEStr . n_elem) triggerPeriod
                              , _check = (unpackEStr . n_elem) triggerCheck
                              , _description = (unpackEStr . n_elem) triggerDescription
-                             , _result = parseFun $ (unpackEStr . n_elem) triggerResult
+                             , _result = p
                              }
+
+
 
 parseSchedule :: Text -> CronSchedule
 parseSchedule cron = let (Right x) = parseOnly cronSchedule cron -- fail here

@@ -1,24 +1,24 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings  #-}
 module GNS.Data where
 
 import           Control.Applicative
+import           Control.Exception
 import           Control.Monad
 import           Data.Attoparsec.Number
 import           Data.ByteString        (ByteString)
 import           Data.Map               (Map)
 import           Data.Set               (Set)
+import           Data.String
 import           Data.Text
 import           Data.Time              (UTCTime)
 import           Data.Typeable
+import           Data.Word
 import           Data.Yaml
 import qualified Data.Yaml              as Y
 import           Debug.Trace
-import           Network.HTTP.Types hiding (Status)
+import           Network.HTTP.Types     hiding (Status)
 import           System.Cron
-import Control.Exception
-import Data.Word
-import Data.String
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq)
 
@@ -40,10 +40,10 @@ data Trigger = Trigger
 
 newtype Status = Status { unStatus :: Bool } deriving Show
 
-newtype TriggerFun = TriggerFun (Complex -> Status) 
+newtype TriggerFun = TriggerFun (Complex -> Status)
 
 instance Show TriggerFun where
-    show x = show "trigger fun here"
+     show x = show "trigger fun here"
 
 data Group = Group
  { name     :: Text
@@ -62,7 +62,7 @@ data Config = Config
 ----------------------------------------------------------------------------------------------------
 -- check type
 ----------------------------------------------------------------------------------------------------
-data Return = CI Number | CB Bool 
+data Return = CI Number | CB Bool
 
 instance Show Return where
     show (CI x) = show x
@@ -73,20 +73,20 @@ instance Typeable Return where
     typeOf (CB x) = typeOf x
 
 instance Eq Return where
-    (==) a b | typeOf a == typeOf b = 
+    (==) a b | typeOf a == typeOf b =
                 case (a,b) of
                      (CI x, CI y) -> x == y
                      (CB x, CB y) -> x == y
             | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
 
-    (/=) a b | typeOf a == typeOf b = 
+    (/=) a b | typeOf a == typeOf b =
                 case (a,b) of
                      (CI x, CI y) -> x /= y
                      (CB x, CB y) -> x /= y
             | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
 
 instance Ord Return where
-    compare a b | typeOf a == typeOf b = 
+    compare a b | typeOf a == typeOf b =
                     case (a,b) of
                          (CI x, CI y) -> compare x y
                          (CB x, CB y) -> compare x y
@@ -110,12 +110,12 @@ newtype Complex = Complex (Map Name Return) deriving Show
 data Check = Shell
   { _checkName :: Text
   , _sh        :: Text
-  , _return      :: Complex
+  , _return    :: Complex
   }
            | HttpByStatus
   { _checkName :: Text
   , _url       :: Text
-  , _return      :: Complex
+  , _return    :: Complex
   }
   deriving (Show)
 
