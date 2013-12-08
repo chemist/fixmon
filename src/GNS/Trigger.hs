@@ -2,10 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE TemplateHaskell   #-}
-module GNS.Fun
-(
-parseFun
-)
+module GNS.Trigger
+( parseTrigger )
 where
 
 import           Control.Applicative  hiding (empty)
@@ -87,9 +85,9 @@ evalGns (Not g) c = not $ evalGns g c
 evalGns (Or g) c = or $ map (\x -> evalGns x c) g
 evalGns (And g) c = and $ map (\x -> evalGns x c) g
 
-parseFun :: Text -> Either ParseError TriggerFun
--- parseFun x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return . TriggerFun . evalGns
-parseFun x = do
-    y <- (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x)
-    trace (show y) $ P.return . TriggerFun . evalGns $ y
+parseTrigger :: Text -> Either ParseError TriggerFun
+parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return . TriggerFun . evalGns
+-- parseFun x = do
+--     y <- (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x)
+--     trace (show y) $ P.return . TriggerFun . evalGns $ y
 

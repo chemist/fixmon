@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE KindSignatures  #-}
 module GNS.Data where
 
 import           Control.Applicative
@@ -28,13 +29,16 @@ data Monitoring = Monitoring
  , _status    :: Map TriggerId Status
  } deriving Show
 
-type CheckName = Text
+newtype CheckName = CheckName Text
+
+instance Show CheckName where
+    show (CheckName x) = show x
 
 data Trigger = Trigger
   { _name        :: Text
   , _period      :: CronSchedule
-  , _check       :: CheckName
   , _description :: Text
+  , _check       :: CheckName
   , _result      :: TriggerFun
   } deriving Show
 
@@ -54,9 +58,10 @@ data Group = Group
 type Hostname = Text
 
 data Config = Config
-  { groups'   :: [Group]
-  , triggers' :: [Trigger]
-  , checks'   :: [Check]
+  { hosts'    :: ! [Hostname]
+  , groups'   :: ! [Group]
+  , triggers' :: ! [Trigger]
+  , checks'   :: ! [Check]
   } deriving Show
 
 ----------------------------------------------------------------------------------------------------
@@ -106,16 +111,7 @@ instance IsString Name where
 
 newtype Complex = Complex (Map Name Return) deriving Show
 
-
-data Check = Shell
-  { _checkName :: Text
-  , _sh        :: Text
-  , _return    :: Complex
-  }
-           | HttpByStatus
-  { _checkName :: Text
-  , _url       :: Text
-  , _return    :: Complex
-  }
-  deriving (Show)
+data Check = Check { _checkName :: CheckName 
+                   , _params :: Map Text Text
+                   } deriving Show
 
