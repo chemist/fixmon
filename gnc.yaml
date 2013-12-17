@@ -34,22 +34,22 @@ triggers:
     period: * * * * *
     check: http-process
     description: Проверка процессинга по админке
-    result: code not eq 500
+    result: code equal 500
   - name: oracle
     period: * * * * *
     check: base-check
     description: Проверка базы
-    result: return eq 1
+    result: return equal 1
   - name: java
     period: * * * * *
     check: process-java
     description: Проверяем что java работает
-    result: return eq 1
+    result: return equal 1
   - name: disk
     period: * * * * *
     check: disk-root
     description: Проверка свободного места
-    result: free gt 1000000
+    result: free more 1000000 and used less 100
 
 checks:
   - name: http-process

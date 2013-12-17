@@ -1,24 +1,25 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE KindSignatures  #-}
 module GNS.Data where
 
 import           Control.Applicative
+import           Control.Exception
 import           Control.Monad
 import           Data.Attoparsec.Number
 import           Data.ByteString        (ByteString)
 import           Data.Map               (Map)
 import           Data.Set               (Set)
+import           Data.String
 import           Data.Text
 import           Data.Time              (UTCTime)
 import           Data.Typeable
+import           Data.Word
 import           Data.Yaml
 import qualified Data.Yaml              as Y
 import           Debug.Trace
-import           Network.HTTP.Types hiding (Status)
+import           Network.HTTP.Types     hiding (Status)
 import           System.Cron
-import Control.Exception
-import Data.Word
-import Data.String
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq)
 
@@ -28,22 +29,25 @@ data Monitoring = Monitoring
  , _status    :: Map TriggerId Status
  } deriving Show
 
-type CheckName = Text
+newtype CheckName = CheckName Text
+
+instance Show CheckName where
+    show (CheckName x) = show x
 
 data Trigger = Trigger
   { _name        :: Text
   , _period      :: CronSchedule
-  , _check       :: CheckName
   , _description :: Text
+  , _check       :: CheckName
   , _result      :: TriggerFun
   } deriving Show
 
 newtype Status = Status { unStatus :: Bool } deriving Show
 
-newtype TriggerFun = TriggerFun (Complex -> Status) 
+newtype TriggerFun = TriggerFun (Complex -> Status)
 
 instance Show TriggerFun where
-    show x = show "trigger fun here"
+     show x = show "trigger fun here"
 
 data Group = Group
  { name     :: Text
@@ -54,15 +58,16 @@ data Group = Group
 type Hostname = Text
 
 data Config = Config
-  { groups'   :: [Group]
-  , triggers' :: [Trigger]
-  , checks'   :: [Check]
+  { hosts'    :: ! [Hostname]
+  , groups'   :: ! [Group]
+  , triggers' :: ! [Trigger]
+  , checks'   :: ! [Check]
   } deriving Show
 
 ----------------------------------------------------------------------------------------------------
 -- check type
 ----------------------------------------------------------------------------------------------------
-data Return = CI Number | CB Bool 
+data Return = CI Number | CB Bool
 
 instance Show Return where
     show (CI x) = show x
@@ -73,20 +78,20 @@ instance Typeable Return where
     typeOf (CB x) = typeOf x
 
 instance Eq Return where
-    (==) a b | typeOf a == typeOf b = 
+    (==) a b | typeOf a == typeOf b =
                 case (a,b) of
                      (CI x, CI y) -> x == y
                      (CB x, CB y) -> x == y
             | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
 
-    (/=) a b | typeOf a == typeOf b = 
+    (/=) a b | typeOf a == typeOf b =
                 case (a,b) of
                      (CI x, CI y) -> x /= y
                      (CB x, CB y) -> x /= y
             | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
 
 instance Ord Return where
-    compare a b | typeOf a == typeOf b = 
+    compare a b | typeOf a == typeOf b =
                     case (a,b) of
                          (CI x, CI y) -> compare x y
                          (CB x, CB y) -> compare x y
@@ -103,16 +108,7 @@ instance IsString Name where
 
 newtype Complex = Complex (Map Name Return) deriving Show
 
-
-data Check = Shell
-  { _checkName :: Text
-  , _sh        :: Text
-  , _return      :: Complex
-  }
-           | HttpByStatus
-  { _checkName :: Text
-  , _url       :: Text
-  , _return      :: Complex
-  }
-  deriving (Show)
+data Check = Check { _checkName :: CheckName 
+                   , _params :: Map Text Text
+                   } deriving Show
 
