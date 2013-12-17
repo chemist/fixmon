@@ -96,10 +96,7 @@ data TypeError = TypeError String deriving (Show, Typeable)
 
 instance Exception TypeError
 
-newtype Name = Name Text deriving (Eq, Ord)
-
-instance Show Name where
-    show (Name x) = unpack x
+newtype Name = Name Text deriving (Show, Eq, Ord)
 
 instance IsString Name where
     fromString x = Name . pack $ x

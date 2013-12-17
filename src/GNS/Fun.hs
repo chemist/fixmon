@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes, FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
 module GNS.Fun where
 
 import           Control.Applicative hiding (empty)
@@ -45,6 +46,28 @@ data GnsFun = Less { name :: Name, return :: Return }
             | Not GnsFun
             | Or [GnsFun]
             | And [GnsFun]
+
+
+data FFF a where
+  Num :: (Num a) => a -> FFF a
+  Bool :: Bool -> FFF Bool
+  Str :: Show a => a -> FFF a
+  Plus :: (Num a) => FFF a -> FFF a -> FFF a
+  NotF :: FFF Bool -> FFF Bool
+  OrF :: FFF Bool -> FFF Bool -> FFF Bool
+  AndF :: FFF Bool -> FFF Bool -> FFF Bool
+  LessF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
+  MoreF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
+  EqualF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
+
+evalF :: FFF a -> a
+evalF (Num a) = a
+evalF (Bool a) = a
+evalF (Str a) = a
+evalF (Plus a1 a2) = evalF a1 + evalF a2
+evalF (NotF a) = P.not $ evalF a
+evalF (OrF a1 a2) = evalF a1 || evalF a2
+evalF (AndF a1 a2) = evalF a1 && evalF a2
 
 instance Show GnsFun where
     show (Less n r) = show n ++ " less " ++ show r
