@@ -4,7 +4,6 @@
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE GADTs #-}
 module GNS.Trigger
-( parseTrigger )
 where
 
 import           Control.Applicative  hiding (empty)
@@ -38,19 +37,62 @@ data GnsFun = Less { name :: Name, return :: Return }
             | Or [GnsFun]
             | And [GnsFun]
 
+data Any where 
+  Any :: (Eq a, Ord a, Show a) => FFF a -> Any
+
+instance Show Any where
+    show (Any x) = show x
 
 data FFF a where
-  Num :: (Num a) => a -> FFF a
+  Int :: Int -> FFF Int
   Bool :: Bool -> FFF Bool
-  Str :: Show a => a -> FFF a
-  Plus :: (Num a) => FFF a -> FFF a -> FFF a
+  Text :: Text -> FFF Text
+
   NotF :: FFF Bool -> FFF Bool
   OrF :: FFF Bool -> FFF Bool -> FFF Bool
   AndF :: FFF Bool -> FFF Bool -> FFF Bool
-  LessF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
-  MoreF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
-  EqualF :: (Num a, Ord a) => FFF a -> FFF a -> FFF Bool
 
+  LessF :: FFF Text -> Any -> FFF Bool
+  MoreF :: FFF Text -> Any -> FFF Bool
+  EqualF :: FFF Text -> Any -> FFF Bool
+
+instance (Show a) => Show (FFF a) where
+    show (Text x) = show x
+    show (EqualF x y) = show x ++ " equal " ++ show y
+
+a = Text "key"
+b = Any $ Bool True
+c = EqualF a b
+
+eval :: FFF a ->  Complex -> Status
+eval (EqualF x y) (Complex c) =  undefined 
+
+[peggy|
+
+top :: FFF Bool = expr
+
+expr :: FFF Bool
+  = pName "equal" pReturn { EqualF $1 $2 }
+
+pName :: FFF Text
+  =  pChar* { Text (pack $1) }
+
+pChar :: Char = [0-9a-zA-Z]
+
+pReturn :: Any
+  = "true" { Any $ Bool True }
+  / "True" { Any $ Bool True }
+  / "false" { Any $ Bool False }
+  / "False" { Any $ Bool False }
+  / num     { Any $ Int $1 }
+  / pName   { Any $ $1 }
+
+num ::: Int
+  = [0-9]* { read $1 }
+
+|]
+
+{-
 evalF :: FFF a -> a
 evalF (Num a) = a
 evalF (Bool a) = a
@@ -59,6 +101,7 @@ evalF (Plus a1 a2) = evalF a1 + evalF a2
 evalF (NotF a) = P.not $ evalF a
 evalF (OrF a1 a2) = evalF a1 || evalF a2
 evalF (AndF a1 a2) = evalF a1 && evalF a2
+-}
 
 instance Show GnsFun where
     show (Less n r) = show n ++ " less " ++ show r
@@ -68,6 +111,7 @@ instance Show GnsFun where
     show (Or x) = Prelude.foldl1 (\a b -> a ++ " or " ++ b) $ map show x
     show (And x) = Prelude.foldl1 (\a b -> a ++ " and " ++ b) $ map show x
 
+{--
 [peggy|
 
 top :: GnsFun = expr
@@ -114,3 +158,4 @@ parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return
 --     y <- (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x)
 --     trace (show y) $ P.return . TriggerFun . evalGns $ y
 
+--}
