@@ -1,24 +1,14 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE KindSignatures  #-}
+{-# LANGUAGE GADTs #-}
 module GNS.Data where
 
-import           Control.Applicative
 import           Control.Exception
-import           Control.Monad
-import           Data.Attoparsec.Number
-import           Data.ByteString        (ByteString)
 import           Data.Map               (Map)
 import           Data.Set               (Set)
 import           Data.String
 import           Data.Text
-import           Data.Time              (UTCTime)
 import           Data.Typeable
-import           Data.Word
-import           Data.Yaml
-import qualified Data.Yaml              as Y
-import           Debug.Trace
-import           Network.HTTP.Types     hiding (Status)
 import           System.Cron
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq)
@@ -44,10 +34,9 @@ data Trigger = Trigger
 
 newtype Status = Status { unStatus :: Bool } deriving Show
 
-newtype TriggerFun = TriggerFun (Complex -> Status)
 
 instance Show TriggerFun where
-     show x = show "trigger fun here"
+     show _ = "trigger fun here"
 
 data Group = Group
  { name     :: Text
@@ -67,12 +56,7 @@ data Config = Config
 ----------------------------------------------------------------------------------------------------
 -- check type
 ----------------------------------------------------------------------------------------------------
-data Return = CI Number | CB Bool
-
-instance Show Return where
-    show (CI x) = show x
-    show (CB x) = show x
-
+{--
 instance Typeable Return where
     typeOf (CI x) = typeOf x
     typeOf (CB x) = typeOf x
@@ -97,6 +81,8 @@ instance Ord Return where
                          (CB x, CB y) -> compare x y
                 | otherwise = throw $ TypeError $ "you try compare " ++ (show $ typeOf a) ++ " and " ++ (show $ typeOf b)
 
+--}
+
 data TypeError = TypeError String deriving (Show, Typeable)
 
 instance Exception TypeError
@@ -106,9 +92,70 @@ newtype Name = Name Text deriving (Show, Eq, Ord)
 instance IsString Name where
     fromString x = Name . pack $ x
 
-newtype Complex = Complex (Map Name Return) deriving Show
 
 data Check = Check { _checkName :: CheckName 
                    , _params :: Map Text Text
                    } deriving Show
+
+newtype TriggerFun = TriggerFun (Complex -> Status)
+
+newtype Complex = Complex (Map Text Any) deriving Show
+
+data Any where 
+  Any :: (Eq a, Ord a, Show a) => FFF a -> Any
+
+instance Typeable Any where
+    typeOf (Any (Int x)) = typeOf x
+    typeOf (Any (Text x)) = typeOf x
+    typeOf (Any (Bool x)) = typeOf x
+    typeOf _ = throw $ TypeError "cant check Any type"
+
+instance Eq Any where
+    (==) a b | typeOf a == typeOf b = case (a,b) of
+                      (Any (Bool x), Any (Bool y)) -> x == y
+                      (Any (Int x), Any (Int y)) -> x == y
+                      (Any (Text x), Any (Text y)) -> x == y
+            | otherwise = throw $ TypeError $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
+
+instance Ord Any where
+    compare a b | typeOf a == typeOf b = 
+                     case (a, b) of
+                          (Any (Bool x), Any (Bool y)) -> compare x y
+                          (Any (Int x), Any (Int y)) -> compare x y
+                          (Any (Text x), Any (Text y)) -> compare x y
+                | otherwise = throw $ TypeError $ "you try compare " ++ show (typeOf a) ++ " and " ++ show (typeOf b)
+
+
+
+
+instance Show Any where
+    show (Any x) = show x
+
+data FFF a where
+  Int :: Int -> FFF Int
+  Bool :: Bool -> FFF Bool
+  Text :: Text -> FFF Text
+
+  Not :: FFF Bool -> FFF Bool
+  Or :: FFF Bool -> FFF Bool -> FFF Bool
+  And :: FFF Bool -> FFF Bool -> FFF Bool
+
+  Less :: FFF Text -> Any -> FFF Bool
+  More :: FFF Text -> Any -> FFF Bool
+  Equal :: FFF Text -> Any -> FFF Bool
+
+
+instance (Show a) => Show (FFF a) where
+    show (Text x) = show x
+    show (Bool x) = show x
+    show (Int x ) = show x
+
+    show (Not x ) = "not " ++ show x
+    show (Or x y) = show x ++ " or " ++ show y 
+    show (And x y) = show x ++ "and " ++ show y
+
+    show (Equal x y) = show x ++ " equal " ++ show y
+    show (Less n r) = show n ++ " less " ++ show r
+    show (More n r) = show n ++ " more " ++ show r
+
 
