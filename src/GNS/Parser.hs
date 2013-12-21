@@ -14,11 +14,12 @@ import           GNS.Trigger          (parseTrigger)
 import           Prelude              hiding (not, or)
 import           System.Cron
 import           System.Cron.Parser
+import Control.Arrow
 
-parseConfig :: FilePath -> IO Config
+parseConfig :: FilePath -> IO GState
 parseConfig file = do
     EMap root <- n_elem <$> parseYamlFile file
-    return $ Config (unpackHosts root) (unpackGroups root) (unpackTriggers root) (unpackChecks root)
+    return $ GState (unpackHosts root) (unpackGroups root) (unpackTriggers root) (unpackChecks root)
 
 -----------------------------------------------------------------------------------------
 -- helpers
@@ -38,8 +39,8 @@ unEN x = unElem . unNode x
 -- hosts
 -----------------------------------------------------------------------------------------
 
-unpackHosts :: [(YamlNode, YamlNode)] -> [Text]
-unpackHosts root = unpackESeq $ unNode root "hosts"
+unpackHosts :: [(YamlNode, YamlNode)] -> [Hostname]
+unpackHosts root = map Hostname $ unpackESeq $ unNode root "hosts"
 
 unpackESeq :: YamlNode -> [Text]
 unpackESeq x = let ESeq l = n_elem x
@@ -60,7 +61,7 @@ unpackGroup :: YamlNode -> Group
 unpackGroup group = let EMap ls = n_elem group
                     in Group
                          { name = unEN ls "name"
-                         , hosts = unpackESeq $ unNode ls "hosts"
+                         , hosts = map Hostname $ unpackESeq $ unNode ls "hosts"
                          , triggers = unpackESeq $ unNode ls "triggers"
                          }
 
@@ -80,7 +81,6 @@ unpackTrigger trigger = let EMap ls = n_elem trigger
                                      Right y -> y
                         in Trigger
                              { _name = unEN ls "name"
-                             , _period = parseSchedule $  unEN ls "period"
                              , _check = CheckName $ unEN ls "check"
                              , _description = unEN ls "description"
                              , _result = p
@@ -102,5 +102,10 @@ unpackChecks root = let ESeq l = n_elem $ unNode root "checks"
 unpackCheck :: YamlNode -> Check
 unpackCheck check = let EMap ls = n_elem check
                         checkName = unNode ls "name"
-                    in Check (CheckName $ unElem checkName) $ fromList $ map (\(x, y) -> (unElem x, unElem y)) $ filter (\(x, _) -> n_elem x /= EStr "name") $ ls
+                        period = parseSchedule $  unEN ls "period"
+                    in Check 
+                        { _checkName = CheckName $ unElem checkName
+                        , _period = period 
+                        , _params = fromList $ map (unElem *** unElem) $ filter (\(x, _) -> n_elem x /= EStr "name" || n_elem x /= EStr "period") ls
+                        }
 

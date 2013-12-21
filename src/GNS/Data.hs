@@ -1,23 +1,46 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE GADTs #-}
 module GNS.Data where
 
 import           Control.Exception
-import           Data.Map               (Map)
-import           Data.Set               (Set)
+import           Data.Map            (Map, empty)
+import           Data.Monoid         hiding (Any)
+import           Data.Set            (Set)
 import           Data.String
-import           Data.Text
+import           Data.Text           hiding (empty)
 import           Data.Typeable
 import           System.Cron
 
-newtype TriggerId = TriggerId Int deriving (Show, Eq)
+import           Control.Monad.Error
+import           Control.Monad.RWS   hiding (Any)
+
+newtype Log = Log Text
+
+instance Monoid Log where
+    mempty = Log ""
+    Log x `mappend` Log y = Log $ x <> "\n" <> y
+
+newtype Gns a = Gns {run:: ErrorT Text (RWST GState Log Monitoring IO) a}
+
+flip' :: (ErrorT Text (RWST GState Log Monitoring IO) a -> b -> c -> d) -> b -> c -> Gns a -> d
+flip' f a b c =  f (run c) a b
+
+runGns :: GState -> Monitoring -> Gns a -> IO (Either Text a, Monitoring, Log)
+runGns = flip' $ runRWST . runErrorT
+
+newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord)
+newtype CheckId = CheckId Int deriving (Show, Eq, Ord)
 
 data Monitoring = Monitoring
- { _periodMap :: Map CronSchedule (Set TriggerId)
+ { _periodMap :: Map CronSchedule (Set CheckId)
  , _triggers  :: Map TriggerId Trigger
+ , _checks    :: Map CheckId Check
  , _status    :: Map TriggerId Status
  } deriving Show
+
+emptyMonitoring :: Monitoring
+emptyMonitoring = Monitoring empty empty empty empty
 
 newtype CheckName = CheckName Text
 
@@ -26,7 +49,6 @@ instance Show CheckName where
 
 data Trigger = Trigger
   { _name        :: Text
-  , _period      :: CronSchedule
   , _description :: Text
   , _check       :: CheckName
   , _result      :: TriggerFun
@@ -44,44 +66,22 @@ data Group = Group
  , triggers :: [Text]
  } deriving Show
 
-type Hostname = Text
+newtype Hostname = Hostname Text deriving (Eq, Show, Ord)
 
-data Config = Config
+data GState = GState
   { hosts'    :: ! [Hostname]
   , groups'   :: ! [Group]
   , triggers' :: ! [Trigger]
   , checks'   :: ! [Check]
-  } deriving Show
+  } deriving (Show)
+
+instance Monoid GState where
+    mempty = GState [] [] [] []
+    GState a b c d `mappend` GState a1 b1 c1 d1 = GState (a <> a1) (b <> b1) (c <> c1) (d <> d1)
 
 ----------------------------------------------------------------------------------------------------
 -- check type
 ----------------------------------------------------------------------------------------------------
-{--
-instance Typeable Return where
-    typeOf (CI x) = typeOf x
-    typeOf (CB x) = typeOf x
-
-instance Eq Return where
-    (==) a b | typeOf a == typeOf b =
-                case (a,b) of
-                     (CI x, CI y) -> x == y
-                     (CB x, CB y) -> x == y
-            | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
-
-    (/=) a b | typeOf a == typeOf b =
-                case (a,b) of
-                     (CI x, CI y) -> x /= y
-                     (CB x, CB y) -> x /= y
-            | otherwise = throw $ TypeError $ "you try do " ++ (show $ typeOf a) ++ " == " ++ (show $ typeOf b)
-
-instance Ord Return where
-    compare a b | typeOf a == typeOf b =
-                    case (a,b) of
-                         (CI x, CI y) -> compare x y
-                         (CB x, CB y) -> compare x y
-                | otherwise = throw $ TypeError $ "you try compare " ++ (show $ typeOf a) ++ " and " ++ (show $ typeOf b)
-
---}
 
 data TypeError = TypeError String deriving (Show, Typeable)
 
@@ -93,15 +93,16 @@ instance IsString Name where
     fromString x = Name . pack $ x
 
 
-data Check = Check { _checkName :: CheckName 
-                   , _params :: Map Text Text
+data Check = Check { _checkName :: CheckName
+                   , _period    :: CronSchedule
+                   , _params    :: Map Text Text
                    } deriving Show
 
 newtype TriggerFun = TriggerFun (Complex -> Status)
 
 newtype Complex = Complex (Map Text Any) deriving Show
 
-data Any where 
+data Any where
   Any :: (Eq a, Ord a, Show a) => FFF a -> Any
 
 instance Typeable Any where
@@ -118,7 +119,7 @@ instance Eq Any where
             | otherwise = throw $ TypeError $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
 
 instance Ord Any where
-    compare a b | typeOf a == typeOf b = 
+    compare a b | typeOf a == typeOf b =
                      case (a, b) of
                           (Any (Bool x), Any (Bool y)) -> compare x y
                           (Any (Int x), Any (Int y)) -> compare x y
@@ -151,7 +152,7 @@ instance (Show a) => Show (FFF a) where
     show (Int x ) = show x
 
     show (Not x ) = "not " ++ show x
-    show (Or x y) = show x ++ " or " ++ show y 
+    show (Or x y) = show x ++ " or " ++ show y
     show (And x y) = show x ++ "and " ++ show y
 
     show (Equal x y) = show x ++ " equal " ++ show y

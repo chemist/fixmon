@@ -31,37 +31,37 @@ groups:
 
 triggers: 
   - name: process
-    period: * * * * *
     check: http-process
     description: Проверка процессинга по админке
     result: code equal 500
   - name: oracle
-    period: * * * * *
     check: base-check
     description: Проверка базы
     result: return equal 1
   - name: java
-    period: * * * * *
     check: process-java
     description: Проверяем что java работает
     result: return equal 1
   - name: disk
-    period: * * * * *
     check: disk-root
     description: Проверка свободного места
     result: free more 1000000 and used less 100
 
 checks:
   - name: http-process
+    period: * * * * *
     type: httpByStatus
     url: http://localhost/ok
   - name: base-check
+    period: * * * * *
     command: uptime
     type: shell
   - name: disk-root
+    period: * * * * *
     command: uptime
     type: shell
   - name: process-java
+    period: * * * * *
     command: uptime
     type: shell
 
