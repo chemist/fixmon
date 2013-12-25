@@ -6,20 +6,14 @@
 module GNS.Trigger
 where
 
-import           Control.Applicative  hiding (empty)
-import           Data.Attoparsec.Text (Parser, parseOnly)
-import qualified Data.Attoparsec.Text as A
 import qualified Data.ListLike        as LL
 import           Data.Map             (lookup)
-import qualified Data.Map             as Map
 import           Data.Text            hiding (empty, filter, foldl1, head, map)
 import           Data.Text.Encoding   (encodeUtf8)
-import           Debug.Trace          (trace)
 import           GNS.Data
 import           Prelude              hiding (and, lookup, not, or)
 import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)
-import qualified Text.Peggy           as Peg
 
 
 
@@ -64,6 +58,7 @@ eval (Equal (Text x) y) (Complex c) = Status $ maybe False (== y) (lookup x c)
 eval (Not x) c = not $ eval x c
 eval (And x y) c = eval x c `and` eval y c
 eval (Or x y) c = eval x c `or` eval y c
+eval _ _ = Status False
 
 
 not :: Status -> Status

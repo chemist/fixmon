@@ -1,11 +1,20 @@
 module Gns  (module Gns) where
 
-import GNS.Data as Gns
-import GNS.Trigger as Gns hiding (name)
-import GNS.Parser as Gns
-import Prelude (print)
+import           Data.Monoid (mempty)
+import           GNS.Data    as Gns
+import           GNS.Parser  as Gns
+import           GNS.Trigger as Gns
+import           Prelude
+import Control.Monad.Error
 
+main :: IO ()
 main = do
-    c <- parseConfig "gnc.yaml"
-    print c
+    a <- runGns (StartOptions "gnc.yaml") mempty $ do
+        Gns.parseConfig
+--         ddd
+    print "hello"
+    print a
+
+ddd :: Gns ()
+ddd = throwError "error"
 

@@ -1,46 +1,76 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedStrings  #-}
 module GNS.Data where
 
 import           Control.Exception
 import           Data.Map            (Map, empty)
+import qualified Data.Map            as Map
 import           Data.Monoid         hiding (Any)
 import           Data.Set            (Set)
+import qualified Data.Set            as Set
 import           Data.String
 import           Data.Text           hiding (empty)
 import           Data.Typeable
 import           System.Cron
 
 import           Control.Monad.Error
-import           Control.Monad.RWS   hiding (Any)
+import           Control.Monad.RWS.Strict   hiding (Any)
 
-newtype Log = Log Text
+newtype Log = Log Text deriving (Show, Eq)
 
 instance Monoid Log where
     mempty = Log ""
-    Log x `mappend` Log y = Log $ x <> "\n" <> y
+    Log x `mappend` Log y = Log $ x <> y
 
-newtype Gns a = Gns {run:: ErrorT Text (RWST GState Log Monitoring IO) a}
+newtype Gns a = Gns {run:: ErrorT String (RWST StartOptions Log Monitoring IO) a} deriving 
+  ( Monad
+  , MonadIO
+  , MonadError String
+  , MonadReader StartOptions
+  , MonadState Monitoring
+  , MonadWriter Log
+  , MonadRWS StartOptions Log Monitoring)
 
-flip' :: (ErrorT Text (RWST GState Log Monitoring IO) a -> b -> c -> d) -> b -> c -> Gns a -> d
+data StartOptions = StartOptions
+  { config :: FilePath
+  } deriving (Show, Eq)
+
+flip' :: (ErrorT String (RWST StartOptions Log Monitoring IO) a -> b -> c -> d) -> b -> c -> Gns a -> d
 flip' f a b c =  f (run c) a b
 
-runGns :: GState -> Monitoring -> Gns a -> IO (Either Text a, Monitoring, Log)
+runGns :: StartOptions -> Monitoring -> Gns a -> IO (Either String a, Monitoring, Log)
 runGns = flip' $ runRWST . runErrorT
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord)
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord)
 
+newtype Cron = Cron CronSchedule deriving (Show, Eq)
+
 data Monitoring = Monitoring
- { _periodMap :: Map CronSchedule (Set CheckId)
+ { _periodMap :: Map Cron (Set CheckId)
  , _triggers  :: Map TriggerId Trigger
  , _checks    :: Map CheckId Check
  , _status    :: Map TriggerId Status
+ , _raw       :: !GState
  } deriving Show
 
 emptyMonitoring :: Monitoring
-emptyMonitoring = Monitoring empty empty empty empty
+emptyMonitoring = Monitoring empty empty empty empty mempty
+
+instance Ord Cron where
+    compare x y = show x `compare` show y
+
+instance Monoid Monitoring where
+    mempty = Monitoring empty empty empty empty mempty
+    Monitoring a b c d e `mappend` Monitoring a1 b1 c1 d1 e1 = Monitoring
+      { _periodMap = Map.unionWith Set.union a a1
+      , _triggers  = Map.union b b1
+      , _checks    = Map.union c c1
+      , _status    = Map.union d d1
+      , _raw       = e `mappend` e1
+      }
 
 newtype CheckName = CheckName Text
 
@@ -85,6 +115,11 @@ instance Monoid GState where
 
 data TypeError = TypeError String deriving (Show, Typeable)
 
+data PError = PError String deriving (Show, Typeable)
+
+instance Exception PError
+instance Error PError
+instance Error TypeError
 instance Exception TypeError
 
 newtype Name = Name Text deriving (Show, Eq, Ord)
@@ -92,9 +127,12 @@ newtype Name = Name Text deriving (Show, Eq, Ord)
 instance IsString Name where
     fromString x = Name . pack $ x
 
+instance IsString Log where
+    fromString x = Log . pack $ x
+
 
 data Check = Check { _checkName :: CheckName
-                   , _period    :: CronSchedule
+                   , _period    :: Cron
                    , _params    :: Map Text Text
                    } deriving Show
 
@@ -116,6 +154,7 @@ instance Eq Any where
                       (Any (Bool x), Any (Bool y)) -> x == y
                       (Any (Int x), Any (Int y)) -> x == y
                       (Any (Text x), Any (Text y)) -> x == y
+                      _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
             | otherwise = throw $ TypeError $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
 
 instance Ord Any where
@@ -124,6 +163,7 @@ instance Ord Any where
                           (Any (Bool x), Any (Bool y)) -> compare x y
                           (Any (Int x), Any (Int y)) -> compare x y
                           (Any (Text x), Any (Text y)) -> compare x y
+                          _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
                 | otherwise = throw $ TypeError $ "you try compare " ++ show (typeOf a) ++ " and " ++ show (typeOf b)
 
 
