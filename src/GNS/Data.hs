@@ -72,7 +72,7 @@ instance Monoid Monitoring where
       , _raw       = e `mappend` e1
       }
 
-newtype CheckName = CheckName Text
+newtype CheckName = CheckName Text deriving (Eq, Ord)
 
 instance Show CheckName where
     show (CheckName x) = show x
@@ -127,6 +127,9 @@ newtype Name = Name Text deriving (Show, Eq, Ord)
 instance IsString Name where
     fromString x = Name . pack $ x
 
+instance IsString CheckName where
+    fromString x = CheckName . pack $ x
+
 instance IsString Log where
     fromString x = Log . pack $ x
 
@@ -134,7 +137,7 @@ instance IsString Log where
 data Check = Check { _checkName :: CheckName
                    , _period    :: Cron
                    , _params    :: Map Text Text
-                   } deriving Show
+                   } deriving (Show, Eq, Ord)
 
 newtype TriggerFun = TriggerFun (Complex -> Status)
 
