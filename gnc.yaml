@@ -11,6 +11,7 @@ groups:
       - example.ru
     triggers:
       - process
+      - java
   - name: db
     hosts:
       - db01.example.ru
@@ -25,9 +26,11 @@ groups:
       - java
   - name: all-linux
     hosts: 
-      - *
+      - app01.example.ru
+    checks:
+      - http-process
     triggers:
-      - disk-root
+      - disk
 
 triggers: 
   - name: process
