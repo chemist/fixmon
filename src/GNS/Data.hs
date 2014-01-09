@@ -1,42 +1,48 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE StandaloneDeriving          #-}
 module GNS.Data where
 
 import           Control.Exception
-import           Data.Map            (Map, empty)
-import           Data.Monoid         hiding (Any)
-import           Data.Set            (Set)
+import           Data.Map                 (Map, empty)
+import           Data.Monoid              hiding (Any)
+import           Data.Set                 (Set)
 import           Data.String
-import           Data.Text           hiding (empty)
+import           Data.Text                hiding (empty)
 import           Data.Typeable
 import           System.Cron
 
+import           Control.Applicative      ((<$>), (<*>))
 import           Control.Monad.Error
-import           Control.Monad.RWS.Strict   hiding (Any)
+import           Control.Monad.RWS.Strict hiding (Any, get, put)
+import           Data.Binary
+import           Data.Text.Binary         ()
 
-newtype Log = Log Text deriving (Show, Eq)
-newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord)
-newtype CheckId = CheckId Int deriving (Show, Eq, Ord)
-newtype Cron = Cron CronSchedule deriving (Show, Eq)
-newtype GroupId = GroupId Int deriving (Show, Eq, Ord)
-newtype HostId = HostId Int deriving (Show, Eq, Ord)
-newtype CheckName = CheckName Text deriving (Eq, Ord)
-newtype Status = Status { unStatus :: Bool } deriving Show
-newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord)
-newtype GroupName = GroupName Text deriving (Eq, Show, Ord)
-newtype Hostname = Hostname Text deriving (Eq, Show, Ord)
-newtype Name = Name Text deriving (Show, Eq, Ord)
-newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Eq, Ord)
+newtype Log = Log Text deriving (Show, Eq, Typeable)
+newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read)
+newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read)
+newtype Cron = Cron CronSchedule deriving (Show, Eq, Typeable)
+newtype GroupId = GroupId Int deriving (Show, Eq, Ord, Binary)
+newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
+newtype CheckName = CheckName Text deriving (Eq, Ord, Binary)
+newtype Status = Status { unStatus :: Bool } deriving (Show, Eq, Ord, Binary)
+newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary)
+newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary)
+newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
+newtype Name = Name Text deriving (Show, Eq, Ord, Binary)
+newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Eq, Ord, Binary, Typeable)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
 
 newtype Complex = Complex (Map Text Any) deriving Show
 newtype TriggerFun = TriggerFun (Complex -> Status)
 
-newtype Gns a = Gns {run:: ErrorT String (RWST StartOptions Log Monitoring IO) a} deriving 
+newtype Gns a = Gns {run:: ErrorT String (RWST StartOptions Log Monitoring IO) a} deriving
   ( Monad
   , MonadIO
+  , Functor
   , MonadError String
   , MonadReader StartOptions
   , MonadState Monitoring
@@ -78,7 +84,11 @@ data PError = PError String deriving (Show, Typeable)
 data Check = Check { _checkName :: CheckName
                    , _period    :: Cron
                    , _params    :: Map Text Text
-                   } deriving (Show, Eq, Ord)
+                   } deriving (Show, Eq, Ord, Typeable)
+
+instance Binary Check where
+    put (Check a b c) = put a >> put b >> put c
+    get = Check <$> get <*> get <*> get
 
 data Any where
   Any :: (Eq a, Ord a, Show a) => FFF a -> Any
@@ -96,6 +106,7 @@ data FFF a where
   More :: FFF Text -> Any -> FFF Bool
   Equal :: FFF Text -> Any -> FFF Bool
 
+deriving instance Typeable1 FFF 
 
 instance Show CheckName where
     show (CheckName x) = show x
@@ -145,11 +156,15 @@ instance Error PError
 instance Error TypeError
 instance Exception TypeError
 
+deriving instance Typeable Any
+
+{--
 instance Typeable Any where
     typeOf (Any (Int x)) = typeOf x
     typeOf (Any (Text x)) = typeOf x
     typeOf (Any (Bool x)) = typeOf x
     typeOf _ = throw $ TypeError "cant check Any type"
+    --}
 
 instance Eq Any where
     (==) a b | typeOf a == typeOf b = case (a,b) of
@@ -184,5 +199,31 @@ runGns = flip' $ runRWST . runErrorT
 emptyMonitoring :: Monitoring
 emptyMonitoring = Monitoring empty empty empty mempty empty empty mempty
 
+
+instance Binary CronField where
+    put (Star) = putWord8 0
+    put (SpecificField x) = putWord8 1 >> put x
+    put (RangeField x y) = putWord8 2 >> put x >> put y
+    put (ListField x) = putWord8 3 >> put x
+    put (StepField x y) = putWord8 4 >> put x >> put y
+
+    get = do x <- getWord8
+             case x of
+                  0 -> return Star
+                  1 -> SpecificField <$> get
+                  2 -> RangeField <$> get <*> get
+                  3 -> ListField <$> get
+                  4 -> StepField <$> get <*> get
+                  _ -> fail "bad binary"
+
+instance Binary Cron where
+    put (Cron (CronSchedule (Minutes a) (Hours b) (DaysOfMonth c) (Months d) (DaysOfWeek e))) = put a >> put b >> put c >> put d >> put e
+    get = do
+        a <- get
+        b <- get
+        c <- get
+        d <- get
+        e <- get
+        return $ Cron (CronSchedule (Minutes a) (Hours b) (DaysOfMonth c) (Months d) (DaysOfWeek e))
 
 

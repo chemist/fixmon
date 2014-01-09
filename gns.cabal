@@ -56,7 +56,7 @@ executable gns
   other-extensions:    OverloadedStrings, DeriveDataTypeable, TemplateHaskell, QuasiQuotes, FlexibleContexts
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.7, attoparsec >=0.10 && <0.11, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, text >=0.11 && <0.12, time >=1.4 && <1.5, yaml >=0.8 && <0.9, http-types >=0.8 && <0.9, cron >=0.1 && <0.2, peggy >=0.3 && <0.4, HsSyck >=0.51 && <0.52, ListLike, mtl
+  build-depends:       base >=4.6 && <4.7, attoparsec >=0.10 && <0.11, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, text >=0.11 && <0.12, time >=1.4 && <1.5, yaml >=0.8 && <0.9, http-types >=0.8 && <0.9, cron >=0.1 && <0.2, peggy >=0.3 && <0.4, HsSyck >=0.51 && <0.52, ListLike, mtl, distributed-process, syb, binary, network-transport-tcp, text-binary, network-transport, distributed-static
   
   -- Directories containing source files.
   hs-source-dirs:      src
