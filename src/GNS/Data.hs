@@ -50,6 +50,7 @@ newtype Gns a = Gns {run:: ErrorT String (RWST StartOptions Log Monitoring IO) a
   , MonadRWS StartOptions Log Monitoring
   )
 
+
 data StartOptions = StartOptions
   { config :: FilePath
   } deriving (Show, Eq)
@@ -68,7 +69,7 @@ data Trigger = Trigger
   { _name        :: TriggerName
   , _description :: Text
   , _check       :: CheckId
-  , _result      :: TriggerFun
+  , _result      :: TriggerRaw Bool
   } deriving Show
 
 data Group = Group
@@ -91,22 +92,22 @@ instance Binary Check where
     get = Check <$> get <*> get <*> get
 
 data Any where
-  Any :: (Eq a, Ord a, Show a) => FFF a -> Any
+  Any :: (Eq a, Ord a, Show a) => TriggerRaw a -> Any
 
-data FFF a where
-  Int :: Int -> FFF Int
-  Bool :: Bool -> FFF Bool
-  Text :: Text -> FFF Text
+data TriggerRaw a where
+  Int :: Int -> TriggerRaw Int
+  Bool :: Bool -> TriggerRaw Bool
+  Text :: Text -> TriggerRaw Text
 
-  Not :: FFF Bool -> FFF Bool
-  Or :: FFF Bool -> FFF Bool -> FFF Bool
-  And :: FFF Bool -> FFF Bool -> FFF Bool
+  Not :: TriggerRaw Bool -> TriggerRaw Bool
+  Or :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
+  And :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
 
-  Less :: FFF Text -> Any -> FFF Bool
-  More :: FFF Text -> Any -> FFF Bool
-  Equal :: FFF Text -> Any -> FFF Bool
+  Less :: TriggerRaw Text -> Any -> TriggerRaw Bool
+  More :: TriggerRaw Text -> Any -> TriggerRaw Bool
+  Equal :: TriggerRaw Text -> Any -> TriggerRaw Bool
 
-deriving instance Typeable1 FFF 
+deriving instance Typeable1 TriggerRaw 
 
 instance Show CheckName where
     show (CheckName x) = show x
@@ -117,7 +118,7 @@ instance Show TriggerFun where
 instance Show Any where
     show (Any x) = show x
 
-instance (Show a) => Show (FFF a) where
+instance (Show a) => Show (TriggerRaw a) where
     show (Text x) = show x
     show (Bool x) = show x
     show (Int x ) = show x

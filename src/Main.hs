@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving         #-}
 module Gns  (module Gns) where
 
 import           Check.Cron

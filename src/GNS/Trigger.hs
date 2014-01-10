@@ -19,20 +19,20 @@ import           Text.Peggy           hiding (And, Not)
 
 [peggy|
 
-top :: FFF Bool = expr
+top :: TriggerRaw Bool = expr
 
-expr :: FFF Bool
+expr :: TriggerRaw Bool
   = expr "and" simpl { And $1 $2 }
   / expr "or"  simpl { Or  $1 $2 }
   / "not" expr { Not $1 }
   / simpl { $1 }
 
-simpl :: FFF Bool 
+simpl :: TriggerRaw Bool 
   = pName "equal" pReturn { Equal $1 $2 }
   / pName "more"  pReturn { More  $1 $2 }
   / pName "less"  pReturn { Less  $1 $2 }
 
-pName :: FFF Text
+pName :: TriggerRaw Text
   =  pChar* { Text (pack $1) }
 
 pChar :: Char = [0-9a-zA-Z]
@@ -51,7 +51,7 @@ num ::: Int
 |]
 
 
-eval :: FFF a -> Complex -> Status
+eval :: TriggerRaw a -> Complex -> Status
 eval (Less (Text x) y) (Complex c) = Status $ maybe False (< y) (lookup x c)
 eval (More (Text x) y) (Complex c) = Status $ maybe False (> y) (lookup x c)
 eval (Equal (Text x) y) (Complex c) = Status $ maybe False (== y) (lookup x c)
@@ -72,8 +72,10 @@ and (Status a) (Status b) = Status $ a && b
 
 
 
-parseTrigger :: Text -> Either ParseError TriggerFun
-parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return . TriggerFun . eval
+parseTrigger :: Text -> Either ParseError (TriggerRaw Bool)
+parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return 
+
+
 
 
 -- | Examples
