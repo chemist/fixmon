@@ -9,7 +9,7 @@ import           Control.Distributed.Process.Node
 import           Control.Monad.State
 import           Data.Map                         (Map, elems, keys, lookup)
 import           Data.Set                         (Set)
-import           GNS.Data                         as Gns
+import           Types                         as Gns
 import           GNS.Message                      as Gns
 import           GNS.Parser                       as Gns
 import           GNS.Trigger                      as Gns

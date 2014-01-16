@@ -1,12 +1,11 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE GADTs #-}
 module GNS.Trigger
 where
 
-import           GNS.Data
+import           Types
 
 import qualified Data.ListLike        as LL
 import           Data.Map             (lookup)

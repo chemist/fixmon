@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 module GNS.Parser  where
 
-import           GNS.Data
+import Types
 import           GNS.Trigger          (parseTrigger)
 
 import           Control.Applicative  ((<$>))

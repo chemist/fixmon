@@ -8,7 +8,7 @@ import           Data.Binary
 import           Data.Map                    (Map)
 import           Data.Set                    (Set)
 import           Data.Typeable
-import           GNS.Data
+import           Types
 
 
 data CMes = MinuteMessage

@@ -7,7 +7,7 @@ import           Control.Monad.State
 import           Data.Map                    (Map, elems, filterWithKey)
 import           Data.Set                    (Set, unions)
 import           Data.Time.Clock
-import           GNS.Data
+import           Types
 import           GNS.Message
 import           System.Cron
 
