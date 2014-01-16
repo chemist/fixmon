@@ -2,17 +2,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving         #-}
 module Gns  (module Gns) where
 
-import           Check.Cron
+import           Types                         as Gns
+import           GNS.Message                   as Gns
+import           Process.Configurator          as Gns
+import           Process.Cron
+
 import           Control.Applicative
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Control.Monad.State
 import           Data.Map                         (Map, elems, keys, lookup)
 import           Data.Set                         (Set)
-import           Types                         as Gns
-import           GNS.Message                      as Gns
-import           GNS.Parser                       as Gns
-import           GNS.Trigger                      as Gns
 import           Network.Transport                (closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)

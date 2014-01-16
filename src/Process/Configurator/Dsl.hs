@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE GADTs #-}
-module GNS.Trigger
+module Process.Configurator.Dsl
 where
 
 import           Types

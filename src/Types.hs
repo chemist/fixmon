@@ -1,27 +1,32 @@
 module Types 
 ( HostId(..)
 , Hostname(..)
+-- * Триггеры
 , TriggerId(..)
 , TriggerName(..)
+, Trigger(..)
+, TriggerHost(..)
+, TriggerRaw(..)
+, Any(..)
+-- * Проверки
 , Check(..)
 , CheckId(..)
 , CheckName(..)
 , CheckHost(..)
-, TriggerRaw(..)
-, Cron(..)
-, Trigger(..)
-, Monitoring(..)
-, Any(..)
-, Status(..)
-, Complex(..)
-, PError(..)
+-- * Группы
 , GroupName(..)
 , GroupId(..)
 , Group(..)
-, TriggerHost(..)
-, Gns(..)
-, StartOptions(..)
+-- * Общее
+, Cron(..)
+, Status(..)
+, Monitoring(..)
+, Complex(..)
+, PError(..)
 , Log(..)
+, StartOptions(..)
+-- * monads
+, Gns(..)
 , runGns
 , emptyMonitoring
 ) where

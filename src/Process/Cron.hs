@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Check.Cron where
+module Process.Cron where
 
 import           Control.Concurrent
 import           Control.Distributed.Process

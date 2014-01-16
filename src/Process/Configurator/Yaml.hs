@@ -1,26 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
-module GNS.Parser  where
+module Process.Configurator.Yaml  where
 
-import Types
-import           GNS.Trigger          (parseTrigger)
+import           Process.Configurator.Dsl (parseTrigger)
+import           Types
 
-import           Control.Applicative  ((<$>))
+import           Control.Applicative      ((<$>))
 import           Control.Arrow
 import           Control.Exception
 import           Control.Monad.Error
 import           Control.Monad.RWS
-import           Data.Attoparsec.Text (parseOnly)
-import           Data.ByteString      (ByteString)
+import           Data.Attoparsec.Text     (parseOnly)
+import           Data.ByteString          (ByteString)
 import           Data.Either
-import           Data.Map             (Map, fromList, toList, (!))
-import qualified Data.Map             as Map
-import           Data.Set             (Set)
-import qualified Data.Set             as Set
-import           Data.Text            hiding (empty, filter, group, head, map,
-                                       zip)
+import           Data.Map                 (Map, fromList, toList, (!))
+import qualified Data.Map                 as Map
+import           Data.Set                 (Set)
+import qualified Data.Set                 as Set
+import           Data.Text                hiding (empty, filter, group, head,
+                                           map, zip)
 import           Data.Yaml.Syck
-import           Prelude              hiding (not, or)
+import           Prelude                  hiding (not, or)
 import           System.Cron.Parser
 
 inv :: Map CheckId Check -> Map CheckName CheckId
@@ -70,10 +69,10 @@ allTriggerHost :: Monitoring -> Map TriggerHost Status
 allTriggerHost m = Map.fromSet (\_ -> Status True) $ Set.unions $ map triggerHost $ _groups m
 
 checkHost :: (Set HostId, Set CheckId) -> Set CheckHost
-checkHost (x, y) = Set.fromList $ [ CheckHost (a,b) 
+checkHost (x, y) = Set.fromList $ [ CheckHost (a,b)
                                   | a <- Set.toList x
                                   , b <- Set.toList y
-                                  ] 
+                                  ]
 
 allCheckHost :: Monitoring -> Set CheckHost
 allCheckHost m = let a = map (checkByGroup m) $ _groups m
