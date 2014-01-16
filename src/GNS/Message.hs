@@ -9,12 +9,12 @@ import           Data.Map                    (Map)
 import           Data.Set                    (Set)
 import           Data.Typeable
 import           GNS.Data
-import           System.Cron
+
 
 data CMes = MinuteMessage
           | Reload (Map Cron (Set CheckHost)) deriving Typeable
 
-newtype Task = Task CheckHost deriving Typeable
+newtype Task = Task CheckHost deriving (Eq, Ord, Show, Typeable)
 
 data SMes a = GetHosts ProcessId
             | GetHostsId ProcessId

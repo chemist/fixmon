@@ -6,11 +6,12 @@
 module GNS.Trigger
 where
 
+import           GNS.Data
+
 import qualified Data.ListLike        as LL
 import           Data.Map             (lookup)
 import           Data.Text            hiding (empty, filter, foldl1, head, map)
 import           Data.Text.Encoding   (encodeUtf8)
-import           GNS.Data
 import           Prelude              hiding (and, lookup, not, or)
 import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)

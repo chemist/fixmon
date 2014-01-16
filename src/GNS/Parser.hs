@@ -2,6 +2,9 @@
 {-# LANGUAGE BangPatterns #-}
 module GNS.Parser  where
 
+import           GNS.Data
+import           GNS.Trigger          (parseTrigger)
+
 import           Control.Applicative  ((<$>))
 import           Control.Arrow
 import           Control.Exception
@@ -17,8 +20,6 @@ import qualified Data.Set             as Set
 import           Data.Text            hiding (empty, filter, group, head, map,
                                        zip)
 import           Data.Yaml.Syck
-import           GNS.Data
-import           GNS.Trigger          (parseTrigger)
 import           Prelude              hiding (not, or)
 import           System.Cron.Parser
 
