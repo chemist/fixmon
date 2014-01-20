@@ -35,7 +35,7 @@ maintainer:          chemistmail@gmail.com
 -- copyright:           
 
 category:            Network
-build-type:          Simple
+build-type:          Custom
 
 -- Extra files to be distributed with the package, such as examples or a 
 -- README.
@@ -56,7 +56,7 @@ executable gns
   other-extensions:    OverloadedStrings, DeriveDataTypeable, TemplateHaskell, QuasiQuotes, FlexibleContexts
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <4.7, attoparsec >=0.10 && <0.11, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, text >=0.11 && <0.12, time >=1.4 && <1.5, yaml >=0.8 && <0.9, http-types >=0.8 && <0.9, cron >=0.1 && <0.2, peggy >=0.3 && <0.4, HsSyck >=0.51 && <0.52, ListLike, mtl, distributed-process, syb, binary, network-transport-tcp, text-binary, network-transport, distributed-static
+  build-depends:       test-framework, test-framework-hunit, test-framework-quickcheck2, QuickCheck, HUnit, base >=4.6 && <4.7, attoparsec >=0.10 && <0.11, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, text >=0.11 && <0.12, time >=1.4 && <1.5, yaml >=0.8 && <0.9, http-types >=0.8 && <0.9, cron >=0.1 && <0.2, peggy >=0.3 && <0.4, HsSyck >=0.51 && <0.52, ListLike, mtl, distributed-process, syb, binary, network-transport-tcp, text-binary, network-transport, distributed-static
   
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -64,3 +64,11 @@ executable gns
   -- Base language which the package is written in.
   default-language:    Haskell2010
   
+executable test
+  Hs-Source-Dirs:       src/Test, src
+  Main-Is:              Main.hs
+
+  Build-Depends:        base >= 4.6 && < 5, peggy, binary, text, containers, ListLike, mtl, text-binary, cron, test-framework, test-framework-hunit, test-framework-quickcheck2,HUnit, QuickCheck
+  Ghc-Options:          -Wall
+
+  default-language:    Haskell2010

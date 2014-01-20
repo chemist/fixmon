@@ -10,7 +10,7 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Exception   (Exception, throw)
 import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, getWord8, put, putWord8)
-import           Data.Text           (Text)
+import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
 import           Data.Typeable       (Typeable, Typeable1, typeOf)
 
@@ -48,12 +48,23 @@ instance Binary Any where
     put (Any (Int x)) = putWord8 0 >> put x
     put (Any (Bool x)) = putWord8 1 >> put x
     put (Any (Text x)) = putWord8 2 >> put x
-    put _ = fail "you dont need this"
+    put (Any (Not x)) = putWord8 3 >> put x
+    put (Any (Or x y)) = putWord8 4 >> put x >> put y
+    put (Any (And x y)) = putWord8 5 >> put x >> put y
+    put (Any (More x y)) = putWord8 6 >> put x >> put y
+    put (Any (Less x y)) = putWord8 7 >> put x >> put y
+    put (Any (Equal x y)) = putWord8 8 >> put x >> put y
     get = do mark <- getWord8
              case mark of
                   0 -> get >>= \x -> return $ Any (Int x)
                   1 -> get >>= \x -> return $ Any (Bool x)
                   2 -> get >>= \x -> return $ Any (Text x)
+                  3 -> get >>= \x -> return $ Any (Not x)
+                  4 -> get >>= \x -> get >>= \y -> return $ Any (Or x y)
+                  5 -> get >>= \x -> get >>= \y -> return $ Any (And x y)
+                  6 -> get >>= \x -> get >>= \y -> return $ Any (More x y)
+                  7 -> get >>= \x -> get >>= \y -> return $ Any (Less x y)
+                  8 -> get >>= \x -> get >>= \y -> return $ Any (Equal x y)
                   _ -> fail "unknown mark in binary any"
 
 
@@ -71,6 +82,7 @@ data TriggerRaw a where
   Equal :: TriggerRaw Text -> Any -> TriggerRaw Bool
 
 deriving instance Typeable1 TriggerRaw
+deriving instance Eq (TriggerRaw a)
 
 instance Binary (TriggerRaw Int) where
     put (Int x)  = putWord8 0 >> put x
@@ -104,13 +116,13 @@ instance Binary (TriggerRaw Bool) where
                   _ -> fail "bad mark in triggerRaw bool"
 
 instance (Show a) => Show (TriggerRaw a) where
-    show (Text x) = show x
+    show (Text x) = unpack x
     show (Bool x) = show x
     show (Int x ) = show x
 
     show (Not x ) = "not " ++ show x
     show (Or x y) = show x ++ " or " ++ show y
-    show (And x y) = show x ++ "and " ++ show y
+    show (And x y) = show x ++ " and " ++ show y
 
     show (Equal x y) = show x ++ " equal " ++ show y
     show (Less n r) = show n ++ " less " ++ show r

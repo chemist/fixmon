@@ -1,18 +1,14 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module GNS.Message where
+module Process.Configurator.Message where
 import           Control.Applicative
 import           Control.Distributed.Process (ProcessId)
 import           Data.Binary
-import           Data.Map                    (Map)
-import           Data.Set                    (Set)
 import           Data.Typeable
 import           Types
 
 
-data CMes = MinuteMessage
-          | Reload (Map Cron (Set CheckHost)) deriving Typeable
 
 newtype Task = Task CheckHost deriving (Eq, Ord, Show, Typeable)
 
@@ -43,16 +39,6 @@ instance Binary a => Binary (SMes a) where
              5 -> GetCronMap <$> get
              6 -> SMes       <$> get <*> get
              _ -> error "bad binary Mesg"
-
-instance Binary CMes where
-    put MinuteMessage = put (0 :: Word8)
-    put (Reload x) = put (1 :: Word8) >> put x
-    get = do
-        a <- get :: Get Word8
-        case a of
-             0 -> pure MinuteMessage
-             1 -> Reload <$> get
-             _ -> error "bad binary"
 
 instance Binary Task where
     put (Task (CheckHost (HostId x, CheckId y))) = put x >> put y

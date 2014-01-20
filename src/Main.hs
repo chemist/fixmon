@@ -1,38 +1,39 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving         #-}
-module Gns  (module Gns) where
+module Main where
 
-import           Types                         as Gns
-import           GNS.Message                   as Gns
-import           Process.Configurator          as Gns
+-- import           Types                         
+import           Process.Configurator          
 import           Process.Cron
 
-import           Control.Applicative
+-- import           Control.Applicative
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Control.Monad.State
-import           Data.Map                         (Map, elems, keys, lookup)
-import           Data.Set                         (Set)
+-- import           Data.Map                         (Map, elems, keys, lookup)
+-- import           Data.Set                         (Set)
 import           Network.Transport                (closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
 import           Prelude                          hiding (lookup)
-import Control.Exception (SomeException)
+-- import Control.Exception (SomeException)
 
 main :: IO ()
 main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
     node <- newLocalNode t initRemoteTable
-    (_, m, _) <-  readConfig
     runProcess node $ do
-        void . spawnLocal $ cron m
-        void . spawnLocal $ clock
+        void . spawnLocal $ cron 
         void . spawnLocal $ store
+        void . spawnLocal $ clock
         say . show =<< getSelfPid
-        replLoop
+        _ <- liftIO $ readLn :: Process String
+        return ()
+        -- replLoop
     closeLocalNode node
     closeTransport t
 
+{--
 replLoop :: Process ()
 replLoop = forever $ do
     say . show =<< getSelfPid
@@ -69,41 +70,4 @@ badInput = unlines
   , "\tRShowHost hosts for show hosts"
   ]
 
-readConfig :: IO (Either String (), Monitoring, Log)
-readConfig = runGns (StartOptions "gnc.yaml") emptyMonitoring $ do
-    Gns.parseConfig
-
-type StoreT a = StateT Monitoring Process a
-
-store :: Process ()
-store = do
-    register "store" =<< getSelfPid
-    (_, m, _) <- liftIO $ readConfig
-    evalStateT storeT m
-
-storeT :: StoreT ()
-storeT = forever $ do
-    self <-  lift getSelfPid
-    m <- lift $ expect :: StoreT (SMes Int)
-    case m of
-         GetHosts pid -> do
-             st <-  (elems . _hosts) <$> get
-             lift . send pid $ SMes self st
-         GetHostsId pid -> do
-             st <- (keys . _hosts) <$> get
-             lift . send pid $ SMes self st
-         GetHost pid hid -> do
-             st <- _hosts <$> get
-             lift . send pid $ SMes self $ lookup hid st
-         GetCheck pid hid -> do
-             st <- _checks <$> get
-             lift . send pid $ SMes self $ lookup hid st
---         GetTrigger pid hid -> do
---             st <- _triggers <$> get
---             lift . send pid $ SMes self $ lookup hid st
-         GetCronMap pid -> do
-             st <-  _periodMap <$> get
-             lift . send pid $ SMes self st
-         _ -> (lift . say $ "bad message to store") >> return ()
-
-
+--}

@@ -14,6 +14,7 @@ import           Data.Text.Encoding   (encodeUtf8)
 import           Prelude              hiding (and, lookup, not, or)
 import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)
+import Text.Read (readMaybe)
 
 
 
@@ -31,11 +32,16 @@ simpl :: TriggerRaw Bool
   = pName "equal" pReturn { Equal $1 $2 }
   / pName "more"  pReturn { More  $1 $2 }
   / pName "less"  pReturn { Less  $1 $2 }
+  / pBool
 
 pName :: TriggerRaw Text
-  =  pChar* { Text (pack $1) }
+  =  [a-zA-Z0-9]+ { Text (pack $1) }
 
-pChar :: Char = [0-9a-zA-Z]
+pBool :: TriggerRaw Bool
+  = "false" { Bool False }
+  / "False" { Bool False }
+  / "true"  { Bool True }
+  / "True"  { Bool True }
 
 pReturn :: Any
   = "true" { Any $ Bool True }
@@ -46,10 +52,10 @@ pReturn :: Any
   / pName   { Any $ $1 }
 
 num ::: Int
-  = [0-9]* { read $1 }
+  = [0-9]+ { read $1 }
+  / [-] [0-9]+ { read ($1:$2) }
 
 |]
-
 
 eval :: TriggerRaw a -> Complex -> Status
 eval (Less (Text x) y) (Complex c) = Status $ maybe False (< y) (lookup x c)
