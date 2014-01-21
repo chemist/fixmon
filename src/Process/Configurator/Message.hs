@@ -1,49 +1,23 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
 module Process.Configurator.Message where
-import           Control.Applicative
-import           Control.Distributed.Process (ProcessId)
+
+
+import           Control.Distributed.Process (ProcessId, Process, getSelfPid, nsend, expect)
 import           Data.Binary
 import           Data.Typeable
-import           Types
 
+newtype Request a = Request (ProcessId, a) deriving (Eq, Ord, Show, Typeable, Binary)
+newtype Response a =  Response (Maybe a) deriving (Eq, Ord, Show, Typeable, Binary)
 
-
-newtype Task = Task CheckHost deriving (Eq, Ord, Show, Typeable)
-
-data SMes a = GetHosts ProcessId
-            | GetHostsId ProcessId
-            | GetHost ProcessId HostId
-            | GetTrigger ProcessId TriggerId
-            | GetCheck ProcessId CheckId
-            | GetCronMap ProcessId
-            | SMes ProcessId a deriving (Typeable, Show, Eq)
-
-instance Binary a => Binary (SMes a) where
-    put (GetHosts x)     = put (0 :: Word8) >> put x
-    put (GetHostsId x)   = put (1 :: Word8) >> put x
-    put (GetHost x y )   = put (2 :: Word8) >> put x >> put y
-    put (GetTrigger x y) = put (3 :: Word8) >> put x >> put y
-    put (GetCheck x y)   = put (4 :: Word8) >> put x >> put y
-    put (GetCronMap x)   = put (5 :: Word8) >> put x
-    put (SMes x a)       = put (6 :: Word8) >> put x >> put a
-    get = do
-        a <- get :: Get Word8
-        case a of
-             0 -> GetHosts   <$> get
-             1 -> GetHostsId <$> get
-             2 -> GetHost    <$> get <*> get
-             3 -> GetTrigger <$> get <*> get
-             4 -> GetCheck   <$> get <*> get
-             5 -> GetCronMap <$> get
-             6 -> SMes       <$> get <*> get
-             _ -> error "bad binary Mesg"
-
-instance Binary Task where
-    put (Task (CheckHost (HostId x, CheckId y))) = put x >> put y
-    get = do
-        x <- get
-        y <- get
-        return $ Task (CheckHost (HostId x, CheckId y))
+request :: forall a t. (Typeable a, Typeable t, Binary a, Binary t) => a -> Process (Maybe t)
+request i = do
+    self <- getSelfPid
+    nsend "configurator" (Request (self, i))
+    Response r <- expect
+    return r
 

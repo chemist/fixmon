@@ -37,9 +37,9 @@ data Group = Group
  } deriving Show
 
 
-newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read)
+newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
 newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Eq, Ord, Binary, Typeable)
-newtype CheckName = CheckName Text deriving (Eq, Ord, Binary)
+newtype CheckName = CheckName Text deriving (Eq, Ord, Binary, Typeable)
 
 instance Show CheckName where
     show (CheckName x) = show x
@@ -57,9 +57,9 @@ instance Binary Check where
     get = Check <$> get <*> get <*> get
 
 
-newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read)
+newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
-newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary)
+newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary, Typeable)
 
 instance IsString TriggerName where
     fromString x = TriggerName . pack $ x
@@ -69,7 +69,7 @@ data Trigger = Trigger
   , _description :: Text
   , _check       :: CheckId
   , _result      :: TriggerRaw Bool
-  } deriving Show
+  } deriving (Show, Eq, Typeable)
 
 instance Binary Trigger where
     put (Trigger n d c r) = put n >> put d >> put c >> put r
