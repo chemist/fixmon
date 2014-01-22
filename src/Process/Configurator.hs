@@ -7,10 +7,11 @@ import           Process.Configurator.Message
 import           Process.Configurator.Yaml
 import           Process.Cron
 
-import           Control.Applicative
 import           Control.Distributed.Process
 import           Control.Monad.State
-import           Data.Map                     (elems, keys, lookup)
+import System.Directory
+import Data.Time (UTCTime)
+import           Data.Map                     (lookup)
 import           Prelude                      hiding (lookup)
 
 readConfig :: IO (Either String (), Monitoring, Log)
@@ -20,75 +21,64 @@ type StoreT a = StateT Monitoring Process a
 
 store :: Process ()
 store = do
+    say "start configurator"
     register "configurator" =<< getSelfPid
     (_, m, _) <- liftIO readConfig
-    nsend "cron" (_periodMap m)
-    evalStateT storeT m
+--    say . show =<< liftIO getCurrentDirectory
+    time <- liftIO $ getModificationTime "gnc.yaml"
+    evalStateT (storeT time) m
 
-storeT :: StoreT ()
-storeT = forever $ do
+storeT :: UTCTime -> StoreT ()
+storeT time = do
     m <- get
-    lift $ receiveTimeout 100000 $! map (\f -> f m) [tr, ch, pm, cch, cs]
+    void . lift $ receiveTimeout 100000 $! map (\f -> f m) [tr, ch, pm, cch, cs]
+--    lift .  say . show =<< liftIO getCurrentDirectory
+    newTime <- liftIO $ getModificationTime "gnc.yaml"
+    when (time /= newTime) $ do
+        lift $ say "file was changed, reload"
+        (_, n, _) <- liftIO readConfig
+        put n
+        lift $ nsend "cron" ChangeConfig
+        lift $ say "configurator (ChangeConfig)-> cron  "
+    storeT newTime
 
 tr :: Monitoring -> Match ()
 tr st = match fun
      where
-     fun (Request (pid, TriggerId x)) = send pid $ Response (lookup (TriggerId x) (_triggers st))
+     fun (Request (pid, TriggerId x)) = do
+         say $ "configurator <- (Request Trigger)"  
+         say $ "configurator (Response Trigger) -> "   
+         send pid $ Response (lookup (TriggerId x) (_triggers st))
 
 ch :: Monitoring -> Match ()
 ch st = match fun
      where
-     fun (Request (pid, CheckId x)) = send pid $ Response (lookup (CheckId x) (_checks st))
+     fun (Request (pid, CheckId x)) = do
+         say $ "configurator <- (Request Check)"  
+         say $ "configurator (Response Check) -> "   
+         send pid $ Response (lookup (CheckId x) (_checks st))
 
 pm :: Monitoring -> Match ()
 pm st = match fun
      where
-     fun (Request (pid, Cron x)) = send pid $ Response (lookup (Cron x) (_periodMap st))
+     fun (Request (pid, Cron x)) = do
+         say $ "configurator <- (Request CronMap)"  
+         say $ "configurator (Response CronMap) -> "   
+         send pid $ Response (lookup (Cron x) (_periodMap st))
 
 cch :: Monitoring -> Match ()
 cch st = match fun
      where
-     fun (Request (pid, CheckHost x)) = send pid $ Response (lookup (CheckHost x) (_checkHost st))
+     fun (Request (pid, CheckHost x)) = do
+         say $ "configurator <- (Request CheckHosts)"  
+         say $ "configurator (Response CheckHosts) -> "   
+         send pid $ Response (lookup (CheckHost x) (_checkHost st))
 
 cs :: Monitoring -> Match ()
 cs st = match fun
      where
-     fun (Request (pid, CronSet)) = send pid $ Response (Just $ _periodMap st)
-
-{--
-         TriggerId _ -> do
-             st <- _triggers <$> get
-             lift . send pid $ Response (lookup id st)
-         CheckId _ -> do
-             st <- (elems . _checks) <$> get
-             lift . send pid $ Response (lookup id st)
-         Cron _ -> do
-             st <- (elems . _periodMap) <$> get
-             lift . send pid $ Response (lookup id st)
-         CheckHost _ -> do
-             st <- (elems . _checkHost) <$> get
-             lift . send pid $ Response (lookup id st)
-
-         GetHosts pid -> do
-             st <-  (elems . _hosts) <$> get
-             lift . send pid $ SMes self st
-         GetHostsId pid -> do
-             st <- (keys . _hosts) <$> get
-             lift . send pid $ SMes self st
-         GetHost pid hid -> do
-             st <- _hosts <$> get
-             lift . send pid $ SMes self $ lookup hid st
-         GetCheck pid hid -> do
-             st <- _checks <$> get
-             lift . send pid $ SMes self $ lookup hid st
-         GetTrigger pid hid -> do
-             st <- _triggers <$> get
-             lift . send pid $ SMes self $ lookup hid st
-         GetCronMap pid -> do
-             st <-  _periodMap <$> get
-             lift . send pid $ SMes self st
-         _ -> (lift . say $ "bad message to store") >> return ()
-
---}
+     fun (Request (pid, CronMap)) = do
+         send pid $ Response (Just $ _periodMap st)
+     fun _ = say "oops, bad message in cs"
 
 

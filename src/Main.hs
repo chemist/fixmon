@@ -24,6 +24,7 @@ main = do
         void . spawnLocal $ cron 
         void . spawnLocal $ store
         void . spawnLocal $ clock
+        void . spawnLocal $ supervisor
         say . show =<< getSelfPid
         _ <- liftIO $ readLn :: Process String
         return ()
@@ -31,6 +32,19 @@ main = do
     closeLocalNode node
     closeTransport t
 
+supervisor :: Process ()
+supervisor = do
+    say "start supervisor"
+    Just cronPid <- whereis "cron"
+    Just storePid <- whereis "configurator"
+    Just clockPid <- whereis "clock"
+    void . monitor $ cronPid
+    void . monitor $ storePid
+    void . monitor $ clockPid
+    forever $ do
+        say "have message in supervisor"
+        x <- expect :: Process ProcessMonitorNotification
+        say . show $ x
 {--
 replLoop :: Process ()
 replLoop = forever $ do

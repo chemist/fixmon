@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE RankNTypes  #-}
 module Process.Cron where
 
 import           Types
@@ -27,45 +29,60 @@ clock = do
 
 type CronState a = StateT (Map Cron (Set CheckHost)) Process a
 
+type ST = Map Cron (Set CheckHost)
+
 data CMes = MinuteMessage
-          | CronSet
-          | Reload (Map Cron (Set CheckHost)) deriving Typeable
+          | CronMap
+          | ChangeConfig
+          deriving (Typeable, Show, Eq, Enum)
 
 instance Binary CMes where
     put MinuteMessage = put (0 :: Word8)
-    put (Reload x) = put (1 :: Word8) >> put x
-    put CronSet = put (3 :: Word8)
+    put CronMap = put (1 :: Word8)
+    put ChangeConfig = put (2 :: Word8)
     get = do
         a <- get :: Get Word8
         case a of
              0 -> pure MinuteMessage
-             1 -> Reload <$> get
-             3 -> pure CronSet
+             1 -> pure CronMap
+             2 -> pure ChangeConfig
              _ -> error "bad binary"
 
 
 -- | get message every minutes, check crontab, start checks
 --  get Reload message, reload crontab
+
 cron :: Process ()
 cron = do
+    say "start cron"
     register "cron" =<< getSelfPid
-    Just x <- request CronSet
-    say "load crontab"
-    evalStateT cronT x
+    say "cron (CronMap)-> configurator"
+    Just x <- request CronMap
+    say "cron <-(CronMap) configurator"
+    evalStateT (cronT ) x
 
 cronT :: CronState ()
 cronT = forever $ do
-        message <- lift expect :: CronState CMes
-        case message of
-             MinuteMessage -> do
-                 now <- liftIO getCurrentTime
-                 crontab <- S.get
-                 let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) crontab
-                 lift $ say $ "do tasks " ++ (show . unions . elems $ tasks)
-                 return ()
-             Reload x -> do
-                 lift $ say $ "reload crontab " ++ show x
-                 S.put x
+    st <- S.get
+    newSt <- lift . receiveWait $ map (\f -> f st) [messages']
+    S.put newSt
 
+messages' :: ST -> Match ST
+messages' st = match fun
+    where
+    fun MinuteMessage = do
+        now <- liftIO getCurrentTime
+        let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
+        say "cron <- MinuteMessage"
+        -- say $ "do tasks " ++ (show . unions . elems $ tasks)
+        return st
+    fun ChangeConfig = do
+        say "cron <- ChangeConfig"
+        Just x <- request CronMap
+        return x
+    fun CronMap = do
+        say "cron <- CronMap"
+        Just x <- request CronMap
+        return x
 
 
