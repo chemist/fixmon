@@ -2,6 +2,9 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Process.Cron where
 
+import           Types
+import           Process.Configurator.Message
+
 import           Control.Concurrent
 import           Control.Distributed.Process
 import           Control.Monad.State (forever, StateT, evalStateT, lift)
@@ -12,7 +15,6 @@ import           Data.Set                    (Set, unions)
 import           Data.Time.Clock
 import           Data.Typeable
 import           System.Cron
-import           Types
 import Control.Applicative
 
 -- | send message every minutes to cron
@@ -26,16 +28,19 @@ clock = do
 type CronState a = StateT (Map Cron (Set CheckHost)) Process a
 
 data CMes = MinuteMessage
+          | CronSet
           | Reload (Map Cron (Set CheckHost)) deriving Typeable
 
 instance Binary CMes where
     put MinuteMessage = put (0 :: Word8)
     put (Reload x) = put (1 :: Word8) >> put x
+    put CronSet = put (3 :: Word8)
     get = do
         a <- get :: Get Word8
         case a of
              0 -> pure MinuteMessage
              1 -> Reload <$> get
+             3 -> pure CronSet
              _ -> error "bad binary"
 
 
@@ -44,20 +49,20 @@ instance Binary CMes where
 cron :: Process ()
 cron = do
     register "cron" =<< getSelfPid
-    say "wait crontab"
-    Reload x <- expect :: Process CMes
+    Just x <- request CronSet
     say "load crontab"
     evalStateT cronT x
 
 cronT :: CronState ()
 cronT = forever $ do
-        message <- lift $ expect :: CronState CMes
+        message <- lift expect :: CronState CMes
         case message of
              MinuteMessage -> do
                  now <- liftIO getCurrentTime
                  crontab <- S.get
                  let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) crontab
-                 lift $ say $ "do tasks " ++ (show $ unions $ elems tasks)
+                 lift $ say $ "do tasks " ++ (show . unions . elems $ tasks)
+                 return ()
              Reload x -> do
                  lift $ say $ "reload crontab " ++ show x
                  S.put x

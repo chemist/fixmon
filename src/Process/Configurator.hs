@@ -3,56 +3,57 @@ module Process.Configurator
 where
 
 import           Types
+import           Process.Configurator.Message
+import           Process.Configurator.Yaml
+import           Process.Cron
 
 import           Control.Applicative
 import           Control.Distributed.Process
 import           Control.Monad.State
 import           Data.Map                     (elems, keys, lookup)
 import           Prelude                      hiding (lookup)
-import           Process.Configurator.Message
-import           Process.Configurator.Yaml
 
 readConfig :: IO (Either String (), Monitoring, Log)
-readConfig = runGns (StartOptions "gnc.yaml") emptyMonitoring $ do
-    parseConfig
+readConfig = runGns (StartOptions "gnc.yaml") emptyMonitoring parseConfig
 
 type StoreT a = StateT Monitoring Process a
 
 store :: Process ()
 store = do
-    register "store" =<< getSelfPid
-    (_, m, _) <- liftIO $ readConfig
+    register "configurator" =<< getSelfPid
+    (_, m, _) <- liftIO readConfig
     nsend "cron" (_periodMap m)
     evalStateT storeT m
 
 storeT :: StoreT ()
 storeT = forever $ do
     m <- get
-    lift $ receiveTimeout 100000 $! map (\f -> f m) [tr, ch, pm, cch]
+    lift $ receiveTimeout 100000 $! map (\f -> f m) [tr, ch, pm, cch, cs]
 
 tr :: Monitoring -> Match ()
 tr st = match fun
      where
-     fun (Request (pid, TriggerId x)) = do
-         send pid $ Response (lookup (TriggerId x) (_triggers st))
+     fun (Request (pid, TriggerId x)) = send pid $ Response (lookup (TriggerId x) (_triggers st))
 
 ch :: Monitoring -> Match ()
 ch st = match fun
      where
-     fun (Request (pid, CheckId x)) = do
-         send pid $ Response (lookup (CheckId x) (_checks st))
+     fun (Request (pid, CheckId x)) = send pid $ Response (lookup (CheckId x) (_checks st))
 
 pm :: Monitoring -> Match ()
 pm st = match fun
      where
-     fun (Request (pid, Cron x)) = do
-         send pid $ Response (lookup (Cron x) (_periodMap st))
+     fun (Request (pid, Cron x)) = send pid $ Response (lookup (Cron x) (_periodMap st))
 
 cch :: Monitoring -> Match ()
 cch st = match fun
      where
-     fun (Request (pid, CheckHost x)) = do
-         send pid $ Response (lookup (CheckHost x) (_checkHost st))
+     fun (Request (pid, CheckHost x)) = send pid $ Response (lookup (CheckHost x) (_checkHost st))
+
+cs :: Monitoring -> Match ()
+cs st = match fun
+     where
+     fun (Request (pid, CronSet)) = send pid $ Response (Just $ _periodMap st)
 
 {--
          TriggerId _ -> do

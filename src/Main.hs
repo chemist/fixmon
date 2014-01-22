@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving         #-}
 module Main where
 
 -- import           Types                         
