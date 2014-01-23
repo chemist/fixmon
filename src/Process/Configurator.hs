@@ -3,9 +3,8 @@ module Process.Configurator
 where
 
 import           Types
-import           Process.Configurator.Message
+import           Process.Utils
 import           Process.Configurator.Yaml
-import           Process.Cron
 
 import           Control.Distributed.Process
 import           Control.Monad.State
@@ -31,54 +30,76 @@ store = do
 storeT :: UTCTime -> StoreT ()
 storeT time = do
     m <- get
-    void . lift $ receiveTimeout 100000 $! map (\f -> f m) [tr, ch, pm, cch, cs]
+    void . lift $ receiveWait $! map (\f -> f m) storeMatch
 --    lift .  say . show =<< liftIO getCurrentDirectory
     newTime <- liftIO $ getModificationTime "gnc.yaml"
     when (time /= newTime) $ do
         lift $ say "file was changed, reload"
         (_, n, _) <- liftIO readConfig
         put n
-        lift $ nsend "cron" ChangeConfig
-        lift $ say "configurator (ChangeConfig)-> cron  "
+        lift $ nsend "cron" CronMap
+        lift $ say "configurator (CronMap)-> cron  "
+        lift $ nsend "tasker" HostMap
+        lift $ say "configurator (HostMap)-> tasker  "
+        lift $ nsend "tasker" CheckMap
+        lift $ say "configurator (CheckMap)-> tasker  "
     storeT newTime
 
-tr :: Monitoring -> Match ()
-tr st = match fun
+storeMatch :: [Monitoring -> Match ()] 
+storeMatch = [ lookupTrigger
+             , lookupCheck
+             , lookupCronSet
+             , lookupCheckHost
+             , getPart
+             ]
+
+lookupTrigger :: Monitoring -> Match ()
+lookupTrigger st = match fun
      where
      fun (Request (pid, TriggerId x)) = do
-         say $ "configurator <- (Request Trigger)"  
-         say $ "configurator (Response Trigger) -> "   
+         say "configurator <- (Request Trigger)"  
+         say "configurator (Response Trigger) -> "   
          send pid $ Response (lookup (TriggerId x) (_triggers st))
 
-ch :: Monitoring -> Match ()
-ch st = match fun
+lookupCheck :: Monitoring -> Match ()
+lookupCheck st = match fun
      where
      fun (Request (pid, CheckId x)) = do
-         say $ "configurator <- (Request Check)"  
-         say $ "configurator (Response Check) -> "   
+         say "configurator <- (Request Check)"  
+         say "configurator (Response Check) -> "   
          send pid $ Response (lookup (CheckId x) (_checks st))
 
-pm :: Monitoring -> Match ()
-pm st = match fun
+lookupCronSet :: Monitoring -> Match ()
+lookupCronSet st = match fun
      where
      fun (Request (pid, Cron x)) = do
-         say $ "configurator <- (Request CronMap)"  
-         say $ "configurator (Response CronMap) -> "   
+         say "configurator <- (Request CronSet)"  
+         say "configurator (Response CronSet) -> "   
          send pid $ Response (lookup (Cron x) (_periodMap st))
 
-cch :: Monitoring -> Match ()
-cch st = match fun
+lookupCheckHost :: Monitoring -> Match ()
+lookupCheckHost st = match fun
      where
      fun (Request (pid, CheckHost x)) = do
-         say $ "configurator <- (Request CheckHosts)"  
-         say $ "configurator (Response CheckHosts) -> "   
+         say "configurator <- (Request CheckHosts)"  
+         say "configurator (Response CheckHosts) -> "   
          send pid $ Response (lookup (CheckHost x) (_checkHost st))
 
-cs :: Monitoring -> Match ()
-cs st = match fun
+getPart :: Monitoring -> Match ()
+getPart st = match fun
      where
      fun (Request (pid, CronMap)) = do
+         say "configurator <- (Request CronMap)"  
+         say "configurator (Response CronMap) -> "   
          send pid $ Response (Just $ _periodMap st)
-     fun _ = say "oops, bad message in cs"
-
+     fun (Request (pid, HostMap)) = do
+         say "configurator <- (Request HostMap)"  
+         say "configurator (Response HostMap) -> "   
+         send pid $ Response (Just $ _hosts st)
+     fun (Request (pid, CheckMap)) = do
+         say "configurator <- (Request CheckMap)"  
+         say "configurator (Response CheckMap) -> "   
+         send pid $ Response (Just $ _checks st)
+     fun (Request (_, _)) = do
+         say "configurator <- (BadMessage)"
 

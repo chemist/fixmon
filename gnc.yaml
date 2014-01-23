@@ -68,3 +68,4 @@ checks:
     command: uptime
     type: shell
 
+
