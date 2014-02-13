@@ -2,7 +2,7 @@
 module Netstat where
 
 import Data.Text.IO
-import Data.Text hiding (reverse)
+import Data.Text hiding (reverse, filter, map)
 import qualified Data.Text.Read as RT
 import Data.Attoparsec.Text 
 import qualified Data.Attoparsec.Text as AT
@@ -10,12 +10,13 @@ import Data.Network.Ip
 import Data.Word
 import Control.Applicative
 import Prelude hiding (readFile, concat)
+import qualified Data.Map as Map
 
 netstat :: String
 netstat = "proc"
 
-hexIp :: Text
-hexIp = "0100007F"
+localIp :: [IP]
+localIp = ["127.0.0.1"]
 
 leHexToIp :: Text -> IP
 leHexToIp h = let Right (i, _) = RT.hexadecimal . invert $ h
@@ -66,9 +67,52 @@ type Port = Int
 type From = Point
 type To = Point
 
-data Point = Point IP Port deriving (Show, Eq)
-data Connection = Connection From To deriving (Show, Eq)
+data Point = Point
+  { ip :: IP
+  , port :: Port
+  } deriving (Eq)
 
+instance Show Point where
+    show x = show (ip x) ++ ":" ++ show (port x)
+
+data Connection = Connection 
+  { localSocket :: From
+  , remoteSocket :: To 
+  , stateSocket :: TcpState
+  } deriving (Show, Eq)
+
+stateFilter :: TcpState -> [Connection] -> [Connection]
+stateFilter st = filter (\(Connection _ _ s) -> s == st) 
+
+localPoint :: [Connection] -> [Point]
+localPoint = map (\x -> localSocket x)
+
+remotePoint :: [Connection] -> [Point]
+remotePoint = map (\x -> remoteSocket x)
+
+listening :: [Connection] -> [Point]
+listening = localPoint . stateFilter TCP_LISTEN 
+
+listeningPorts :: [Connection] -> [Port]
+listeningPorts = map port . listening
+
+establishedFrom :: Maybe IP -> Maybe Port -> [Connection] -> [Point]
+establishedFrom Nothing Nothing = remotePoint . stateFilter TCP_ESTABLISHED
+establishedFrom Nothing (Just p) = remotePoint . filter (\x -> (port . localSocket $ x) == p) . stateFilter TCP_ESTABLISHED
+establishedFrom (Just i) Nothing = remotePoint . filter (\x -> (ip . localSocket $ x) == i) . stateFilter TCP_ESTABLISHED
+establishedFrom (Just i) (Just p) = remotePoint . filter (\x -> Point i p == localSocket x) . stateFilter TCP_ESTABLISHED
+
+accumulatePoints :: [Point] -> [(IP, Integer)]
+accumulatePoints p = Map.toList . Map.fromListWith (+) $ map (\x -> (ip x, 1)) p
+
+accumulatePointsByPort :: Port -> [Connection] -> [(IP, Integer)]
+accumulatePointsByPort p = accumulatePoints . establishedFrom Nothing (Just p) 
+
+accumulateClientsByPort :: [Connection] -> [(Port, Integer)]
+accumulateClientsByPort c = undefined
+
+accumulateServersByPort :: [Connection] -> [(Point, Integer)]
+accumulateServersByPort = undefined
 
 firstLine :: Parser ()
 firstLine = skipWhile (not . isEndOfLine)
@@ -79,8 +123,9 @@ connection = do
     f <- leHexToIp <$> (takeTill (== ':') <* char ':')
     p <- AT.hexadecimal <* space
     t <- leHexToIp <$> (takeTill (== ':') <* char ':')
-    p' <- AT.hexadecimal <* space <* skipWhile (not . isEndOfLine)
-    return $ Connection (Point f p) (Point t p')
+    p' <- AT.hexadecimal <* space
+    status <- AT.hexadecimal <* skipWhile (not . isEndOfLine)
+    return $ Connection (Point f p) (Point t p') (toEnum $ status - 1 )
 
 connections :: Parser [Connection]
 connections = firstLine *> many connection 
