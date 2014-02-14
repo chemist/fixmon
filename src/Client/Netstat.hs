@@ -11,12 +11,10 @@ import Data.Word
 import Control.Applicative
 import Prelude hiding (readFile, concat)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 netstat :: String
 netstat = "proc"
-
-localIp :: [IP]
-localIp = ["127.0.0.1"]
 
 leHexToIp :: Text -> IP
 leHexToIp h = let Right (i, _) = RT.hexadecimal . invert $ h
@@ -70,7 +68,7 @@ type To = Point
 data Point = Point
   { ip :: IP
   , port :: Port
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance Show Point where
     show x = show (ip x) ++ ":" ++ show (port x)
@@ -96,23 +94,36 @@ listening = localPoint . stateFilter TCP_LISTEN
 listeningPorts :: [Connection] -> [Port]
 listeningPorts = map port . listening
 
-establishedFrom :: Maybe IP -> Maybe Port -> [Connection] -> [Point]
-establishedFrom Nothing Nothing = remotePoint . stateFilter TCP_ESTABLISHED
-establishedFrom Nothing (Just p) = remotePoint . filter (\x -> (port . localSocket $ x) == p) . stateFilter TCP_ESTABLISHED
-establishedFrom (Just i) Nothing = remotePoint . filter (\x -> (ip . localSocket $ x) == i) . stateFilter TCP_ESTABLISHED
-establishedFrom (Just i) (Just p) = remotePoint . filter (\x -> Point i p == localSocket x) . stateFilter TCP_ESTABLISHED
 
-accumulatePoints :: [Point] -> [(IP, Integer)]
-accumulatePoints p = Map.toList . Map.fromListWith (+) $ map (\x -> (ip x, 1)) p
+establishedIncoming :: Maybe Port -> [Connection] -> [Point]
+establishedIncoming Nothing c = 
+  let ports = Set.fromList . listeningPorts $ c 
+      est = stateFilter TCP_ESTABLISHED c
+  in map (\(Connection (Point _ p) (Point i _) _) -> Point i p) $ filter (\x -> Set.member (port . localSocket $ x) ports) est
+establishedIncoming (Just p) c = 
+  map (\(Connection (Point _ p') (Point i _) _) -> Point i p') $ filter (\x -> (port . localSocket $ x) == p) $ stateFilter TCP_ESTABLISHED c
 
-accumulatePointsByPort :: Port -> [Connection] -> [(IP, Integer)]
-accumulatePointsByPort p = accumulatePoints . establishedFrom Nothing (Just p) 
 
-accumulateClientsByPort :: [Connection] -> [(Port, Integer)]
-accumulateClientsByPort c = undefined
+establishedOutgoing :: Maybe Port -> [Connection] -> [Point]
+establishedOutgoing Nothing c = 
+  let ports = Set.fromList . listeningPorts $ c
+      est = stateFilter TCP_ESTABLISHED c
+  in remotePoint $ filter (\x -> not $ Set.member (port . localSocket $ x) ports) est
+establishedOutgoing (Just p) c = 
+  let ports = Set.fromList . listeningPorts $ c
+      est = stateFilter TCP_ESTABLISHED c
+  in remotePoint $ filter (\x -> (not $ Set.member (port . localSocket $ x) ports) && (port . remoteSocket $ x) == p) est
 
-accumulateServersByPort :: [Connection] -> [(Point, Integer)]
-accumulateServersByPort = undefined
+
+
+accumulatePoints :: [Point] -> [(Point, Integer)]
+accumulatePoints p = Map.toList . Map.fromListWith (+) $ map (\x -> (x, 1)) p
+
+accumulateIncoming :: Maybe Port -> [Connection] -> [(Point, Integer)]
+accumulateIncoming p = accumulatePoints . establishedIncoming p
+
+accumulateOutgoing :: Maybe Port -> [Connection] -> [(Point, Integer)]
+accumulateOutgoing p = accumulatePoints . establishedOutgoing p
 
 firstLine :: Parser ()
 firstLine = skipWhile (not . isEndOfLine)
