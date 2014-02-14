@@ -65,10 +65,14 @@ type Port = Int
 type From = Point
 type To = Point
 
-data Point = Point
+data Point = Internet 
+  { links :: Integer
+  , port :: Port
+  }        | Point
   { ip :: IP
   , port :: Port
   } deriving (Eq, Ord)
+
 
 instance Show Point where
     show x = show (ip x) ++ ":" ++ show (port x)
