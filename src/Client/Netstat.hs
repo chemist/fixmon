@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Netstat where
 
 import Data.Text.IO
 import Data.Text hiding (reverse, filter, map)
 import qualified Data.Text.Read as RT
-import Data.Attoparsec.Text 
+import Data.Attoparsec.Text hiding (I)
 import qualified Data.Attoparsec.Text as AT
 import Data.Network.Ip
 import Data.Word
@@ -65,17 +66,38 @@ type Port = Int
 type From = Point
 type To = Point
 
-data Point = Internet 
-  { links :: Integer
-  , port :: Port
-  }        | Point
+data Point = Point
   { ip :: IP
   , port :: Port
+  , name :: Maybe Text
   } deriving (Eq, Ord)
 
-
 instance Show Point where
-    show x = show (ip x) ++ ":" ++ show (port x)
+    show (Point i p (Just n)) = unpack n ++ " " ++ show i ++ " " ++ show p
+    show (Point i p Nothing) = "Internet " ++ show i ++ " " ++ show p
+
+newtype Dns = Dns [(Net, Text)]
+
+data Net = II IP
+         | NN IPSubnet deriving (Show)
+
+instance Eq Net where
+    (II x) == (II y) =  x == y
+    NN x == NN y = x == y
+    II x == NN y = isHostInNetwork x y
+    NN y == II x = isHostInNetwork x y
+
+knownIp :: Dns
+knownIp = Dns  [ (II $ read "127.0.0.1", "localhost")
+               , (II $ read "10.12.0.54", "gray local")
+               , (II $ read "188.138.95.252", "public web02.intaxi.ru")
+               , (II $ read "91.224.183.150", "office")
+               , (II $ read "217.28.217.83", "geo.intaxi.ru")
+               , (II $ read "50.31.164.146", "newrelic")
+               , (NN $ read "172.18.60.0/24", "vpn network")
+               , (II $ read "172.18.60.51", "idb00.intaxi")
+               , (NN $ read "127.0.0.0/8", "vpn network")
+               ]
 
 data Connection = Connection 
   { localSocket :: From
@@ -103,9 +125,9 @@ establishedIncoming :: Maybe Port -> [Connection] -> [Point]
 establishedIncoming Nothing c = 
   let ports = Set.fromList . listeningPorts $ c 
       est = stateFilter TCP_ESTABLISHED c
-  in map (\(Connection (Point _ p) (Point i _) _) -> Point i p) $ filter (\x -> Set.member (port . localSocket $ x) ports) est
+  in map (\(Connection (Point _ p _) (Point i _ n) _) -> Point i p n) $ filter (\x -> Set.member (port . localSocket $ x) ports) est
 establishedIncoming (Just p) c = 
-  map (\(Connection (Point _ p') (Point i _) _) -> Point i p') $ filter (\x -> (port . localSocket $ x) == p) $ stateFilter TCP_ESTABLISHED c
+  map (\(Connection (Point _ p' _) (Point i _ n) _) -> Point i p' n) $ filter (\x -> (port . localSocket $ x) == p) $ stateFilter TCP_ESTABLISHED c
 
 
 establishedOutgoing :: Maybe Port -> [Connection] -> [Point]
@@ -118,16 +140,23 @@ establishedOutgoing (Just p) c =
       est = stateFilter TCP_ESTABLISHED c
   in remotePoint $ filter (\x -> (not $ Set.member (port . localSocket $ x) ports) && (port . remoteSocket $ x) == p) est
 
+toN :: Dns -> [Point] -> [Point]
+toN (Dns a) l = map (fun a) l
+                where
+                fun y (Point i p _) = case lookup (II i) y of
+                                           Nothing -> Point i p Nothing
+                                           Just n -> Point i p (Just n)
 
+newtype Incoming = Incoming (Map.Map Port (Set.Set Point)) deriving (Show)
 
-accumulatePoints :: [Point] -> [(Point, Integer)]
-accumulatePoints p = Map.toList . Map.fromListWith (+) $ map (\x -> (x, 1)) p
+newtype Outgoing = Outgoing (Map.Map Port (Set.Set Point)) deriving (Show)
 
-accumulateIncoming :: Maybe Port -> [Connection] -> [(Point, Integer)]
-accumulateIncoming p = accumulatePoints . establishedIncoming p
+allEstablished :: Dns -> [Connection] -> (Incoming, Outgoing)
+allEstablished d l = 
+  let estI = map (\x -> (port x, Set.singleton x)) $ toN d $ establishedIncoming Nothing l
+      estO = map (\x -> (port x, Set.singleton x)) $ toN d $ establishedOutgoing Nothing l
+  in (Incoming $ Map.fromListWith Set.union estI, Outgoing $ Map.fromListWith Set.union estO)
 
-accumulateOutgoing :: Maybe Port -> [Connection] -> [(Point, Integer)]
-accumulateOutgoing p = accumulatePoints . establishedOutgoing p
 
 firstLine :: Parser ()
 firstLine = skipWhile (not . isEndOfLine)
@@ -140,7 +169,7 @@ connection = do
     t <- leHexToIp <$> (takeTill (== ':') <* char ':')
     p' <- AT.hexadecimal <* space
     status <- AT.hexadecimal <* skipWhile (not . isEndOfLine)
-    return $ Connection (Point f p) (Point t p') (toEnum $ status - 1 )
+    return $ Connection (Point f p Nothing) (Point t p' Nothing) (toEnum $ status - 1 )
 
 connections :: Parser [Connection]
 connections = firstLine *> many connection 
