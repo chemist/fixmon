@@ -29,6 +29,8 @@ module Types
 , Gns(..)
 , runGns
 , emptyMonitoring
+-- * error
+, TypeError
 ) where
 
 import Types.Shared 

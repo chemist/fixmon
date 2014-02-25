@@ -18,6 +18,7 @@ import qualified Control.Monad.Reader as R
 import qualified Control.Monad.Error as E
 import Text.Read (readMaybe)
 import Control.Applicative ((<$>), (<*>), pure)
+import Control.Exception (try)
 
 
 
@@ -61,7 +62,7 @@ num ::: Int
 |]
 
 parseTrigger :: Text -> Either ParseError (TriggerRaw Bool)
-parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return 
+parseTrigger x = parseString top "<stdin>" $ LL.CS $ encodeUtf8 x  
 
 
 data Env = Env 
@@ -69,31 +70,29 @@ data Env = Env
 type Eval a = R.ReaderT Env (E.ErrorT String IO) a
 
 
-runEval :: Env -> Eval (TriggerRaw a) -> Complex -> IO (Either String Status)
-runEval env e c = E.runErrorT (R.runReaderT (fun c e) env)
+eval :: Env -> Complex -> TriggerRaw a -> IO (Either String Bool)
+eval env c e = E.runErrorT (R.runReaderT (fun c e) env)
 
-fun :: Complex -> Eval (TriggerRaw a) -> Eval Status
-fun (Complex c) e = do
-    t <- e
-    case t of
-         Less (Text x) y -> return $ Status $ maybe False (< y) (lookup x c)
-         More (Text x) y -> return $ Status $ maybe False (> y) (lookup x c)
-         Equal (Text x) y -> return $ Status $ maybe False (== y) (lookup x c)
-         Not x -> not <$> (fun (Complex c) (pure x))
-         And x y -> and <$> (fun (Complex c) (pure x)) <*> (fun (Complex c) (pure y))
-         Or x y -> or <$> (fun (Complex c) (pure x)) <*> (fun (Complex c) (pure y))
-         _ -> pure $ Status False
-
-eval :: TriggerRaw a -> Complex -> Status
-eval (Less (Text x) y) (Complex c) = Status $ maybe False (< y) (lookup x c)
-eval (More (Text x) y) (Complex c) = Status $ maybe False (> y) (lookup x c)
-eval (Equal (Text x) y) (Complex c) = Status $ maybe False (== y) (lookup x c)
-eval (Not x) c = not $ eval x c
-eval (And x y) c = eval x c `and` eval y c
-eval (Or x y) c = eval x c `or` eval y c
-eval _ _ = Status False
+fun :: Complex -> TriggerRaw a -> Eval Bool
+fun (Complex c) (Less (Text x) y)  = return $! maybe False (< y) (lookup x c)
+fun (Complex c) (More (Text x) y)  = return $! maybe False (> y) (lookup x c)
+fun (Complex c) (Equal (Text x) y) = do
+    r <- R.liftIO $ try $ return $! maybe False (== y) (lookup x c) :: Eval (Either TypeError Bool)
+    case r of
+         Left e -> fail $ show e
+         Right a -> return a
+fun (Complex c) (Not x)            = not <$> fun (Complex c) x
+fun (Complex c) (And x y)          = and <$> fun (Complex c) x <*> fun (Complex c) y
+fun (Complex c) (Or x y)           = or <$> fun (Complex c) x <*> fun (Complex c) y
+fun _  _                           = return False
 
 
+not = P.not
+
+or x y = x || y
+
+and x y = x && y
+{--
 not :: Status -> Status
 not (Status x) = Status $ P.not x
 
@@ -103,6 +102,7 @@ or (Status a) (Status b) = Status $ a || b
 and :: Status -> Status -> Status
 and (Status a) (Status b) = Status $ a && b
 
+--}
 
 
 

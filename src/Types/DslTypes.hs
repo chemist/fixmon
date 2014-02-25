@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
 module Types.DslTypes
-( TriggerRaw(..), Any(..) )
+( TriggerRaw(..), Any(..), TypeError )
 where
 
 import           Control.Applicative ((<$>), (<*>))
