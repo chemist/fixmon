@@ -14,7 +14,10 @@ import           Data.Text.Encoding   (encodeUtf8)
 import           Prelude              hiding (and, lookup, not, or)
 import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)
+import qualified Control.Monad.Reader as R
+import qualified Control.Monad.Error as E
 import Text.Read (readMaybe)
+import Control.Applicative ((<$>), (<*>), pure)
 
 
 
@@ -57,6 +60,30 @@ num ::: Int
 
 |]
 
+parseTrigger :: Text -> Either ParseError (TriggerRaw Bool)
+parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return 
+
+
+data Env = Env 
+
+type Eval a = R.ReaderT Env (E.ErrorT String IO) a
+
+
+runEval :: Env -> Eval (TriggerRaw a) -> Complex -> IO (Either String Status)
+runEval env e c = E.runErrorT (R.runReaderT (fun c e) env)
+
+fun :: Complex -> Eval (TriggerRaw a) -> Eval Status
+fun (Complex c) e = do
+    t <- e
+    case t of
+         Less (Text x) y -> return $ Status $ maybe False (< y) (lookup x c)
+         More (Text x) y -> return $ Status $ maybe False (> y) (lookup x c)
+         Equal (Text x) y -> return $ Status $ maybe False (== y) (lookup x c)
+         Not x -> not <$> (fun (Complex c) (pure x))
+         And x y -> and <$> (fun (Complex c) (pure x)) <*> (fun (Complex c) (pure y))
+         Or x y -> or <$> (fun (Complex c) (pure x)) <*> (fun (Complex c) (pure y))
+         _ -> pure $ Status False
+
 eval :: TriggerRaw a -> Complex -> Status
 eval (Less (Text x) y) (Complex c) = Status $ maybe False (< y) (lookup x c)
 eval (More (Text x) y) (Complex c) = Status $ maybe False (> y) (lookup x c)
@@ -76,10 +103,6 @@ or (Status a) (Status b) = Status $ a || b
 and :: Status -> Status -> Status
 and (Status a) (Status b) = Status $ a && b
 
-
-
-parseTrigger :: Text -> Either ParseError (TriggerRaw Bool)
-parseTrigger x = (parseString top "<stdin>" $ LL.CS $ encodeUtf8 x) >>= P.return 
 
 
 

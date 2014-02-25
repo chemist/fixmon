@@ -8,6 +8,8 @@ import           Control.Monad.RWS.Strict (MonadIO, MonadRWS, MonadReader,
                                            MonadState, MonadWriter, RWST,
                                            runRWST)
 
+import qualified Control.Monad.Reader as R
+
 newtype Gns a = Gns {run:: ErrorT String (RWST StartOptions Log Monitoring IO) a} deriving
   ( Monad
   , MonadIO
@@ -24,7 +26,5 @@ flip' f a b c =  f (run c) a b
 
 runGns :: StartOptions -> Monitoring -> Gns a -> IO (Either String a, Monitoring, Log)
 runGns = flip' $ runRWST . runErrorT
-
-
 
 
