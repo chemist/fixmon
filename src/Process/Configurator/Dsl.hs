@@ -11,7 +11,7 @@ import qualified Data.ListLike        as LL
 import           Data.Map             (lookup)
 import           Data.Text            hiding (empty, filter, foldl1, head, map)
 import           Data.Text.Encoding   (encodeUtf8)
-import           Prelude              hiding (and, lookup, not, or)
+import           Prelude              hiding (lookup)
 import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)
 import qualified Control.Monad.Reader as R
@@ -19,6 +19,7 @@ import qualified Control.Monad.Error as E
 import Text.Read (readMaybe)
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Exception (try)
+import Data.Typeable
 
 
 
@@ -74,38 +75,38 @@ eval :: Env -> Complex -> TriggerRaw a -> IO (Either String Bool)
 eval env c e = E.runErrorT (R.runReaderT (fun c e) env)
 
 fun :: Complex -> TriggerRaw a -> Eval Bool
-fun (Complex c) (Less (Text x) y)  = return $! maybe False (< y) (lookup x c)
-fun (Complex c) (More (Text x) y)  = return $! maybe False (> y) (lookup x c)
-fun (Complex c) (Equal (Text x) y) = do
-    r <- R.liftIO $ try $ return $! maybe False (== y) (lookup x c) :: Eval (Either TypeError Bool)
-    case r of
-         Left e -> fail $ show e
-         Right a -> return a
+fun (Complex c) (Less (Text x) y)  = maybe (fail "bad check describe") (less y) (lookup x c)
+fun (Complex c) (More (Text x) y)  = maybe (fail "bad check describe") (more y) (lookup x c)
+fun (Complex c) (Equal (Text x) y) = maybe (fail "bad check describe") (equal y) (lookup x c) 
 fun (Complex c) (Not x)            = not <$> fun (Complex c) x
-fun (Complex c) (And x y)          = and <$> fun (Complex c) x <*> fun (Complex c) y
-fun (Complex c) (Or x y)           = or <$> fun (Complex c) x <*> fun (Complex c) y
+fun (Complex c) (And x y)          = (&&) <$> fun (Complex c) x <*> fun (Complex c) y
+fun (Complex c) (Or x y)           = (||) <$> fun (Complex c) x <*> fun (Complex c) y
 fun _  _                           = return False
 
+class Logic a where
+    equal :: a -> a -> Eval Bool
+    more :: a -> a -> Eval Bool
+    less :: a -> a -> Eval Bool
 
-not = P.not
-
-or x y = x || y
-
-and x y = x && y
-{--
-not :: Status -> Status
-not (Status x) = Status $ P.not x
-
-or :: Status -> Status -> Status
-or (Status a) (Status b) = Status $ a || b
-
-and :: Status -> Status -> Status
-and (Status a) (Status b) = Status $ a && b
-
---}
-
-
-
+instance Logic Any where
+    equal a b | typeOf a == typeOf b = case (a,b) of
+                      (Any (Bool x), Any (Bool y)) -> return $ x == y
+                      (Any (Int x), Any (Int y)) -> return $ x == y
+                      (Any (Text x), Any (Text y)) -> return $ x == y
+                      _ -> fail $ "unknown type " ++ show (typeOf a)
+            | otherwise = fail $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
+    more a b | typeOf a == typeOf b = case (a, b) of
+                      (Any (Bool x), Any (Bool y)) -> return $ x > y
+                      (Any (Int x), Any (Int y)) -> return $ x > y
+                      (Any (Text x), Any (Text y)) -> return $ x > y
+                      _ -> fail $ "unknown type " ++ show (typeOf a)
+             | otherwise = fail $ "you try do " ++ show (typeOf a) ++ " > " ++ show (typeOf b)
+    less a b | typeOf a == typeOf b = case (a, b) of
+                      (Any (Bool x), Any (Bool y)) -> return $ x < y
+                      (Any (Int x), Any (Int y)) -> return $ x < y
+                      (Any (Text x), Any (Text y)) -> return $ x < y
+                      _ -> fail $ "unknown type " ++ show (typeOf a)
+             | otherwise = fail $ "you try do " ++ show (typeOf a) ++ " < " ++ show (typeOf b)
 
 -- | Examples
 -- 
