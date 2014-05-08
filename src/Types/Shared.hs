@@ -7,7 +7,9 @@ import           Types.Cron
 import           Types.DslTypes
 
 import           Control.Exception   (Exception)
-import           Data.Map            (Map, empty)
+import Data.HashMap.Strict (HashMap, empty)
+import Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Monoid         (Monoid, mappend, mempty, (<>))
 import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
@@ -18,6 +20,8 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, put)
 import           Data.Text.Binary    ()
+import Data.Vector (Vector)
+import qualified Data.Vector as V
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -101,10 +105,10 @@ data StartOptions = StartOptions
 data Monitoring = Monitoring
  { _periodMap :: Map Cron (Set CheckHost)
  , _checkHost :: Map CheckHost (Set TriggerId)
- , _hosts     :: Map HostId Hostname
- , _groups    :: [Group]
- , _triggers  :: Map TriggerId Trigger
- , _checks    :: Map CheckId Check
+ , _hosts     :: Vector Hostname
+ , _groups    :: Vector Group
+ , _triggers  :: Vector Trigger
+ , _checks    :: Vector Check
  , _status    :: Map TriggerHost Status
  } deriving Show
 
@@ -119,6 +123,6 @@ instance Error PError
 ----------------------------------------------------------------------------------------------------
 
 emptyMonitoring :: Monitoring
-emptyMonitoring = Monitoring empty empty empty mempty empty empty mempty
+emptyMonitoring = Monitoring M.empty M.empty V.empty V.empty V.empty V.empty M.empty
 
 
