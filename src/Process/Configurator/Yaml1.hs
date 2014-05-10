@@ -3,22 +3,22 @@ module Process.Configurator.Yaml1 where
 
 import Data.Yaml
 import Data.Vector hiding ((++))
-import Data.HashMap.Strict hiding (map)
+import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as DH
-import Data.Text (pack, Text)
+import Data.Text (Text)
 import Control.Applicative
 import Data.Attoparsec.Text (parseOnly)
 import Control.Monad (mzero)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Debug.Trace
-import Text.Peggy.Prim (ParseError)
-import Prelude hiding (map)
+import Data.Monoid ((<>))
+import Prelude hiding (map, foldl1)
+import Control.Arrow ((&&&))
 
 import Process.Configurator.Dsl
 import Types.Cron
 import System.Cron.Parser
-import Types (Hostname(..), TriggerRaw)
+import Types (Hostname(..))
 import qualified Types as T
 
 data Trigger = Trigger
@@ -84,8 +84,8 @@ instance FromJSON Group where
                            v .:? "checks"
     parseJSON _ = mzero
 
-decodeConf :: FilePath -> IO (Either ParseException Config)
-decodeConf fp = decodeFileEither fp
+decodeConf :: FilePath -> IO (Either String Config)
+decodeConf fp = conv <$> (decodeFileEither fp)
 
 transformCheck :: Check -> Either String T.Check
 transformCheck ch = makeCheck =<< parseOnly cronSchedule (period ch)
@@ -103,7 +103,7 @@ transformTrigger chs tr = makeTrigger =<< (conv $ parseTrigger (result tr))
                            Nothing -> fail $ "check " ++ (show $ check tr) ++ " not found"
                            Just i -> return $ T.Trigger (T.TriggerName (name tr)) (description tr) (T.CheckId i) tr'
 
-conv :: Either ParseError (TriggerRaw Bool) -> Either String (TriggerRaw Bool)
+conv :: Show a => Either a b -> Either String b
 conv x = case x of
               Left y -> Left $ show y
               Right y -> Right y
@@ -135,8 +135,34 @@ transformGroup ch hs tr gr = do
                              tt <- ttriggers $ gtriggers gr
                              return $ T.Group (T.GroupName $ gname gr) (S.fromList hh) (S.fromList tt) (S.fromList cc)
 
+checksFromTriggers :: Vector T.Trigger -> T.Group -> (S.Set T.HostId, S.Set T.CheckId)
+checksFromTriggers t g = 
+  let ch = S.map (\(T.TriggerId i) -> T._check (t ! i)) $ T.triggers g
+  in (T.hosts g, ch) 
+
+checkHosts :: Vector T.Trigger -> Vector T.Group -> S.Set T.CheckHost
+checkHosts t m = 
+  let pairs = map (checksFromTriggers t) m
+      pairs' = map (T.hosts &&& T.checks) m
+      checkHost (x, y) = S.fromList $ [ T.CheckHost (a, b) | a <-  S.toList x, b <- S.toList y ]
+  in foldl1 S.union $ map checkHost (pairs <> pairs')
+
+triggersByCheckHost :: Vector T.Trigger -> Vector T.Group -> M.Map T.CheckHost (S.Set T.TriggerId)
+triggersByCheckHost tv gv = 
+  let fun :: T.CheckHost -> Vector T.Group -> S.Set T.TriggerId
+      fun (T.CheckHost (a, b)) tv' = V.foldl S.union S.empty $ map T.triggers . V.filter (filterFun a b) $ tv'
+      filterFun :: T.HostId -> T.CheckId -> T.Group -> Bool
+      filterFun h c g = S.member h (T.hosts g)  && S.member c (S.map (\(T.TriggerId x) -> T._check (tv ! x)) $ T.triggers g)
+  in M.fromSet (flip fun gv) $ checkHosts tv gv
+
+
 dc x = do
     ch <-  Data.Vector.mapM transformCheck $ checks x
     tr <-  Data.Vector.mapM (transformTrigger ch) $ triggers x
     gg <- Data.Vector.mapM (transformGroup ch (hosts x) tr) $ groups x
-    return (ch,tr, gg)
+    let tbch = triggersByCheckHost tr gg 
+    return (ch,tr, gg, tbch)
+
+main = do
+    f <-  decodeConf "gnc.yaml"
+    return $ dc =<< id f
