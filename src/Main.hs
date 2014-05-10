@@ -4,14 +4,18 @@ module Main where
 import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
+import           Process.Web
 
 import           Control.Applicative
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
+import           Control.Monad.Reader                       (ask)
 import           Control.Monad.State
-import           Network.Transport                (closeTransport)
-import           Network.Transport.TCP            (createTransport,
-                                                   defaultTCPParameters)
+import           Network.Transport                          (closeTransport)
+import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
+
+import           Network.Wai.Handler.Warp
+
 -- import Control.Exception (SomeException)
 
 main :: IO ()
@@ -19,6 +23,8 @@ main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
+        s <-  ask
+        void . spawnLocal $ liftIO $ run 3000 (web s)
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock
@@ -46,7 +52,7 @@ supervisor = do
     forever $ do
         (ProcessMonitorNotification _ pid _) <- expect :: Process ProcessMonitorNotification
         say "supervisor <- (ProcessMonitorNotification)"
-        say . show $ lookup pid names 
+        say . show $ lookup pid names
 {--
 replLoop :: Process ()
 replLoop = forever $ do

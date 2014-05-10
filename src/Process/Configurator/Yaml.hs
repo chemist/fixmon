@@ -2,9 +2,9 @@
 module Process.Configurator.Yaml
 (parseConfig) where
 
-import           Control.Monad            (mzero)
 import           Control.Applicative      (pure, (<$>), (<*>))
 import           Control.Arrow            ((&&&))
+import           Control.Monad            (mzero)
 
 import           Data.Attoparsec.Text     (parseOnly)
 import           Data.HashMap.Strict      (toList)
@@ -14,6 +14,7 @@ import qualified Data.Set                 as S
 import           Data.Text                (Text)
 import           Data.Vector              (Vector, filter, findIndex, foldl,
                                            foldl', foldl1, map, mapM, (!))
+import           Data.Vector.Binary       ()
 import           Data.Yaml                (FromJSON (..), Value (..),
                                            decodeFileEither, (.:), (.:?))
 import           System.Cron.Parser       (cronSchedule)
