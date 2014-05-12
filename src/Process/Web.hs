@@ -1,13 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Process.Web where
 
-import Network.Wai.Handler.Warp (run)
-import Network.Wai
+import Web.Scotty
 import           Network.HTTP.Types.Status
 import Control.Monad.Reader
 import Data.Vector (Vector)
-import Data.ByteString.Lazy.Char8 (pack)
+import Data.Text (Text)
+import Data.Text.Lazy (pack)
 import Data.Vector.Binary ()
+import Data.Monoid ((<>))
 -- import           Network.Wai.Middleware.RequestLogger (logStdoutDev)
 -- import           Network.Wai.Middleware.Static
 import Control.Distributed.Process.Node
@@ -18,8 +19,9 @@ import qualified Process.Utils as PU
 import Types
 
 
-web :: LocalProcess -> Request -> IO Response
-web lp x = do
-    b <-  runLocalProcess lp $ PU.request PU.HostMap :: IO (Maybe (Vector Hostname))
-    return $ responseLBS status200 [] (pack $ show b)
+web :: LocalProcess -> ScottyM ()
+web lp = do
+    b <-  liftIO $ runLocalProcess lp $ PU.request PU.HostMap :: ScottyM (Maybe (Vector Hostname))
+    get "/" $ do
+        html $ "<p>" <> pack (show b) <> "</p>"
 

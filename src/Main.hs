@@ -14,7 +14,7 @@ import           Control.Monad.State
 import           Network.Transport                          (closeTransport)
 import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
 
-import           Network.Wai.Handler.Warp
+import           Web.Scotty (scotty)
 
 -- import Control.Exception (SomeException)
 
@@ -24,7 +24,7 @@ main = do
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
         s <-  ask
-        void . spawnLocal $ liftIO $ run 3000 (web s)
+        void . spawnLocal $ liftIO $ scotty 3000 (web s)
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock
