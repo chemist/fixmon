@@ -1,8 +1,8 @@
 module Types 
-( HostId(..)
+( HostId
 , Hostname(..)
 -- * Триггеры
-, TriggerId(..)
+, TriggerId
 , TriggerName(..)
 , Trigger(..)
 , TriggerHost(..)
@@ -10,12 +10,12 @@ module Types
 , Any(..)
 -- * Проверки
 , Check(..)
-, CheckId(..)
+, CheckId
 , CheckName(..)
 , CheckHost(..)
 -- * Группы
 , GroupName(..)
-, GroupId(..)
+, GroupId
 , Group(..)
 -- * Общее
 , Cron(..)
@@ -31,6 +31,7 @@ module Types
 , emptyMonitoring
 -- * error
 , TypeError
+, IntId(..)
 ) where
 
 import Types.Shared 

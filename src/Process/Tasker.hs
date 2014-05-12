@@ -11,11 +11,12 @@ import           Control.Monad.State         (StateT, evalStateT, forever, lift,
 import Control.Monad (forM_)
 import           Data.Map                    (Map, lookup)
 import           Data.Set                    (Set, toList)
+import Data.Vector (Vector, (!))
 import           Prelude                     hiding (lookup)
 
 data Tasker = Tasker
-  { hosts  :: Map HostId Hostname
-  , checks :: Map CheckId Check
+  { hosts  :: Vector Hostname
+  , checks :: Vector Check
   }
 
 type TaskerState a = StateT Tasker Process a
@@ -52,13 +53,13 @@ taskMatch st = match fun
 
 startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
-    let host'' = lookup (h ch) (hosts st)
-        check'' = lookup (c ch) (checks st)
+    let host'' = (hosts st) ! (h ch)
+        check'' = (checks st) ! (c ch)
     say $ "do check: " ++ show check''
     say $ "in host: " ++ show host''
     where
-        h :: CheckHost -> HostId
-        h (CheckHost (x, _)) = x
+        h :: CheckHost -> Int
+        h (CheckHost (i, _)) = unId i
         
-        c :: CheckHost -> CheckId
-        c (CheckHost (_, x)) = x
+        c :: CheckHost -> Int
+        c (CheckHost (_, i)) = unId i

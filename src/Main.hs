@@ -13,6 +13,7 @@ import           Control.Monad.Reader                       (ask)
 import           Control.Monad.State
 import           Network.Transport                          (closeTransport)
 import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
+import Control.Concurrent (threadDelay)
 
 import           Web.Scotty (scotty)
 
@@ -24,14 +25,19 @@ main = do
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
         s <-  ask
-        void . spawnLocal $ liftIO $ scotty 3000 (web s)
+        void . spawnLocal $ do
+            register "web" =<< getSelfPid
+            say "start web"
+            liftIO $ scotty 3000 (web s)
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock
         void . spawnLocal $ tasker
         void . spawnLocal $ supervisor
         say . show =<< getSelfPid
-        _ <- liftIO $ readLn :: Process String
+        _ <- liftIO $ getLine :: Process String
+        say $ "kill web"
+        maybe (return ()) (flip kill "stop web") =<< whereis "web"
         return ()
         -- replLoop
     closeLocalNode node
@@ -44,11 +50,13 @@ supervisor = do
     Just storePid <- whereis "configurator"
     Just clockPid <- whereis "clock"
     Just taskerPid <- whereis "tasker"
+    Just webPid <- whereis "web"
     void . monitor $ cronPid
     void . monitor $ storePid
     void . monitor $ clockPid
     void . monitor $ taskerPid
-    names <- zip [cronPid, storePid, clockPid, taskerPid] <$> sequence [getProcessInfo cronPid, getProcessInfo storePid, getProcessInfo clockPid, getProcessInfo taskerPid]
+    void . monitor $ webPid
+    names <- zip [cronPid, storePid, clockPid, taskerPid, webPid] <$> sequence [getProcessInfo cronPid, getProcessInfo storePid, getProcessInfo clockPid, getProcessInfo taskerPid, getProcessInfo webPid]
     forever $ do
         (ProcessMonitorNotification _ pid _) <- expect :: Process ProcessMonitorNotification
         say "supervisor <- (ProcessMonitorNotification)"

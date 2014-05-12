@@ -54,18 +54,20 @@ storeMatch = [ lookupTrigger
 lookupTrigger :: Monitoring -> Match ()
 lookupTrigger st = match fun
      where
-     fun (Request (pid, TriggerId x)) = do
+     fun :: Request TriggerId -> Process ()
+     fun (Request (pid, i)) = do
          say "configurator <- (Request Trigger)"
          say "configurator (Response Trigger) -> "
-         send pid $ Response ((_triggers st) !? x)
+         send pid $ Response ((_triggers st) !? unId i)
 
 lookupCheck :: Monitoring -> Match ()
 lookupCheck st = match fun
      where
-     fun (Request (pid, CheckId x)) = do
+     fun :: Request CheckId -> Process ()
+     fun (Request (pid, i)) = do
          say "configurator <- (Request Check)"
          say "configurator (Response Check) -> "
-         send pid $ Response ((_checks st) !? x)
+         send pid $ Response ((_checks st) !? unId i)
 
 lookupCronSet :: Monitoring -> Match ()
 lookupCronSet st = match fun

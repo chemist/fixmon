@@ -7,9 +7,9 @@ import           Types.Cron
 import           Types.DslTypes
 
 import           Control.Exception   (Exception)
-import Data.HashMap.Strict (HashMap, empty)
-import Data.Map (Map)
-import qualified Data.Map as M
+import           Data.HashMap.Strict (HashMap, empty)
+import           Data.Map            (Map)
+import qualified Data.Map            as M
 import           Data.Monoid         (Monoid, mappend, mempty, (<>))
 import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
@@ -20,12 +20,12 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, put)
 import           Data.Text.Binary    ()
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import           Data.Vector         (Vector)
+import qualified Data.Vector         as V
+import Control.Lens
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
-
 
 newtype GroupId = GroupId Int deriving (Show, Eq, Ord, Binary)
 newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary)
@@ -34,12 +34,31 @@ instance IsString GroupName where
     fromString x = GroupName . pack $ x
 
 data Group = Group
- { name     :: GroupName
- , hosts    :: Set HostId
- , triggers :: Set TriggerId
- , checks   :: Set CheckId
+ { gname     :: GroupName
+ , ghosts    :: Set HostId
+ , gtriggers :: Set TriggerId
+ , gchecks   :: Set CheckId
  } deriving Show
 
+class IntId a where
+    unId :: a -> Int
+    pId :: Int -> a
+
+instance IntId CheckId where
+    unId (CheckId x) = x
+    pId = CheckId
+
+instance IntId HostId where
+    unId (HostId x) = x
+    pId = HostId
+
+instance IntId TriggerId where
+    unId (TriggerId x) = x
+    pId = TriggerId
+
+instance IntId GroupId where
+    unId (GroupId x) = x
+    pId = GroupId
 
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
 newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Eq, Ord, Binary, Typeable)
@@ -51,14 +70,15 @@ instance Show CheckName where
 instance IsString CheckName where
     fromString x = CheckName . pack $ x
 
-data Check = Check { _checkName :: CheckName
-                   , _period    :: Cron
-                   , _params    :: Map Text Text
+data Check = Check { cname :: CheckName
+                   , cperiod    :: Cron
+                   , ctype :: Text
+                   , cparams    :: Map Text Text
                    } deriving (Show, Eq, Ord, Typeable)
 
 instance Binary Check where
-    put (Check a b c) = put a >> put b >> put c
-    get = Check <$> get <*> get <*> get
+    put (Check a b c d) = put a >> put b >> put c >> put d
+    get = Check <$> get <*> get <*> get <*> get
 
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
@@ -69,10 +89,10 @@ instance IsString TriggerName where
     fromString x = TriggerName . pack $ x
 
 data Trigger = Trigger
-  { _name        :: TriggerName
-  , _description :: Text
-  , _check       :: CheckId
-  , _result      :: TriggerRaw Bool
+  { tname        :: TriggerName
+  , tdescription :: Text
+  , tcheck       :: CheckId
+  , tresult      :: TriggerRaw Bool
   } deriving (Show, Eq, Typeable)
 
 instance Binary Trigger where
