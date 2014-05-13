@@ -22,7 +22,6 @@ import           Data.Binary         (Binary, get, put)
 import           Data.Text.Binary    ()
 import           Data.Vector         (Vector)
 import qualified Data.Vector         as V
-import Control.Lens
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
