@@ -68,7 +68,7 @@ executable test
   Hs-Source-Dirs:       src/Test, src
   Main-Is:              Main.hs
 
-  Build-Depends:        base >= 4.6 && < 4.7, peggy, binary, text, containers, ListLike, mtl, text-binary, cron, test-framework, test-framework-hunit, test-framework-quickcheck2,HUnit, QuickCheck, vector, unordered-containers, lens
+  Build-Depends:        base >= 4.6 && < 4.7, peggy, binary, text, containers, ListLike, mtl, text-binary, cron, test-framework, test-framework-hunit, test-framework-quickcheck2,HUnit, QuickCheck, vector, unordered-containers, ghc
   Ghc-Options:          -Wall
 
   default-language:    Haskell2010
