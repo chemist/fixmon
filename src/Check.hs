@@ -49,6 +49,7 @@ describeCheck ch@(Check _ _ t _) = do
          Nothing -> return $ string ""
          Just (AC (_, t)) -> return $ example t
 
+{--
 abr :: CheckT IO ()
 abr = do
     addRoute Http
@@ -57,6 +58,7 @@ abr = do
     x <- describeCheck testHttp
     liftIO $ putStr $ toByteString x
     return ()
+    --}
 
 class Checkable a where
     route :: a -> (Text, Check -> IO Complex) 
@@ -73,6 +75,7 @@ example a = let m = describe a
 
             in mapping [("checks", mapping nds)]
 
+{--
 data Http = Http deriving Show
 data Shell = Shell deriving Show
 
@@ -100,3 +103,4 @@ doShell c = print "do shell check" >> (return $ Complex empty)
 testHttp = Check (CheckName "web") (Cron daily) "http.status" (fromList [("url", "http://ya.ru")])
 
 testShell = Check (CheckName "shell") (Cron daily) "cmd.run" (fromList [("abc", ""), ("command", "uptime")])
+--}

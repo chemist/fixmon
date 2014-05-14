@@ -1,22 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ConstraintKinds #-}
 module Check.Http where
 
-import           Control.Concurrent
-import           Control.Concurrent.Async
-import           Data.Attoparsec.Text     (parseOnly)
-import           Data.Map                 (Map, fromList)
-import           Data.Text
-import           GNS.Data
-import           System.Cron.Parser
+-- import Network.Wreq
+import Data.Text (Text)
 
-testCheck :: Check
-testCheck = Check
-  { _checkName = "ya"
-  , _period = Cron . right $ parseOnly cronSchedule  "* * * * *"
-  , _params = fromList []
-  }
+import Check
+import Types
 
-right ::Either String b -> b
-right (Right x) = x
-right _ = error "bad crontab"
+data Http = HttpSimple deriving Show
+
+instance Checkable Http where
+    describe (HttpSimple) = [("url", True, checkUrl), ("agent", False, checkAgent)]
+    route (HttpSimple) = ("http.simple", doHttp)
+
+checkUrl :: Text -> Maybe Text
+checkUrl = undefined
+
+checkAgent :: Text  -> Maybe Text
+checkAgent = undefined
+
+checkAuth :: Text -> Maybe Text
+checkAuth = undefined
+
+doHttp :: Check -> IO Complex
+doHttp = undefined
