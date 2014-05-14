@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 -- The name of the package.
-name:                gns
+name:                fixmon
 
 -- The package version.  See the Haskell package versioning policy (PVP) 
 -- for standards guiding when and how versions should be incremented.
@@ -45,7 +45,7 @@ build-type:          Custom
 cabal-version:       >=1.10
 
 
-executable gns
+executable fixmon
   -- .hs or .lhs file containing the Main module.
   main-is: Main.hs 
   

@@ -20,9 +20,9 @@ store :: Process ()
 store = do
     say "start configurator"
     register "configurator" =<< getSelfPid
-    Right m <- liftIO $ parseConfig "gnc.yaml"
+    Right m <- liftIO $ parseConfig "fixmon.yaml"
 --    say . show =<< liftIO getCurrentDirectory
-    time <- liftIO $ getModificationTime "gnc.yaml"
+    time <- liftIO $ getModificationTime "fixmon.yaml"
     evalStateT (storeT time) m
 
 storeT :: UTCTime -> StoreT ()
@@ -30,10 +30,10 @@ storeT time = do
     m <- get
     void . lift $ receiveWait $! map (\f -> f m) storeMatch
 --    lift .  say . show =<< liftIO getCurrentDirectory
-    newTime <- liftIO $ getModificationTime "gnc.yaml"
+    newTime <- liftIO $ getModificationTime "fixmon.yaml"
     when (time /= newTime) $ do
         lift $ say "file was changed, reload"
-        Right n <- liftIO $ parseConfig "gnc.yaml"
+        Right n <- liftIO $ parseConfig "fixmon.yaml"
         put n
         lift $ nsend "cron" CronMap
         lift $ say "configurator (CronMap)-> cron  "
