@@ -5,17 +5,17 @@ module Check where
 import Data.Maybe (fromJust)
 import Data.Map (insert, Map, lookup, empty, fromList)
 import Data.Text (Text, unpack)
-import Prelude hiding (lookup, putStr)
 import Control.Applicative ((<$>), (<*>), (*>), Applicative)
 import Data.Monoid ((<>))
 import System.Cron
-import Types
+import Types (Check(..), Complex(..))
 import Control.Monad.State
 import Control.Monad
 import Data.Vector (Vector)
 import Network.URI
 import Data.Yaml.Builder
 import Data.ByteString (putStr)
+import Prelude hiding (lookup, putStr)
 
 data AC  where
   AC :: Checkable a =>  ((Check -> IO Complex), a) -> AC

@@ -15,7 +15,7 @@ import           Network.Transport                          (closeTransport)
 import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
 import Control.Concurrent (threadDelay)
 
-import           Web.Scotty (scotty)
+-- import           Web.Scotty (scotty)
 
 -- import Control.Exception (SomeException)
 
@@ -28,7 +28,7 @@ main = do
         void . spawnLocal $ do
             register "web" =<< getSelfPid
             say "start web"
-            liftIO $ scotty 3000 (web s)
+            liftIO $ undefined (web s)
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock

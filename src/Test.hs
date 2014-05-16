@@ -2,18 +2,18 @@
 {-# LANGUAGE GADTs #-}
 module Main where
 
-import Types.DslTypes
-import Process.Configurator.Dsl 
+import Types.DslTypes (TriggerRaw(..), Any(..))
+import Process.Configurator.Dsl  (parseTrigger)
 
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
 import Test.QuickCheck
 import Test.HUnit hiding (Test)
-import Data.Text
-import Control.Applicative
+import Data.Text (Text, pack)
+import Control.Applicative ((<$>),(<*>))
 import Data.String (fromString)
-import Data.Binary
-import Text.Peggy.Prim
+import Data.Binary (Binary, decode, encode)
+import Text.Peggy.Prim (ParseError)
 import Data.Monoid (mempty)
 
 
