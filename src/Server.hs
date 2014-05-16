@@ -1,23 +1,20 @@
 module Main where
 
--- import           Types
 import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
 import           Process.Web
 
 import           Control.Applicative
+import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
-import           Control.Monad.Reader                       (ask)
+import           Control.Monad.Reader             (ask)
 import           Control.Monad.State
-import           Network.Transport                          (closeTransport)
-import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
-import Control.Concurrent (threadDelay)
+import           Network.Transport                (closeTransport)
+import           Network.Transport.TCP            (createTransport,
+                                                   defaultTCPParameters)
 
--- import           Web.Scotty (scotty)
-
--- import Control.Exception (SomeException)
 
 main :: IO ()
 main = do
@@ -28,7 +25,7 @@ main = do
         void . spawnLocal $ do
             register "web" =<< getSelfPid
             say "start web"
-            liftIO $ undefined (web s)
+            liftIO $ (web s)
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock
