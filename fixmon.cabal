@@ -65,6 +65,7 @@ executable agent
                        text-binary,
                        binary >=0.5 && <0.6, 
                        cron == 0.2.*,
+                       lens == 4.1.*,
                        wreq
   hs-source-dirs:      src
   default-language:    Haskell2010
