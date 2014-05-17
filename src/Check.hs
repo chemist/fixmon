@@ -2,24 +2,19 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Check where
-import           Control.Applicative (Applicative, (*>), (<$>), (<*>))
+import           Control.Applicative (Applicative)
 import           Control.Monad
 import           Control.Monad.State
-import           Data.ByteString     (putStr)
-import           Data.Map            (Map, empty, fromList, insert, lookup)
-import           Data.Maybe          (fromJust)
+import           Data.Map            (Map, insert, lookup)
 import           Data.Monoid         ((<>))
-import           Data.Text           (Text, unpack)
-import           Data.Vector         (Vector)
+import           Data.Text           (Text)
 import           Data.Yaml.Builder
-import           Network.URI
 import           Prelude             hiding (lookup, putStr)
-import           System.Cron
 
 import           Types               (Check (..), Complex (..))
 
 data AC  where
-  AC :: Checkable a =>  ((Check -> IO Complex), a) -> AC
+  AC :: Checkable a =>  (Check -> IO Complex, a) -> AC
 
 type Route = Map Text AC
 
@@ -44,11 +39,11 @@ runCheck ch@(Check _ _ t _) = do
           (lookup t routes)
 
 describeCheck :: Check -> CheckT IO YamlBuilder
-describeCheck ch@(Check _ _ t _) = do
+describeCheck (Check _ _ t _) = do
     routes <- get :: CheckT IO Route
     case lookup t routes of
          Nothing -> return $ string ""
-         Just (AC (_, t)) -> return $ example [t]
+         Just (AC (_, x)) -> return $ example [x]
 
 {--
 abr :: CheckT IO ()

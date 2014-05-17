@@ -58,7 +58,7 @@ lookupTrigger st = match fun
      fun (Request (pid, i)) = do
          say "configurator <- (Request Trigger)"
          say "configurator (Response Trigger) -> "
-         send pid $ Response ((_triggers st) !? unId i)
+         send pid $ Response (_triggers st !? unId i)
 
 lookupCheck :: Monitoring -> Match ()
 lookupCheck st = match fun
@@ -67,7 +67,7 @@ lookupCheck st = match fun
      fun (Request (pid, i)) = do
          say "configurator <- (Request Check)"
          say "configurator (Response Check) -> "
-         send pid $ Response ((_checks st) !? unId i)
+         send pid $ Response (_checks st !? unId i)
 
 lookupCronSet :: Monitoring -> Match ()
 lookupCronSet st = match fun
@@ -100,6 +100,5 @@ getPart st = match fun
          say "configurator <- (Request CheckMap)"
          say "configurator (Response CheckMap) -> "
          send pid $ Response (Just $ _checks st)
-     fun (Request (_, _)) = do
-         say "configurator <- (BadMessage)"
+     fun (Request (_, _)) = say "configurator <- (BadMessage)"
 

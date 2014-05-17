@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -36,7 +35,7 @@ cron = do
     say "cron (CronMap)-> configurator"
     Just x <- request CronMap
     say "cron <-(CronMap) configurator"
-    evalStateT (cronT ) x
+    evalStateT cronT x
 
 cronT :: CronState ()
 cronT = forever $ do

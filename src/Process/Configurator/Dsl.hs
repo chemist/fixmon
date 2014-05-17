@@ -16,9 +16,7 @@ import qualified Prelude              as P
 import           Text.Peggy           hiding (And, Not)
 import qualified Control.Monad.Reader as R
 import qualified Control.Monad.Error as E
-import Text.Read (readMaybe)
-import Control.Applicative ((<$>), (<*>), pure)
-import Control.Exception (try)
+import Control.Applicative ((<$>), (<*>))
 import Data.Typeable
 
 

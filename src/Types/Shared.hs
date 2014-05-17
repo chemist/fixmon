@@ -7,7 +7,7 @@ import           Types.Cron
 import           Types.DslTypes
 
 import           Control.Exception   (Exception)
-import           Data.HashMap.Strict (HashMap, empty)
+import           Control.Monad       (mzero)
 import           Data.Map            (Map)
 import qualified Data.Map            as M
 import           Data.Monoid         (Monoid, mappend, mempty, (<>))
@@ -15,13 +15,15 @@ import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
 import           Data.Text           (Text, pack)
 import           Data.Typeable       (Typeable)
+import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
-import           Control.Applicative ((<$>), (<*>))
+import           Control.Applicative (pure, (<$>), (<*>))
 import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, put)
 import           Data.Text.Binary    ()
 import           Data.Vector         (Vector)
 import qualified Data.Vector         as V
+import           Data.Vector.Binary  ()
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -69,10 +71,10 @@ instance Show CheckName where
 instance IsString CheckName where
     fromString x = CheckName . pack $ x
 
-data Check = Check { cname :: CheckName
-                   , cperiod    :: Cron
-                   , ctype :: Text
-                   , cparams    :: Map Text Text
+data Check = Check { cname   :: CheckName
+                   , cperiod :: Cron
+                   , ctype   :: Text
+                   , cparams :: Map Text Text
                    } deriving (Show, Eq, Ord, Typeable)
 
 instance Binary Check where
@@ -136,6 +138,9 @@ data PError = PError String deriving (Show, Typeable)
 instance Exception PError
 instance Error PError
 
+instance FromJSON Hostname where
+    parseJSON (String x) = pure $ Hostname x
+    parseJSON _ = mzero
 
 ----------------------------------------------------------------------------------------------------
 -- helpers

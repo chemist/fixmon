@@ -1,14 +1,17 @@
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Check
-import           Check.Http
+import           Check       ()
+import           Check.Http  ()
+import           Data.Map    (fromList)
 import           System.Cron
-import Data.Map (fromList, empty)
-import           Types       (Check (..), CheckName (..), Complex (..),
-                              Cron (..))
+import           Types       (Check (..), CheckName (..), Cron (..))
 
-main = print "hello"
 
+main :: IO ()
+main = print ("hello" :: String)
+
+testHttp :: Check
 testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", "http://www.ubank.neta") ])
                                                                       --   , ("redirects", "3") ])
+

@@ -12,7 +12,7 @@ import qualified Data.Map                 as M
 import           Data.Monoid              ((<>))
 import qualified Data.Set                 as S
 import           Data.Text                (Text)
-import           Data.Vector              (Vector, filter, findIndex, foldl,
+import           Data.Vector              (Vector, filter, findIndex, foldl, elemIndex,
                                            foldl', foldl1, map, mapM, (!))
 import           Data.Vector.Binary       ()
 import           Data.Yaml                (FromJSON (..), Value (..),
@@ -68,16 +68,12 @@ instance FromJSON Config where
     parseJSON _ = mzero
 
 
-instance FromJSON Hostname where
-    parseJSON (String x) = pure $ Hostname x
-    parseJSON _ = mzero
 
 instance FromJSON ITrigger where
     parseJSON (Object v) = ITrigger <$>
                            v .: "name" <*>
                            v .: "description" <*>
-                           v .: "check" <*> do
-                           v .: "result"
+                           v .: "check" <*> v .: "result"
     parseJSON _ = mzero
 
 instance FromJSON ICheck where
@@ -97,23 +93,23 @@ instance FromJSON IGroup where
     parseJSON _ = mzero
 
 decodeConf :: FilePath -> IO (Either String Config)
-decodeConf fp = conv <$> (decodeFileEither fp)
+decodeConf fp = conv <$> decodeFileEither fp
 
 transformCheck :: ICheck -> Either String Check
 transformCheck ch = makeCheck =<< parseOnly cronSchedule (icperiod ch)
   where
-    makeCheck cr = return $ Check
+    makeCheck cr = return Check
       { cname = CheckName (icname ch)
       , cperiod = Cron cr
       , ctype = ictype ch
-      , cparams = M.filterWithKey (\x _ -> x /= "name" && x /= "period" && x /= "type") $ M.map (\(String x) -> x) $ M.fromList $ icparams ch
+      , cparams = M.filterWithKey (\x _ -> x `notElem` ["name", "period", "type"]) $ M.map (\(String x) -> x) $ M.fromList $ icparams ch
       }
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
-transformTrigger chs tr = makeTrigger =<< (conv $ parseTrigger (itresult tr))
+transformTrigger chs tr = makeTrigger =<< conv (parseTrigger (itresult tr))
   where
-    makeTrigger tr' = case (findIndex (\c -> cname c == CheckName (itcheck tr)) chs) of
-                           Nothing -> fail $ "check " ++ (show $ itcheck tr) ++ " not found"
+    makeTrigger tr' = case findIndex (\c -> cname c == CheckName (itcheck tr)) chs of
+                           Nothing -> fail $ "check " ++ show (itcheck tr) ++ " not found"
                            Just i -> return $ Trigger (TriggerName (itname tr)) (itdescription tr) (pId i) tr'
 
 conv :: Show a => Either a b -> Either String b
@@ -126,21 +122,21 @@ transformGroup ch hs tr gr = do
                              let thosts :: Either String [HostId]
                                  thosts = Prelude.mapM funh $ ighosts gr
                                  funh :: Hostname -> Either String HostId
-                                 funh h = case (findIndex (== h) hs) of
-                                              Nothing -> fail $ "bad hostname in group"
+                                 funh h = case elemIndex h hs of
+                                              Nothing -> fail "bad hostname in group"
                                               Just i -> return $ pId i
                                  tchecks :: Maybe [Text] -> Either String [CheckId]
                                  tchecks Nothing = return []
                                  tchecks (Just xs) = Prelude.mapM func xs
                                  func :: Text -> Either String CheckId
-                                 func h = case (findIndex (\a -> cname a == CheckName h) ch) of
+                                 func h = case findIndex (\a -> cname a == CheckName h) ch of
                                                Nothing -> fail "bad check in group"
                                                Just i -> return $ pId i
                                  ttriggers :: Maybe [Text] -> Either String [TriggerId]
                                  ttriggers Nothing = return []
                                  ttriggers (Just xs) = Prelude.mapM funt xs
                                  funt :: Text -> Either String TriggerId
-                                 funt h = case (findIndex (\a -> tname a == TriggerName h) tr) of
+                                 funt h = case findIndex (\a -> tname a == TriggerName h) tr of
                                                Nothing -> fail "bad trigger in group"
                                                Just i -> return $ pId i
                              hh <- thosts
@@ -160,7 +156,7 @@ checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
 checkHosts t m =
   let pairs = map (checksFromTriggers t) m
       pairs' = map (ghosts &&& gchecks) m
-      checkHost (x, y) = S.fromList $ [ CheckHost (a, b) | a <-  S.toList x, b <- S.toList y ]
+      checkHost (x, y) = S.fromList [ CheckHost (a, b) | a <-  S.toList x, b <- S.toList y ]
   in foldl1 S.union $ map checkHost (pairs <> pairs')
 
 triggersByCheckHost :: Vector Trigger -> Vector Group -> M.Map CheckHost (S.Set TriggerId)
@@ -169,7 +165,7 @@ triggersByCheckHost tv gv =
       fun (CheckHost (a, b)) tv' = foldl S.union S.empty $ map gtriggers . filter (filterFun a b) $ tv'
       filterFun :: HostId -> CheckId -> Group -> Bool
       filterFun h c g = S.member h (ghosts g)  && S.member c (S.map (\i -> tcheck (tv ! unId i)) $ gtriggers g)
-  in M.fromSet (flip fun gv) $ checkHosts tv gv
+  in M.fromSet (`fun` gv) $ checkHosts tv gv
 
 --------------------------------------------------------------------------------------------------
     -- _periodMap
@@ -181,7 +177,7 @@ cronChecks :: Vector Check -> Vector Trigger -> Vector Group -> PeriodMap
 cronChecks vc vt vg = M.fromSet fun cronSet
   where checkHosts' = checkHosts vt vg
         fun :: Cron -> S.Set CheckHost
-        fun c = S.filter (filterFun c) $ checkHosts'
+        fun c = S.filter (filterFun c) checkHosts'
         filterFun :: Cron -> CheckHost -> Bool
         filterFun c (CheckHost (_, i)) = c == cperiod (vc ! unId i)
         cronSet :: S.Set Cron
@@ -193,7 +189,7 @@ cronChecks vc vt vg = M.fromSet fun cronSet
 
 triggerHosts :: Vector Group -> M.Map TriggerHost Status
 triggerHosts vg =
-  let ths g = S.fromList $ [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)]
+  let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)]
   in M.fromSet (const (Status True)) $ foldl' S.union S.empty $ map ths vg
 
 
@@ -210,4 +206,4 @@ configToMonitoring x = do
 parseConfig :: FilePath -> IO (Either String Monitoring)
 parseConfig file = do
     f <-  decodeConf file
-    return $ configToMonitoring =<< id f
+    return $ configToMonitoring =<< f

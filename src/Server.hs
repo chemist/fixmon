@@ -25,16 +25,16 @@ main = do
         void . spawnLocal $ do
             register "web" =<< getSelfPid
             say "start web"
-            liftIO $ (web s)
+            liftIO $ web s
         void . spawnLocal $ cron
         void . spawnLocal $ store
         void . spawnLocal $ clock
         void . spawnLocal $ tasker
         void . spawnLocal $ supervisor
         say . show =<< getSelfPid
-        _ <- liftIO $ getLine :: Process String
-        say $ "kill web"
-        maybe (return ()) (flip kill "stop web") =<< whereis "web"
+        _ <- liftIO getLine :: Process String
+        say "kill web"
+        maybe (return ()) (`kill` "stop web") =<< whereis "web"
         return ()
         -- replLoop
     closeLocalNode node

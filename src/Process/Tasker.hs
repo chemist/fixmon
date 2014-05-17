@@ -3,15 +3,13 @@ module Process.Tasker (tasker) where
 
 
 import           Process.Utils
-import           Types                       hiding (checks, hosts)
+import           Types
 
-import           Control.Concurrent
 import           Control.Distributed.Process
-import           Control.Monad.State         (StateT, evalStateT, forever, lift, get, put)
-import Control.Monad (forM_)
-import           Data.Map                    (Map, lookup)
+import           Control.Monad.State         (StateT, evalStateT, forever, get,
+                                              lift, put)
 import           Data.Set                    (Set, toList)
-import Data.Vector (Vector, (!))
+import           Data.Vector                 (Vector, (!))
 import           Prelude                     hiding (lookup)
 
 data Tasker = Tasker
@@ -47,19 +45,19 @@ taskMatch st = match fun
     where
     fun (x :: Set CheckHost) = do
         say "tasker <- (Set CheckHost)"
-        flip forM_ (startCheck st) $ toList x
+        mapM_ (startCheck st) $ toList x
         say $ show $ toList x
         return st
 
 startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
-    let host'' = (hosts st) ! (h ch)
-        check'' = (checks st) ! (c ch)
+    let host'' = hosts st ! h ch
+        check'' = checks st ! c ch
     say $ "do check: " ++ show check''
     say $ "in host: " ++ show host''
     where
         h :: CheckHost -> Int
         h (CheckHost (i, _)) = unId i
-        
+
         c :: CheckHost -> Int
         c (CheckHost (_, i)) = unId i
