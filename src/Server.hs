@@ -1,19 +1,27 @@
+{-# LANGUAGE DeriveDataTypeable         #-}
 module Main where
 
 import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
 import           Process.Web
+import Types
 
-import           Control.Applicative
+import           Control.Applicative hiding (empty)
 import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Control.Monad.Reader             (ask)
 import           Control.Monad.State
-import           Network.Transport                (closeTransport)
+import           Network.Transport                (closeTransport, newEndPoint, receive, EndPoint, ConnectionId, Connection, connect, Event(..), defaultConnectHints)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
+                                                  
+import qualified Network.Transport as NT
+import Control.Concurrent.MVar
+import Data.Map (Map, empty, insert, (!), delete)
+import qualified Data.Binary as B
+import Data.Typeable
 
 
 main :: IO ()
@@ -31,6 +39,7 @@ main = do
         void . spawnLocal $ clock
         void . spawnLocal $ tasker
         void . spawnLocal $ supervisor
+        void . spawnLocal $ registrator
         say . show =<< getSelfPid
         _ <- liftIO getLine :: Process String
         say "kill web"
@@ -39,6 +48,29 @@ main = do
         -- replLoop
     closeLocalNode node
     closeTransport t
+
+registrator :: Process ()
+registrator = do
+    p <- getSelfPid
+    register "registrator" p
+    say "start registrator"
+    say $ "registrator " ++ " pid " ++ show p
+    go
+    where 
+      go = forever $ do
+              remoteAgentPid <-  expectTimeout 100000 :: Process (Maybe ProcessId)
+              maybe (return ()) (\p -> p `send` Reg >> p `send` testHttp) remoteAgentPid
+--               say $ "echo get " ++ show remoteAgentPid
+--
+
+data Reg = Reg deriving (Show, Typeable)
+
+instance B.Binary Reg where
+    put _ = B.put (0::Int)
+    get = do
+        x <- B.get :: B.Get Int
+        return Reg
+
 
 supervisor :: Process ()
 supervisor = do

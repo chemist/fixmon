@@ -21,7 +21,7 @@ clock = do
     register "clock" =<< getSelfPid
     forever $ do
         nsend "cron" MinuteMessage
-        liftIO $ threadDelay $ 10 * 1000000
+        liftIO $ threadDelay $ 10 * 100000000
 
 type ST = Map Cron (Set CheckHost)
 type CronState a = StateT ST Process a

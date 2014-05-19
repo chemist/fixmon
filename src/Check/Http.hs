@@ -18,6 +18,12 @@ import           Types
 
 
 data Http = HttpSimple deriving Show
+data Shell = Shell deriving Show
+
+instance Checkable Shell where
+    describe Shell = undefined
+    route Shell = ("cmd.run", undefined)
+    isCorrect _ Shell = undefined
 
 instance Checkable Http where
     describe (HttpSimple) = [ ("url", True, "Uri - as string, RFC3986")

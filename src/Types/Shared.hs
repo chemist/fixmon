@@ -149,4 +149,3 @@ instance FromJSON Hostname where
 emptyMonitoring :: Monitoring
 emptyMonitoring = Monitoring M.empty M.empty V.empty V.empty V.empty V.empty M.empty
 
-

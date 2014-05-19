@@ -18,29 +18,29 @@ data AC  where
 
 type Route = Map Text AC
 
-runCheckT :: CheckT IO a -> Route -> IO a
+runCheckT :: Monad m => CheckT m a -> Route -> m a
 runCheckT = evalStateT . runS
 
-newtype CheckT m a = CheckT { runS :: StateT Route m a } deriving (Functor, Applicative, Monad, MonadIO, MonadState Route)
+newtype CheckT m a = CheckT { runS :: StateT Route m a } deriving (Functor, Applicative, Monad, MonadIO, MonadState Route, MonadTrans)
 
-addRoute :: Checkable a =>  a -> CheckT IO ()
+addRoute :: (Monad m, Checkable a) =>  a -> CheckT m ()
 addRoute x = modify fun
   where
     fun :: Route -> Route
     fun = insert (fst . route $ x) (AC (snd . route $ x, x))
 
-runCheck :: Check -> CheckT IO (Maybe Complex)
+runCheck :: (MonadIO m, Monad m) => Check -> CheckT m (Maybe Complex)
 runCheck ch@(Check _ _ t _) = do
-    routes <-  get :: CheckT IO Route
+    routes <-  get 
     maybe (return Nothing)
           (\(AC (f,_)) -> do
               r <- liftIO $ f ch
               return $ Just r)
           (lookup t routes)
 
-describeCheck :: Check -> CheckT IO YamlBuilder
+describeCheck :: Monad m => Check -> CheckT m YamlBuilder
 describeCheck (Check _ _ t _) = do
-    routes <- get :: CheckT IO Route
+    routes <- get 
     case lookup t routes of
          Nothing -> return $ string ""
          Just (AC (_, x)) -> return $ example [x]

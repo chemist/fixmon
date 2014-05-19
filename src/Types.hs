@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Types 
 ( HostId
 , Hostname(..)
@@ -29,8 +30,16 @@ module Types
 -- * error
 , TypeError
 , IntId(..)
+-- * for tests
+, testHttp
 ) where
 
 import Types.Shared 
 import Types.Cron 
 import Types.DslTypes 
+
+import           Data.Map    (fromList)
+import           System.Cron
+
+testHttp :: Check
+testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", "http://ya.ru") ])
