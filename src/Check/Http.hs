@@ -50,14 +50,7 @@ doHttp (Check _ _ _ p) = do
         Just _ = lookup "agent" p
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
         opts = defaults & redirects .~ redirects'
-    r <- try $ getWith opts url
-    either bad good r
-    where
-      bad :: SomeException -> IO Complex
-      bad resp = trace (show resp) $ return $ Complex $ fromList [("success", Any $ Bool False)]
-      good :: Response ByteString  -> IO Complex
-      good resp = return $ Complex $ fromList [ ("success", Any $ Bool True)
-                                              , ("status" , Any $ Int $ resp ^. responseStatus . statusCode)
-                                              ]
+    resp <- getWith opts url
+    return $ Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
 
 

@@ -63,6 +63,7 @@ executable agent
                        vector-binary-instances == 0.2.*,
                        network-transport,
                        network-transport-tcp,
+                       attoparsec >=0.11 && <0.12, 
                        distributed-process >= 0.4.2,
                        transformers >=0.3 && <0.4, 
                        mtl >=2.1 && <2.2, 

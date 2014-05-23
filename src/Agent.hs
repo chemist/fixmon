@@ -1,30 +1,35 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Main where
 
-import           Check       
-import           Check.Http  
-import           Data.Map    (fromList)
-import           System.Cron
-import           Types       (Check (..), CheckName (..), Cron (..))
-import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
-import Data.Binary
-import qualified Control.Monad.State as ST
-import Network.Transport (closeTransport, EndPointAddress(..))
-import Network.Transport.TCP (createTransport, defaultTCPParameters)
+import           Check
+import           Check.Http
+import           Check.System
+import           Types                                      (Check (..),
+                                                             CheckName (..),
+                                                             Cron (..))
+
+import           Control.Concurrent                         (threadDelay)
 import           Control.Distributed.Process
+import           Control.Distributed.Process.Internal.Types
 import           Control.Distributed.Process.Node
-import Control.Distributed.Process.Internal.Types
-import Process.Utils
-import Control.Monad
-import Control.Monad.Trans.Class
-import qualified Data.Binary as B
-import Data.Typeable
-import Control.Concurrent (threadDelay)
-import Data.Maybe (fromMaybe)
-import Data.Map (empty)
+import           Control.Monad
+import qualified Control.Monad.State                        as ST
+import           Control.Monad.Trans.Class
+import           Data.Binary
+import qualified Data.Binary                                as B
+import           Data.ByteString                            (ByteString)
+import           Data.ByteString.Lazy                       (toStrict)
+import           Data.Map                                   (fromList)
+import           Data.Map                                   (empty)
+import           Data.Maybe                                 (fromMaybe)
+import           Data.Typeable
+import           Network.Transport                          (EndPointAddress (..),
+                                                             closeTransport)
+import           Network.Transport.TCP                      (createTransport, defaultTCPParameters)
+import           Process.Utils
+import           System.Cron
 
 data H = forall a. Checkable a => H {unH :: a}
 
