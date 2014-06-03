@@ -13,6 +13,7 @@ import           Data.Binary         (Binary, get, getWord8, put, putWord8)
 import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
 import           Data.Typeable       (Typeable, Typeable1, typeOf)
+import Data.Time
 
 data TypeError = TypeError String deriving (Show, Typeable)
 instance Error TypeError
@@ -32,6 +33,7 @@ instance Eq Any where
                       (Any (Bool x), Any (Bool y)) -> x == y
                       (Any (Int x), Any (Int y)) -> x == y
                       (Any (Text x), Any (Text y)) -> x == y
+                      (Any (UTC x), Any (UTC y)) -> x == y
                       _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
             | otherwise = throw $ TypeError $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
 
@@ -41,6 +43,7 @@ instance Ord Any where
                           (Any (Bool x), Any (Bool y)) -> compare x y
                           (Any (Int x), Any (Int y)) -> compare x y
                           (Any (Text x), Any (Text y)) -> compare x y
+                          (Any (UTC x), Any (UTC y)) -> compare x y
                           _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
                 | otherwise = throw $ TypeError $ "you try compare " ++ show (typeOf a) ++ " and " ++ show (typeOf b)
 
@@ -72,6 +75,7 @@ data TriggerRaw a where
   Int :: Int -> TriggerRaw Int
   Bool :: Bool -> TriggerRaw Bool
   Text :: Text -> TriggerRaw Text
+  UTC:: UTCTime -> TriggerRaw UTCTime
 
   Not :: TriggerRaw Bool -> TriggerRaw Bool
   Or :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
@@ -96,6 +100,19 @@ instance Binary (TriggerRaw Text) where
                                     2 -> Text <$> get
                                     _ -> fail "bad mark in triggerRaw text"
 
+instance Binary UTCTime where
+    put (UTCTime x y) = put (fromEnum x) >> put (fromEnum y)
+    get = do
+        x <- get
+        y <- get
+        return $ UTCTime (toEnum x) (toEnum y)
+
+instance Binary (TriggerRaw UTCTime) where
+    put (UTC x) = putWord8 3 >> put x
+    get = getWord8 >>= \x -> case x of
+                                    3 -> UTC <$> get
+                                    _ -> fail "bad mark in treggerRaw utc"
+
 instance Binary (TriggerRaw Bool) where
     put (Bool x) = putWord8 1 >> put x
     put (Not x) = putWord8 3 >> put x
@@ -119,6 +136,7 @@ instance (Show a) => Show (TriggerRaw a) where
     show (Text x) = unpack x
     show (Bool x) = show x
     show (Int x ) = show x
+    show (UTC x) = show x
 
     show (Not x ) = "not " ++ show x
     show (Or x y) = show x ++ " or " ++ show y

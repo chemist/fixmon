@@ -11,9 +11,10 @@ import Data.Attoparsec.Text
 import Control.Applicative
 import System.Cron (daily)
 import Data.Monoid ((<>))
+import Data.Time.Clock
 
 import Network.BSD (getHostName)
-import Prelude hiding (readFile)
+import Prelude hiding (readFile, takeWhile)
 
 data System = HostName
             | Uptime
@@ -29,8 +30,8 @@ data System = HostName
 instance Checkable System where
     route HostName = ("system.hostname", doHostname)
     route Uptime   = ("system.uptime",   doUptime)
-    route Boottime = ("system.boottime",   doCheck)
-    route CpuIntr  = ("system.cpu.intr",   doCheck)
+    route Boottime = ("system.boottime",   doBootTime)
+    route CpuIntr  = ("system.cpu.intr",   doCpuIntr)
     route CpuLoad  = ("system.cpu.load",   doCheck)
     route CpuNum  =  ("system.cpu.num",   doCheck)
     route CpuSwitches  =  ("system.cpu.switches",   doCheck)
@@ -47,14 +48,24 @@ instance Checkable System where
     describe CpuSwitches = []
     describe CpuUtil = []
 
-    isCorrect ch h = undefined
+    isCorrect ch@(Check _ _ "system.hostname" _) HostName = Right ch
+    isCorrect ch@(Check _ _ "system.uptime" _) Uptime = Right ch
+    isCorrect ch@(Check _ _ "system.boottime" _) Boottime = Right ch
+    isCorrect ch@(Check _ _ "system.cpu.intr" _) CpuIntr = Right ch
+    isCorrect ch@(Check _ _ "system.cpu.load" _) CpuLoad = Right ch
+    isCorrect ch@(Check _ _ "system.cpu.num" _) CpuNum = Right ch
+    isCorrect ch@(Check _ _ "system.cpu.switches" _) CpuSwitches = Right ch
+    isCorrect ch@(Check _ _ "system.cpu.util" _) CpuUtil = Right ch
+    isCorrect ch@(Check _ _ "system.localtime" _) LocalTime = Right ch
+    isCorrect _ _ = Left "oops, check is not correct"
 
+---------------------------------- linux checks --------------------------------------
 doHostname (Check _ _ "system.hostname" _) = do
     h <- getHostName
     return $ Complex $ fromList [ ( "system.hostname", Any $ Text (pack h)) ]
-
+--------------------------------------------------------------------------------------
+    
 -- "3023604.41 11190196.16\n"
-
 uptimeFile = "/proc/uptime"
 
 doUptime (Check _ _ "system.uptime" _) = do
@@ -72,11 +83,40 @@ doUptime (Check _ _ "system.uptime" _) = do
              showH = if hours /= 0 then (pack (show hours)) <> " hours " else ""
              showM = if mins /= 0 then (pack (show mins)) <> " minunes" else ""
          in "up " <> showD <> showH <> showM
-       parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
 
+parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
 
 testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" (fromList [])
+--------------------------------------------------------------------------------------
 
+doBootTime (Check _ _ "system.boottime" _) = do
+    Done _ (up, _) <- parse parserUptime <$> readFile uptimeFile
+    now <- getCurrentTime
+    let boot = addUTCTime (-diff) now
+        diff = toEnum . fromEnum . secondsToDiffTime . truncate $ up
+    return $ Complex $ fromList [ ("system.boottime", Any . UTC $ boot)]
+--------------------------------------------------------------------------------------
+
+doCpuIntr (Check _ _ "system.cpu.intr" _) = do
+    undefined
+
+spaces = takeWhile1 isHorizontalSpace
+
+spaces' = takeWhile isHorizontalSpace
+
+cpuN = takeWhile1 (inClass "a-zA-Z0-9")
+
+data Cpu = Cpu [Text] deriving (Show, Eq)
+data Interrupt = Interrupt Text [Int] (Text) deriving (Show, Eq)
+
+parserInterruptsCPU = Cpu <$> manyTill' (spaces *> cpuN) (spaces *> endOfLine)
+parserInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> (spaces' *> takeTill isEndOfLine <* endOfLine)
+
+parserInterrupts = do
+    c <- parserInterruptsCPU
+    l <- many parserInterruptsLine
+    endOfInput
+    return (c,l)
 
 doCheck :: Check -> IO Complex
 doCheck = undefined

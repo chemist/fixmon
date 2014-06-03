@@ -59,6 +59,7 @@ executable agent
                        bytestring >=0.10 && <0.11, 
                        yaml >=0.8 && <0.9, 
                        network >=2.4 && <2.5, 
+                       time >=1.4 && <1.5, 
                        vector >=0.10 && <0.11, 
                        vector-binary-instances == 0.2.*,
                        network-transport,
