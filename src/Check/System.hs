@@ -99,6 +99,7 @@ doBootTime (Check _ _ "system.boottime" _) = do
 
 doCpuIntr (Check _ _ "system.cpu.intr" _) = do
     undefined
+    
 
 spaces = takeWhile1 isHorizontalSpace
 
@@ -107,16 +108,17 @@ spaces' = takeWhile isHorizontalSpace
 cpuN = takeWhile1 (inClass "a-zA-Z0-9")
 
 data Cpu = Cpu [Text] deriving (Show, Eq)
-data Interrupt = Interrupt Text [Int] (Text) deriving (Show, Eq)
+data Interrupt = Interrupt Text [Int] Text deriving (Show, Eq)
 
 parserInterruptsCPU = Cpu <$> manyTill' (spaces *> cpuN) (spaces *> endOfLine)
-parserInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> (spaces' *> takeTill isEndOfLine <* endOfLine)
+parserInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> (spaces *> takeTill isEndOfLine <* endOfLine)
+parserLastInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> pure "empty here"  <* endOfLine 
 
 parserInterrupts = do
     c <- parserInterruptsCPU
-    l <- many parserInterruptsLine
-    endOfInput
-    return (c,l)
+    l <- many parserInterruptsLine 
+    l' <- many parserLastInterruptsLine <* endOfInput
+    return (c,l ++ l')
 
 doCheck :: Check -> IO Complex
 doCheck = undefined
