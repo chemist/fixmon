@@ -2,6 +2,7 @@
 module Types 
 ( HostId
 , Hostname(..)
+, ToAny(..)
 -- * Триггеры
 , TriggerId
 , TriggerName(..)

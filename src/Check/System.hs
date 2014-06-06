@@ -5,7 +5,7 @@ import Check
 import Types
 
 import Data.Map (fromList)
-import Data.Text (pack, Text)
+import Data.Text (pack, Text, toLower, isPrefixOf)
 import Data.Text.IO (readFile)
 import Data.Attoparsec.Text
 import Control.Applicative
@@ -97,9 +97,27 @@ doBootTime (Check _ _ "system.boottime" _) = do
     return $ Complex $ fromList [ ("system.boottime", Any . UTC $ boot)]
 --------------------------------------------------------------------------------------
 
+testIntr = Check (CheckName "interrupts") (Cron daily) "system.cpu.intr" (fromList [])
+
+-- intrFile = "interrupts"
+intrFile = "/proc/interrupts"
+
 doCpuIntr (Check _ _ "system.cpu.intr" _) = do
-    undefined
+    Right (c, i) <- parseOnly parserInterrupts <$> readFile intrFile
+    return $ Complex $ fromList $ mkInterrupts (c,i)
     
+mkInterrupts :: (Cpu, [Interrupt]) -> [(Text, Any)]
+mkInterrupts (Cpu c, i) = 
+  let lowerCpuN = map toLower c
+      addAll xs = ("allcpu", sum $ map snd xs) : xs
+      mk (Interrupt t ns desc) =  map (\(x, y) -> ("system.cpu.intr." <> x <> "." <> toLower t, toAny y)) $ addAll $ zip lowerCpuN ns
+      intr = concatMap mk i
+  in interrupsAll intr : intr
+
+interrupsAll :: [(Text, Any)] -> (Text, Any)
+interrupsAll xs = 
+  let onlyAll = filter (\(x, _) -> isPrefixOf "system.cpu.intr.allcpu" x) xs
+  in ("system.cpu.intr.total", Any . Int . sum $ map (\(_, x) -> unAny x)  onlyAll)
 
 spaces = takeWhile1 isHorizontalSpace
 
@@ -111,14 +129,10 @@ data Cpu = Cpu [Text] deriving (Show, Eq)
 data Interrupt = Interrupt Text [Int] Text deriving (Show, Eq)
 
 parserInterruptsCPU = Cpu <$> manyTill' (spaces *> cpuN) (spaces *> endOfLine)
-parserInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> (spaces *> takeTill isEndOfLine <* endOfLine)
-parserLastInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> pure "empty here"  <* endOfLine 
+parserInterruptsLine = Interrupt <$> (spaces' *> cpuN <* char ':') <*> (many' (spaces *> decimal)) <*> (spaces' *> takeTill isEndOfLine <* endOfLine)
+parserInterrupts = (,) <$> parserInterruptsCPU <*> many parserInterruptsLine
+--------------------------------------------------------------------------------------
 
-parserInterrupts = do
-    c <- parserInterruptsCPU
-    l <- many parserInterruptsLine 
-    l' <- many parserLastInterruptsLine <* endOfInput
-    return (c,l ++ l')
 
 doCheck :: Check -> IO Complex
 doCheck = undefined

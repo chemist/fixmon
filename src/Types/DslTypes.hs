@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
 module Types.DslTypes
-( TriggerRaw(..), Any(..), TypeError )
+( TriggerRaw(..), Any(..), TypeError, ToAny(..) )
 where
 
 import           Control.Applicative ((<$>), (<*>))
@@ -22,6 +22,26 @@ instance Exception TypeError
 
 data Any where
   Any :: (Eq a, Ord a, Show a, Binary a) => TriggerRaw a -> Any
+
+class ToAny a where
+    unAny :: Any -> a
+    toAny :: a -> Any
+
+instance ToAny Int where
+    unAny (Any (Int x)) = x
+    toAny = Any . Int 
+
+instance ToAny Bool where
+    unAny (Any (Bool x)) = x
+    toAny = Any . Bool
+
+instance ToAny Text where
+    unAny (Any (Text x)) = x
+    toAny = Any . Text
+
+instance ToAny UTCTime where
+    unAny (Any (UTC x)) = x
+    toAny = Any . UTC
 
 deriving instance Typeable Any
 
