@@ -31,7 +31,7 @@ executable server
                        bytestring >=0.10 && <0.11, 
                        conduit >=1.0 && <1.1, 
                        transformers >=0.3 && <0.4, 
-                       binary >=0.5 && <0.6, 
+                       binary >=0.6.4 && <0.8, 
                        cereal >=0.4 && <0.5, 
                        attoparsec >=0.11 && <0.12, 
                        time >=1.4 && <1.5, 
@@ -70,7 +70,8 @@ executable agent
                        mtl >=2.1 && <2.2, 
                        text >=0.11 && <0.12, 
                        text-binary,
-                       binary >=0.5 && <0.6, 
+                       -- binary >=0.5 && <0.6, 
+                       binary >=0.6.4 && <0.8, 
                        cron == 0.2.*,
                        lens == 4.1.*,
                        wreq
@@ -84,7 +85,7 @@ test-suite tests
   default-language:    Haskell2010
   build-depends:       base >=4.6 && <4.7,
                        peggy == 0.3.*,
-                       binary >=0.5 && <0.6, 
+                       binary >=0.6.4 && <0.8, 
                        text >=0.11 && <0.12, 
                        text-binary,
                        time >=1.4 && <1.5, 

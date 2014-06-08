@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE DeriveGeneric          #-}
 module Types.Shared where
 
 import           Types.Cron
@@ -17,13 +18,14 @@ import           Data.Text           (Text, pack)
 import           Data.Typeable       (Typeable)
 import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
-import           Control.Applicative (pure, (<$>), (<*>))
+import           Control.Applicative (pure)
 import           Control.Monad.Error (Error)
-import           Data.Binary         (Binary, get, put)
+import           Data.Binary         (Binary)
 import           Data.Text.Binary    ()
 import           Data.Vector         (Vector)
 import qualified Data.Vector         as V
 import           Data.Vector.Binary  ()
+import GHC.Generics (Generic)
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -39,7 +41,9 @@ data Group = Group
  , ghosts    :: Set HostId
  , gtriggers :: Set TriggerId
  , gchecks   :: Set CheckId
- } deriving Show
+ } deriving (Show, Generic)
+
+instance Binary Group
 
 class IntId a where
     unId :: a -> Int
@@ -75,13 +79,9 @@ data Check = Check { cname   :: CheckName
                    , cperiod :: Cron
                    , ctype   :: Text
                    , cparams :: Map Text Text
-                   } deriving (Show, Eq, Ord, Typeable)
+                   } deriving (Show, Eq, Ord, Typeable, Generic)
 
-instance Binary Check where
-    put (Check a b c d) = put a >> put b >> put c >> put d
-    get = Check <$> get <*> get <*> get <*> get
-
-
+instance Binary Check
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
 newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -94,12 +94,9 @@ data Trigger = Trigger
   , tdescription :: Text
   , tcheck       :: CheckId
   , tresult      :: TriggerRaw Bool
-  } deriving (Show, Eq, Typeable)
+  } deriving (Show, Eq, Typeable, Generic)
 
-instance Binary Trigger where
-    put (Trigger n d c r) = put n >> put d >> put c >> put r
-    get = Trigger <$> get <*> get <*> get <*> get
-
+instance Binary Trigger
 
 newtype Log = Log Text deriving (Show, Eq, Typeable)
 

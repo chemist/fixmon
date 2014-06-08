@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 module Types.DslTypes
 ( TriggerRaw(..), Any(..), TypeError, ToAny(..) )
 where
@@ -29,19 +30,28 @@ class ToAny a where
 
 instance ToAny Int where
     unAny (Any (Int x)) = x
+    unAny _ = undefined
     toAny = Any . Int 
 
 instance ToAny Bool where
     unAny (Any (Bool x)) = x
+    unAny _ = undefined
     toAny = Any . Bool
 
 instance ToAny Text where
     unAny (Any (Text x)) = x
+    unAny _ = undefined
     toAny = Any . Text
 
 instance ToAny UTCTime where
     unAny (Any (UTC x)) = x
+    unAny _ = undefined
     toAny = Any . UTC
+
+instance ToAny Double where
+    unAny (Any (Double x)) = x
+    unAny _ = undefined
+    toAny = Any . Double
 
 deriving instance Typeable Any
 
@@ -54,6 +64,7 @@ instance Eq Any where
                       (Any (Int x), Any (Int y)) -> x == y
                       (Any (Text x), Any (Text y)) -> x == y
                       (Any (UTC x), Any (UTC y)) -> x == y
+                      (Any (Double x), Any (Double y)) -> x == y
                       _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
             | otherwise = throw $ TypeError $ "you try do " ++ show (typeOf a) ++ " == " ++ show (typeOf b)
 
@@ -64,30 +75,35 @@ instance Ord Any where
                           (Any (Int x), Any (Int y)) -> compare x y
                           (Any (Text x), Any (Text y)) -> compare x y
                           (Any (UTC x), Any (UTC y)) -> compare x y
+                          (Any (Double x), Any (Double y)) -> compare x y
                           _ -> throw $ TypeError $ "unknown type " ++ show (typeOf a)
                 | otherwise = throw $ TypeError $ "you try compare " ++ show (typeOf a) ++ " and " ++ show (typeOf b)
 
 instance Binary Any where
-    put (Any (Int x)) = putWord8 0 >> put x
-    put (Any (Bool x)) = putWord8 1 >> put x
-    put (Any (Text x)) = putWord8 2 >> put x
-    put (Any (Not x)) = putWord8 3 >> put x
-    put (Any (Or x y)) = putWord8 4 >> put x >> put y
-    put (Any (And x y)) = putWord8 5 >> put x >> put y
-    put (Any (More x y)) = putWord8 6 >> put x >> put y
-    put (Any (Less x y)) = putWord8 7 >> put x >> put y
-    put (Any (Equal x y)) = putWord8 8 >> put x >> put y
+    put (Any (Int x))      = putWord8 0 >> put x
+    put (Any (Bool x))     = putWord8 1 >> put x
+    put (Any (Text x))     = putWord8 2 >> put x
+    put (Any (UTC x))      = putWord8 3 >> put x
+    put (Any (Double x))   = putWord8 4 >> put x
+    put (Any (Not x))      = putWord8 5 >> put x
+    put (Any (Or x y))     = putWord8 6 >> put x >> put y
+    put (Any (And x y))    = putWord8 7 >> put x >> put y
+    put (Any (More x y))   = putWord8 8 >> put x >> put y
+    put (Any (Less x y))   = putWord8 9 >> put x >> put y
+    put (Any (Equal x y))  = putWord8 10 >> put x >> put y
     get = do mark <- getWord8
              case mark of
                   0 -> get >>= \x -> return $ Any (Int x)
                   1 -> get >>= \x -> return $ Any (Bool x)
                   2 -> get >>= \x -> return $ Any (Text x)
-                  3 -> get >>= \x -> return $ Any (Not x)
-                  4 -> get >>= \x -> get >>= \y -> return $ Any (Or x y)
-                  5 -> get >>= \x -> get >>= \y -> return $ Any (And x y)
-                  6 -> get >>= \x -> get >>= \y -> return $ Any (More x y)
-                  7 -> get >>= \x -> get >>= \y -> return $ Any (Less x y)
-                  8 -> get >>= \x -> get >>= \y -> return $ Any (Equal x y)
+                  3 -> get >>= \x -> return $ Any (UTC x)
+                  4 -> get >>= \x -> return $ Any (Double x)
+                  5 -> get >>= \x -> return $ Any (Not x)
+                  6 -> get >>= \x -> get >>= \y -> return $ Any (Or x y)
+                  7 -> get >>= \x -> get >>= \y -> return $ Any (And x y)
+                  8 -> get >>= \x -> get >>= \y -> return $ Any (More x y)
+                  9 -> get >>= \x -> get >>= \y -> return $ Any (Less x y)
+                  10 -> get >>= \x -> get >>= \y -> return $ Any (Equal x y)
                   _ -> fail "unknown mark in binary any"
 
 
@@ -96,6 +112,7 @@ data TriggerRaw a where
   Bool :: Bool -> TriggerRaw Bool
   Text :: Text -> TriggerRaw Text
   UTC:: UTCTime -> TriggerRaw UTCTime
+  Double :: Double -> TriggerRaw Double
 
   Not :: TriggerRaw Bool -> TriggerRaw Bool
   Or :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
@@ -133,6 +150,12 @@ instance Binary (TriggerRaw UTCTime) where
                                     3 -> UTC <$> get
                                     _ -> fail "bad mark in treggerRaw utc"
 
+instance Binary (TriggerRaw Double) where
+    put (Double x) = putWord8 4 >> put x
+    get = getWord8 >>= \x -> case x of
+                                    4 -> Double <$> get
+                                    _ -> fail "bad mark in treggerRaw utc"
+
 instance Binary (TriggerRaw Bool) where
     put (Bool x) = putWord8 1 >> put x
     put (Not x) = putWord8 3 >> put x
@@ -157,6 +180,7 @@ instance (Show a) => Show (TriggerRaw a) where
     show (Bool x) = show x
     show (Int x ) = show x
     show (UTC x) = show x
+    show (Double x) = show x
 
     show (Not x ) = "not " ++ show x
     show (Or x y) = show x ++ " or " ++ show y
