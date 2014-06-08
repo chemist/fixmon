@@ -23,6 +23,7 @@ instance Exception TypeError
 
 data Any where
   Any :: (Eq a, Ord a, Show a, Binary a) => TriggerRaw a -> Any
+  AnyList :: [Any] -> Any
 
 class ToAny a where
     unAny :: Any -> a
@@ -57,6 +58,7 @@ deriving instance Typeable Any
 
 instance Show Any where
     show (Any x) = show x
+    show (AnyList x) = show x
 
 instance Eq Any where
     (==) a b | typeOf a == typeOf b = case (a,b) of
@@ -91,6 +93,7 @@ instance Binary Any where
     put (Any (More x y))   = putWord8 8 >> put x >> put y
     put (Any (Less x y))   = putWord8 9 >> put x >> put y
     put (Any (Equal x y))  = putWord8 10 >> put x >> put y
+    put (AnyList x) = putWord8 11 >> put x
     get = do mark <- getWord8
              case mark of
                   0 -> get >>= \x -> return $ Any (Int x)
@@ -104,6 +107,7 @@ instance Binary Any where
                   8 -> get >>= \x -> get >>= \y -> return $ Any (More x y)
                   9 -> get >>= \x -> get >>= \y -> return $ Any (Less x y)
                   10 -> get >>= \x -> get >>= \y -> return $ Any (Equal x y)
+                  11 -> get >>= \x -> return $ AnyList x
                   _ -> fail "unknown mark in binary any"
 
 

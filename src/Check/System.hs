@@ -170,7 +170,8 @@ parserLoadavg = (,,) <$> rational <* space <*> rational <* space <*> rational
 --------------------------------------------------------------------------------------
 
 cpuFile :: String
-cpuFile = "/proc/cpuinfo"
+cpuFile = "cpuinfo"
+-- cpuFile = "/proc/cpuinfo"
 
 testCpuInfo :: Check
 testCpuInfo = Check (CheckName "cpuinfo") (Cron daily) "system.cpu.info" (fromList [])
@@ -195,6 +196,12 @@ doCpuInfo (Check _ _ "system.cpu.info" _) = do
                                   , ("system.cpu.info.fpu_exception", Any . Bool $ fpuException one)
                                   , ("system.cpu.info.cpuid_level", Any . Int $ cpuidLevel one)
                                   , ("system.cpu.info.wp", Any . Bool $ wp one)
+                                  , ("system.cpu.info.flags", AnyList $ map (Any . Text) (filter (/= "") $ flags one))
+                                  , ("system.cpu.info.bogomips", Any . Double $ bogomips one)
+                                  , ("system.cpu.info.cl_flush_size", Any . Int $ clflushSize one)
+                                  , ("system.cpu.info.cache_alignment", Any . Int $ cacheAlignment one)
+                                  , ("system.cpu.info.address_sizes", Any . Text $ addressSizes one)
+                                  , ("system.cpu.info.power_management", Any . Text $ powerManagement one)
                                   ]
 doCpuInfo _ = undefined
 
