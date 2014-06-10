@@ -12,6 +12,7 @@ import Control.Applicative
 import System.Cron (daily)
 import Data.Monoid ((<>))
 import Data.Time.Clock
+import Data.List (groupBy)
 
 import Network.BSD (getHostName)
 import Prelude hiding (readFile, takeWhile)
@@ -34,7 +35,7 @@ instance Checkable System where
     route CpuIntr  = ("system.cpu.intr",   doCpuIntr)
     route CpuLoad  = ("system.cpu.loadavg",   doCpuLoad)
     route CpuInfo  =  ("system.cpu.info",   doCpuInfo)
-    route CpuSwitches  =  ("system.cpu.switches",   doCheck)
+    route CpuSwitches  =  ("system.cpu.switches",   doCpuSwitches)
     route CpuUtil  =  ("system.cpu.util",   doCheck)
     route LocalTime  =  ("system.localtime",   doCheck)
 
@@ -108,17 +109,17 @@ doBootTime _ = undefined
 testIntr :: Check
 testIntr = Check (CheckName "interrupts") (Cron daily) "system.cpu.intr" (fromList [])
 
--- intrFile = "interrupts"
 intrFile :: String
 intrFile = "/proc/interrupts"
+-- intrFile = "interrupts"
 
 doCpuIntr :: Check -> IO Complex
 doCpuIntr (Check _ _ "system.cpu.intr" _) = do
-    Right (c, i) <- parseOnly parserInterrupts <$> readFile intrFile
-    return $ Complex $ fromList $ mkInterrupts (c,i)
+    Right c <- parseOnly parserInterrupts <$> readFile intrFile
+    return $ Complex $ fromList $ mkInterrupts c
 doCpuIntr _ = undefined
     
-mkInterrupts :: (Cpu, [Interrupt]) -> [(Text, Any)]
+mkInterrupts :: (Cpu, [Interrupt]) -> [(Tag, Any)]
 mkInterrupts (Cpu c, i) = 
   let lowerCpuN = map toLower c
       addAll xs = ("allcpu", sum $ map snd xs) : xs
@@ -126,7 +127,7 @@ mkInterrupts (Cpu c, i) =
       intr = concatMap mk i
   in interrupsAll intr : intr
 
-interrupsAll :: [(Text, Any)] -> (Text, Any)
+interrupsAll :: [(Tag, Any)] -> (Tag, Any)
 interrupsAll xs = 
   let onlyAll = filter (\(x, _) -> isPrefixOf "system.cpu.intr.allcpu" x) xs
   in ("system.cpu.intr.total", Any . Int . sum $ map (\(_, x) -> unAny x)  onlyAll)
@@ -159,9 +160,9 @@ testLoadAvg = Check (CheckName "loadavg") (Cron daily) "system.cpu.loadavg" (fro
 doCpuLoad :: Check -> IO Complex
 doCpuLoad (Check _ _ "system.cpu.loadavg" _) = do
     Right (x,y,z) <- parseOnly parserLoadavg <$> readFile loadavgFile
-    return . Complex . fromList $ [ ("system.cpu.la1", Any . Double $ x)
-                                  , ("system.cpu.la5", Any . Double $ y)
-                                  , ("system.cpu.la15", Any . Double $ z)
+    return . Complex . fromList $ [ ("system.cpu.loadavg.la1", Any . Double $ x)
+                                  , ("system.cpu.loadavg.la5", Any . Double $ y)
+                                  , ("system.cpu.loadavg.la15", Any . Double $ z)
                                   ]
 doCpuLoad _ = undefined
 
@@ -170,8 +171,8 @@ parserLoadavg = (,,) <$> rational <* space <*> rational <* space <*> rational
 --------------------------------------------------------------------------------------
 
 cpuFile :: String
-cpuFile = "cpuinfo"
--- cpuFile = "/proc/cpuinfo"
+-- cpuFile = "cpuinfo"
+cpuFile = "/proc/cpuinfo"
 
 testCpuInfo :: Check
 testCpuInfo = Check (CheckName "cpuinfo") (Cron daily) "system.cpu.info" (fromList [])
@@ -265,6 +266,10 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
                       <*> (string "cache_alignment" *> spaces *> char ':' *> spaces *> decimal <* endOfLine )
                       <*> (string "address sizes" *> spaces *> char ':' *> spaces *> takeTill isEndOfLine <* endOfLine )
                       <*> (string "power management" *> char ':' *> skipWhile isHorizontalSpace *> takeTill isEndOfLine <* endOfLine)
+--------------------------------------------------------------------------------------
+
+doCpuSwitches :: Check -> IO Complex
+doCpuSwitches (Check _ _ "system.cpu.switches" _) = undefined
 
 
 doCheck :: Check -> IO Complex

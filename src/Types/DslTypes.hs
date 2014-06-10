@@ -4,7 +4,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
 module Types.DslTypes
-( TriggerRaw(..), Any(..), TypeError, ToAny(..) )
+( TriggerRaw(..), Any(..), TypeError, ToAny(..), Tag )
 where
 
 import           Control.Applicative ((<$>), (<*>))
@@ -24,6 +24,8 @@ instance Exception TypeError
 data Any where
   Any :: (Eq a, Ord a, Show a, Binary a) => TriggerRaw a -> Any
   AnyList :: [Any] -> Any
+
+type Tag = Text
 
 class ToAny a where
     unAny :: Any -> a

@@ -27,10 +27,11 @@ module Types
 , PError(..)
 , Log(..)
 , StartOptions(..)
+, IntId(..)
+, Tag
 -- * monads
 -- * error
 , TypeError
-, IntId(..)
 -- * for tests
 , testHttp
 ) where
