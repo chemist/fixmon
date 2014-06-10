@@ -12,10 +12,13 @@ import Control.Applicative
 import System.Cron (daily)
 import Data.Monoid ((<>))
 import Data.Time.Clock
-import Data.List (groupBy)
+import Data.Time.Clock.POSIX
+import Data.Maybe 
 
 import Network.BSD (getHostName)
 import Prelude hiding (readFile, takeWhile)
+
+-- see http://man7.org/linux/man-pages/man5/proc.5.html
 
 data System = HostName
             | Uptime
@@ -36,7 +39,7 @@ instance Checkable System where
     route CpuLoad  = ("system.cpu.loadavg",   doCpuLoad)
     route CpuInfo  =  ("system.cpu.info",   doCpuInfo)
     route CpuSwitches  =  ("system.cpu.switches",   doCpuSwitches)
-    route CpuUtil  =  ("system.cpu.util",   doCheck)
+    route CpuUtil  =  ("system.cpu.util",   doCpuUtil)
     route LocalTime  =  ("system.localtime",   doCheck)
 
     describe HostName = []
@@ -96,14 +99,21 @@ parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
 testUptime :: Check
 testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" (fromList [])
 --------------------------------------------------------------------------------------
+statFile :: String
+statFile = "/proc/stat"
+
 doBootTime :: Check -> IO Complex
 doBootTime (Check _ _ "system.boottime" _) = do
-    Done _ (up, _) <- parse parserUptime <$> readFile uptimeFile
-    now <- getCurrentTime
-    let boot = addUTCTime (-diff) now
-        diff = toEnum . fromEnum . secondsToDiffTime . truncate $ up
-    return $ Complex $ fromList [ ("system.boottime", Any . UTC $ boot)]
+    Right t <- parseOnly parserBootTime <$> readFile statFile
+    let bootTime = posixSecondsToUTCTime t
+    return $ Complex $ fromList [ ("system.boottime", Any . UTC $ bootTime )]
 doBootTime _ = undefined
+
+testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" (fromList [])
+
+parserBootTime :: Parser NominalDiffTime
+parserBootTime = head . catMaybes <$> bootOrEmpty `sepBy` endOfLine
+  where bootOrEmpty = Just <$> (string "btime" *> space *> rational) <|> pure Nothing <* takeTill isEndOfLine
 --------------------------------------------------------------------------------------
 
 testIntr :: Check
@@ -268,9 +278,59 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
                       <*> (string "power management" *> char ':' *> skipWhile isHorizontalSpace *> takeTill isEndOfLine <* endOfLine)
 --------------------------------------------------------------------------------------
 
-doCpuSwitches :: Check -> IO Complex
-doCpuSwitches (Check _ _ "system.cpu.switches" _) = undefined
+testCpuSwitches :: Check 
+testCpuSwitches = Check (CheckName "switches") (Cron daily) "system.cpu.switches" (fromList [])
 
+doCpuSwitches :: Check -> IO Complex
+doCpuSwitches (Check _ _ "system.cpu.switches" _) = do
+    Right s <- parseOnly parserCpuSwitches <$> readFile statFile
+    return . Complex . fromList $ [ ("system.cpu.switches", Any . Int $ s)]
+
+parserCpuSwitches :: Parser Int
+parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
+  where switchesOrEmpty = Just <$> (string "ctxt" *> space *> decimal) <|> pure Nothing <* takeTill isEndOfLine
+--------------------------------------------------------------------------------------
+
+doCpuUtil :: Check -> IO Complex
+doCpuUtil = undefined
+
+parserProcStatCpu :: Parser CpuUtilStat
+parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
+  where 
+    cpuOrEmpty = Just <$> cpuUtilStat <|> pure Nothing <* takeTill isEndOfLine
+    cpuUtilStat = do
+        string "cpu "
+        xs <- many (space *> decimal)
+        return $ CpuUtilStat
+          { user = xs !! 0
+          , nice = xs !! 1
+          , system = xs !! 2
+          , idle = xs !! 3
+          , iowait = xs !!? 4
+          , irq = xs !!? 5
+          , softirq = xs !!? 6
+          , steal = xs !!? 7
+          , guest = xs !!? 8
+          , guestNice = xs !!? 9
+          }
+
+(!!?) :: [a] -> Int -> Maybe a
+(!!?) xs i = safeIndex i (length xs) xs
+  where safeIndex i is xs | i < is = Just (xs !! i)
+                          | otherwise = Nothing
+
+data CpuUtilStat = CpuUtilStat 
+  { user :: Int
+  , nice :: Int
+  , system :: Int
+  , idle :: Int
+  , iowait :: Maybe Int
+  , irq :: Maybe Int
+  , softirq :: Maybe Int
+  , steal :: Maybe Int
+  , guest :: Maybe Int
+  , guestNice :: Maybe Int
+  } deriving Show
 
 doCheck :: Check -> IO Complex
 doCheck = undefined
