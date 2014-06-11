@@ -1,22 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Check.System where
 
-import Check
-import Types
+import           Check
+import           Types
 
-import Data.Map (fromList)
-import Data.Text (pack, Text, toLower, isPrefixOf)
-import Data.Text.IO (readFile)
-import Data.Attoparsec.Text
-import Control.Applicative
-import System.Cron (daily)
-import Data.Monoid ((<>))
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
-import Data.Maybe 
+import           Control.Applicative
+import           Data.Attoparsec.Text
+import           Data.Map              (fromList)
+import           Data.Maybe
+import           Data.Monoid           ((<>))
+import           Data.Text             (Text, isPrefixOf, pack, toLower)
+import           Data.Text.IO          (readFile)
+import           Data.Time.Clock
+import           Data.Time.Clock.POSIX
+import           System.Cron           (daily)
 
-import Network.BSD (getHostName)
-import Prelude hiding (readFile, takeWhile)
+import           Network.BSD           (getHostName)
+import           Prelude               hiding (readFile, takeWhile)
 
 -- see http://man7.org/linux/man-pages/man5/proc.5.html
 
@@ -24,10 +24,10 @@ data System = HostName
             | Uptime
             | Boottime
             | CpuIntr
-            | CpuLoad 
-            | CpuInfo 
+            | CpuLoad
+            | CpuInfo
             | CpuSwitches
-            | CpuUtil 
+            | CpuUtil
             | LocalTime
             deriving (Show)
 
@@ -70,7 +70,7 @@ doHostname (Check _ _ "system.hostname" _) = do
     return $ Complex $ fromList [ ( "system.hostname", Any $ Text (pack h)) ]
 doHostname _ = undefined
 --------------------------------------------------------------------------------------
-    
+
 -- "3023604.41 11190196.16\n"
 uptimeFile :: String
 uptimeFile = "/proc/uptime"
@@ -82,7 +82,7 @@ doUptime (Check _ _ "system.uptime" _) = do
                                 , ("system.uptime.idle", Any $ Text (timeToPeriod idle))
                                 ]
     where
-       timeToPeriod x = 
+       timeToPeriod x =
          let i = truncate x
              days = i `div` 86400
              hours = (i `mod` 86400) `div` 3600
@@ -102,6 +102,7 @@ testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" (fromList [
 statFile :: String
 statFile = "/proc/stat"
 
+-- | check, read /proc/stat, return boottime as UTCTime
 doBootTime :: Check -> IO Complex
 doBootTime (Check _ _ "system.boottime" _) = do
     Right t <- parseOnly parserBootTime <$> readFile statFile
@@ -109,8 +110,10 @@ doBootTime (Check _ _ "system.boottime" _) = do
     return $ Complex $ fromList [ ("system.boottime", Any . UTC $ bootTime )]
 doBootTime _ = undefined
 
+-- | test check for doBootTime
 testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" (fromList [])
 
+-- | helpers for doBootTime
 parserBootTime :: Parser NominalDiffTime
 parserBootTime = head . catMaybes <$> bootOrEmpty `sepBy` endOfLine
   where bootOrEmpty = Just <$> (string "btime" *> space *> rational) <|> pure Nothing <* takeTill isEndOfLine
@@ -128,9 +131,9 @@ doCpuIntr (Check _ _ "system.cpu.intr" _) = do
     Right c <- parseOnly parserInterrupts <$> readFile intrFile
     return $ Complex $ fromList $ mkInterrupts c
 doCpuIntr _ = undefined
-    
+
 mkInterrupts :: (Cpu, [Interrupt]) -> [(Tag, Any)]
-mkInterrupts (Cpu c, i) = 
+mkInterrupts (Cpu c, i) =
   let lowerCpuN = map toLower c
       addAll xs = ("allcpu", sum $ map snd xs) : xs
       mk (Interrupt t ns _) =  map (\(x, y) -> ("system.cpu.intr." <> x <> "." <> toLower t, toAny y)) $ addAll $ zip lowerCpuN ns
@@ -138,7 +141,7 @@ mkInterrupts (Cpu c, i) =
   in interrupsAll intr : intr
 
 interrupsAll :: [(Tag, Any)] -> (Tag, Any)
-interrupsAll xs = 
+interrupsAll xs =
   let onlyAll = filter (\(x, _) -> isPrefixOf "system.cpu.intr.allcpu" x) xs
   in ("system.cpu.intr.total", Any . Int . sum $ map (\(_, x) -> unAny x)  onlyAll)
 
@@ -177,7 +180,7 @@ doCpuLoad (Check _ _ "system.cpu.loadavg" _) = do
 doCpuLoad _ = undefined
 
 parserLoadavg :: Parser (Double, Double, Double)
-parserLoadavg = (,,) <$> rational <* space <*> rational <* space <*> rational 
+parserLoadavg = (,,) <$> rational <* space <*> rational <* space <*> rational
 --------------------------------------------------------------------------------------
 
 cpuFile :: String
@@ -217,30 +220,30 @@ doCpuInfo (Check _ _ "system.cpu.info" _) = do
 doCpuInfo _ = undefined
 
 data CpuInf = CpuInf
-  { processor :: Int
-  , vendorId :: Text
-  , cpuFamily :: Text
-  , model :: Int
-  , modelName :: Text
-  , stepping :: Int
-  , microcode :: Text
-  , cpuMHz :: Double
-  , cacheSize :: Text
-  , physicalId :: Int
-  , siblings :: Int
-  , coreId :: Int
-  , cpuCores :: Int
-  , apicid :: Int
-  , initialApicid :: Int
-  , fpu :: Bool
-  , fpuException :: Bool
-  , cpuidLevel :: Int
-  , wp :: Bool
-  , flags :: [Text]
-  , bogomips :: Double
-  , clflushSize :: Int
-  , cacheAlignment :: Int
-  , addressSizes :: Text
+  { processor       :: Int
+  , vendorId        :: Text
+  , cpuFamily       :: Text
+  , model           :: Int
+  , modelName       :: Text
+  , stepping        :: Int
+  , microcode       :: Text
+  , cpuMHz          :: Double
+  , cacheSize       :: Text
+  , physicalId      :: Int
+  , siblings        :: Int
+  , coreId          :: Int
+  , cpuCores        :: Int
+  , apicid          :: Int
+  , initialApicid   :: Int
+  , fpu             :: Bool
+  , fpuException    :: Bool
+  , cpuidLevel      :: Int
+  , wp              :: Bool
+  , flags           :: [Text]
+  , bogomips        :: Double
+  , clflushSize     :: Int
+  , cacheAlignment  :: Int
+  , addressSizes    :: Text
   , powerManagement :: Text
   } deriving Show
 
@@ -278,7 +281,7 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
                       <*> (string "power management" *> char ':' *> skipWhile isHorizontalSpace *> takeTill isEndOfLine <* endOfLine)
 --------------------------------------------------------------------------------------
 
-testCpuSwitches :: Check 
+testCpuSwitches :: Check
 testCpuSwitches = Check (CheckName "switches") (Cron daily) "system.cpu.switches" (fromList [])
 
 doCpuSwitches :: Check -> IO Complex
@@ -291,12 +294,30 @@ parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
   where switchesOrEmpty = Just <$> (string "ctxt" *> space *> decimal) <|> pure Nothing <* takeTill isEndOfLine
 --------------------------------------------------------------------------------------
 
+testCpuUtil :: Check
+testCpuUtil = Check (CheckName "cpuutil") (Cron daily) "system.cpu.util" (fromList [])
+
 doCpuUtil :: Check -> IO Complex
-doCpuUtil = undefined
+doCpuUtil (Check _ _ "system.cpu.util" _) = do
+  Right c <- parseOnly parserProcStatCpu <$> readFile statFile
+  let ifJust (name, Nothing) = Nothing
+      ifJust (name, (Just i)) = Just (name, Any . Int $ i)
+      ifJustAll = map ifJust [ ("system.cpu.util.iowait", iowait c)
+                             , ("system.cpu.util.irq", irq c)
+                             , ("system.cpu.util.softirq", softirq c)
+                             , ("system.cpu.util.steal", steal c)
+                             , ("system.cpu.util.guest", guest c)
+                             , ("system.cpu.util.guestnice", guestNice c)
+                             ]
+  return . Complex . fromList $ [ ( "system.cpu.util.user", Any . Int $ user c)
+                                , ( "system.cpu.util.nice", Any . Int $ nice c)
+                                , ( "system.cpu.util.system", Any . Int $ system c)
+                                , ( "system.cpu.util.idle"  , Any . Int $ idle c)
+                                ] ++ catMaybes ifJustAll
 
 parserProcStatCpu :: Parser CpuUtilStat
 parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
-  where 
+  where
     cpuOrEmpty = Just <$> cpuUtilStat <|> pure Nothing <* takeTill isEndOfLine
     cpuUtilStat = do
         string "cpu "
@@ -314,23 +335,26 @@ parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
           , guestNice = xs !!? 9
           }
 
+-- | Safe index
 (!!?) :: [a] -> Int -> Maybe a
 (!!?) xs i = safeIndex i (length xs) xs
   where safeIndex i is xs | i < is = Just (xs !! i)
                           | otherwise = Nothing
 
-data CpuUtilStat = CpuUtilStat 
-  { user :: Int
-  , nice :: Int
-  , system :: Int
-  , idle :: Int
-  , iowait :: Maybe Int
-  , irq :: Maybe Int
-  , softirq :: Maybe Int
-  , steal :: Maybe Int
-  , guest :: Maybe Int
+data CpuUtilStat = CpuUtilStat
+  { user      :: Int
+  , nice      :: Int
+  , system    :: Int
+  , idle      :: Int
+  , iowait    :: Maybe Int
+  , irq       :: Maybe Int
+  , softirq   :: Maybe Int
+  , steal     :: Maybe Int
+  , guest     :: Maybe Int
   , guestNice :: Maybe Int
   } deriving Show
+
+--------------------------------------------------------------------------------------
 
 doCheck :: Check -> IO Complex
 doCheck = undefined
