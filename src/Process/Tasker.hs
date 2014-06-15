@@ -53,7 +53,6 @@ taskSet = handleCast fun
     where
     fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
     fun st x = do
-        say "hello"
         mapM_ (startCheck st) $ toList x
         say . show . toList $ x
         continue st

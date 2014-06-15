@@ -6,6 +6,7 @@ import           Process.Tasker
 import           Process.Web
 
 import           Control.Distributed.Process
+import           Control.Distributed.Process.Platform.Supervisor
 import           Control.Distributed.Process.Node
 import           Control.Monad.Reader             (ask)
 import           Control.Monad.State
@@ -27,6 +28,8 @@ main = do
             liftIO $ web s
         void . spawnLocal $ store
         void . spawnLocal $ tasker
+        -- c <- toChildStart cron
+        -- void $ super c
         void . spawnLocal $ cron
 --         void . spawnLocal $ supervisor
 --         void . spawnLocal $ registrator
@@ -38,6 +41,12 @@ main = do
         -- replLoop
     closeLocalNode node
     closeTransport t
+
+super :: ChildStart -> Process SupervisorPid
+super cronStart = start restartOne ParallelShutdown (childs cronStart)
+
+childs :: ChildStart -> [ChildSpec]
+childs cronStart = [ ChildSpec "cron" Worker Permanent TerminateImmediately cronStart Nothing]
 
 {--
 registrator :: Process ()
