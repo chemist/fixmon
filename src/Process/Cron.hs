@@ -1,22 +1,27 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric      #-}
 module Process.Cron (cron) where
 
-import           Process.Configurator (getCronMap, Update(..))
-import           Process.Tasker (doTasks)
+import           Process.Configurator                                (Update (..), getCronMap)
+import           Process.Tasker                                      (doTasks)
 import           Types
 
-import           Control.Distributed.Process (Process, register, say, getSelfPid, liftIO)
+import           Control.Distributed.Process                         (Process, getSelfPid,
+                                                                      liftIO,
+                                                                      register,
+                                                                      say)
+import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
-import           Data.Map                    (Map, elems, filterWithKey)
-import           Data.Set                    (Set, unions)
+import           Data.Binary
+import           Data.Map                                            (Map,
+                                                                      elems, filterWithKey)
+import           Data.Set                                            (Set,
+                                                                      unions)
 import           Data.Time.Clock
+import           Data.Typeable                                       (Typeable)
+import           GHC.Generics                                        (Generic)
 import           System.Cron
-import Data.Binary
-import GHC.Generics (Generic)
-import Data.Typeable (Typeable)
-import Control.Distributed.Process.Platform (Recipient(..))
 
 defDelay :: Delay
 defDelay = Delay $ seconds 20
@@ -30,7 +35,7 @@ data MinuteMessage = MinuteMessage deriving (Typeable, Generic)
 instance Binary MinuteMessage
 
 cron :: Process ()
-cron = serve () initServer server 
+cron = serve () initServer server
 
 initServer :: InitHandler () ST
 initServer _ = do
@@ -40,7 +45,7 @@ initServer _ = do
     return $ InitOk x defDelay
 
 server :: ProcessDefinition ST
-server = defaultProcess 
+server = defaultProcess
     { apiHandlers = [ minuteTask ]
     , timeoutHandler = \s _ -> do
         doCron

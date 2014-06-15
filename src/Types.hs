@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Types 
+module Types
 ( HostId
 , Hostname(..)
 , ToAny(..)
@@ -36,11 +36,11 @@ module Types
 , testHttp
 ) where
 
-import Types.Shared 
-import Types.Cron 
-import Types.DslTypes 
+import           Types.Cron
+import           Types.DslTypes
+import           Types.Shared
 
-import           Data.Map    (fromList)
+import           Data.Map       (fromList)
 import           System.Cron
 
 testHttp :: Check

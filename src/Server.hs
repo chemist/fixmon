@@ -1,13 +1,10 @@
-{-# LANGUAGE DeriveDataTypeable         #-}
 module Main where
 
 import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
 import           Process.Web
-import Types
 
-import           Control.Applicative hiding (empty)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Control.Monad.Reader             (ask)
@@ -15,9 +12,7 @@ import           Control.Monad.State
 import           Network.Transport                (closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
-                                                  
-import qualified Data.Binary as B
-import Data.Typeable
+
 
 
 main :: IO ()
@@ -44,6 +39,7 @@ main = do
     closeLocalNode node
     closeTransport t
 
+{--
 registrator :: Process ()
 registrator = do
     p <- getSelfPid
@@ -51,7 +47,7 @@ registrator = do
     say "start registrator"
     say $ "registrator " ++ " pid " ++ show p
     go
-    where 
+    where
       go = forever $ do
               remoteAgentPid <-  expectTimeout 100000 :: Process (Maybe ProcessId)
               maybe (return ()) (\p -> p `send` Reg >> p `send` testHttp) remoteAgentPid
@@ -85,7 +81,6 @@ supervisor = do
         (ProcessMonitorNotification _ pid _) <- expect :: Process ProcessMonitorNotification
         say "supervisor <- (ProcessMonitorNotification)"
         say . show $ lookup pid names
-{--
 replLoop :: Process ()
 replLoop = forever $ do
     say . show =<< getSelfPid

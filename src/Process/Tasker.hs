@@ -1,20 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Process.Tasker 
+module Process.Tasker
 ( tasker
 , doTasks
 ) where
 
 
-import           Process.Configurator (getHostMap, getCheckMap, Update(..))
+import           Process.Configurator                                (Update (..), getCheckMap, getHostMap)
 import           Types
 
 import           Control.Distributed.Process
-import           Control.Distributed.Process.Platform (Recipient(..))
+import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
-import           Data.Set                    (Set, toList)
-import           Data.Vector                 (Vector, (!))
-import           Prelude                     hiding (lookup)
+import           Data.Set                                            (Set,
+                                                                      toList)
+import           Data.Vector                                         (Vector,
+                                                                      (!))
+import           Prelude                                             hiding
+                                                                      (lookup)
 
 tasker :: Process ()
 tasker = serve () initServer server
@@ -39,7 +42,7 @@ initServer _ = do
     return $ InitOk (Tasker hm cm) NoDelay
 
 server :: ProcessDefinition Tasker
-server = defaultProcess 
+server = defaultProcess
     { apiHandlers = [ taskSet
                     ]
     , infoHandlers = [updateConfig]
@@ -72,4 +75,4 @@ updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do
     hm <- getHostMap
     cm <- getCheckMap
-    continue (Tasker hm cm) 
+    continue (Tasker hm cm)

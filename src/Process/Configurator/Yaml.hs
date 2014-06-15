@@ -2,7 +2,7 @@
 module Process.Configurator.Yaml
 (parseConfig) where
 
-import           Control.Applicative      (pure, (<$>), (<*>))
+import           Control.Applicative      ((<$>), (<*>))
 import           Control.Arrow            ((&&&))
 import           Control.Monad            (mzero)
 

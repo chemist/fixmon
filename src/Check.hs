@@ -31,7 +31,7 @@ addRoute x = modify fun
 
 runCheck :: (MonadIO m, Monad m) => Check -> CheckT m (Maybe Complex)
 runCheck ch@(Check _ _ t _) = do
-    routes <-  get 
+    routes <-  get
     maybe (return Nothing)
           (\(AC (f,_)) -> do
               r <- liftIO $ f ch
@@ -40,7 +40,7 @@ runCheck ch@(Check _ _ t _) = do
 
 describeCheck :: Monad m => Check -> CheckT m YamlBuilder
 describeCheck (Check _ _ t _) = do
-    routes <- get 
+    routes <- get
     case lookup t routes of
          Nothing -> return $ string ""
          Just (AC (_, x)) -> return $ example [x]

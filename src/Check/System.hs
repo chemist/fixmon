@@ -5,6 +5,7 @@ import           Check
 import           Types
 
 import           Control.Applicative
+import           Control.Monad         (void)
 import           Data.Attoparsec.Text
 import           Data.Map              (fromList)
 import           Data.Maybe
@@ -78,9 +79,9 @@ uptimeFile = "/proc/uptime"
 
 doUptime :: Check -> IO Complex
 doUptime (Check _ _ "system.uptime" _) = do
-    Done _ (up, idle) <-  parse parserUptime <$> readFile uptimeFile
+    Done _ (up, idle') <-  parse parserUptime <$> readFile uptimeFile
     return $ Complex $ fromList [ ("system.uptime.up", toAny (timeToPeriod up))
-                                , ("system.uptime.idle", toAny (timeToPeriod idle))
+                                , ("system.uptime.idle", toAny (timeToPeriod idle'))
                                 ]
     where
        timeToPeriod x =
@@ -88,9 +89,9 @@ doUptime (Check _ _ "system.uptime" _) = do
              days = i `div` 86400
              hours = (i `mod` 86400) `div` 3600
              mins = (i `mod` 3600) `div` 60
-             showD = if days /= (0 :: Integer) then (pack (show days)) <> " days " else ""
-             showH = if hours /= 0 then (pack (show hours)) <> " hours " else ""
-             showM = if mins /= 0 then (pack (show mins)) <> " minunes" else ""
+             showD = if days /= (0 :: Integer) then pack (show days) <> " days " else ""
+             showH = if hours /= 0 then pack (show hours) <> " hours " else ""
+             showM = if mins /= 0 then pack (show mins) <> " minunes" else ""
          in "up " <> showD <> showH <> showM
 doUptime _ = undefined
 
@@ -112,6 +113,7 @@ doBootTime (Check _ _ "system.boottime" _) = do
 doBootTime _ = undefined
 
 -- | test check for doBootTime
+testBootTime :: Check
 testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" (fromList [])
 
 -- | helpers for doBootTime
@@ -289,6 +291,7 @@ doCpuSwitches :: Check -> IO Complex
 doCpuSwitches (Check _ _ "system.cpu.switches" _) = do
     Right s <- parseOnly parserCpuSwitches <$> readFile statFile
     return . Complex . fromList $ [ ("system.cpu.switches", toAny s)]
+doCpuSwitches _ = undefined
 
 parserCpuSwitches :: Parser Int
 parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
@@ -301,8 +304,8 @@ testCpuUtil = Check (CheckName "cpuutil") (Cron daily) "system.cpu.util" (fromLi
 doCpuUtil :: Check -> IO Complex
 doCpuUtil (Check _ _ "system.cpu.util" _) = do
   Right c <- parseOnly parserProcStatCpu <$> readFile statFile
-  let ifJust (name, Nothing) = Nothing
-      ifJust (name, (Just i)) = Just (name, toAny i)
+  let ifJust (_, Nothing) = Nothing
+      ifJust (name, Just i) = Just (name, toAny i)
       ifJustAll = map ifJust [ ("system.cpu.util.iowait", iowait c)
                              , ("system.cpu.util.irq", irq c)
                              , ("system.cpu.util.softirq", softirq c)
@@ -315,16 +318,17 @@ doCpuUtil (Check _ _ "system.cpu.util" _) = do
                                 , ( "system.cpu.util.system", toAny $ system c)
                                 , ( "system.cpu.util.idle"  , toAny $ idle c)
                                 ] ++ catMaybes ifJustAll
+doCpuUtil _ = undefined
 
 parserProcStatCpu :: Parser CpuUtilStat
 parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
   where
     cpuOrEmpty = Just <$> cpuUtilStat <|> pure Nothing <* takeTill isEndOfLine
     cpuUtilStat = do
-        string "cpu "
+        void $ string "cpu "
         xs <- many (space *> decimal)
-        return $ CpuUtilStat
-          { user = xs !! 0
+        return CpuUtilStat
+          { user = head xs
           , nice = xs !! 1
           , system = xs !! 2
           , idle = xs !! 3
@@ -339,8 +343,8 @@ parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
 -- | Safe index
 (!!?) :: [a] -> Int -> Maybe a
 (!!?) xs i = safeIndex i (length xs) xs
-  where safeIndex i is xs | i < is = Just (xs !! i)
-                          | otherwise = Nothing
+  where safeIndex i' is xs' | i' < is = Just (xs' !! i')
+                            | otherwise = Nothing
 
 data CpuUtilStat = CpuUtilStat
   { user      :: Int
@@ -364,3 +368,4 @@ doLocalTime (Check _ _ "system.localtime" _) = do
     return . Complex . fromList $ [ ("system.localtime.utc", toAny t)
                                   , ("system.localtime.zone", toAny . pack $ z)
                                   ]
+doLocalTime _ = undefined
