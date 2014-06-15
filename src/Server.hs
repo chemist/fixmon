@@ -8,12 +8,11 @@ import           Process.Web
 import Types
 
 import           Control.Applicative hiding (empty)
-import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
 import           Control.Monad.Reader             (ask)
 import           Control.Monad.State
-import           Network.Transport                (closeTransport, newEndPoint, receive, EndPoint, ConnectionId, Connection, connect, Event(..), defaultConnectHints)
+import           Network.Transport                (closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
                                                   
@@ -64,7 +63,7 @@ data Reg = Reg deriving (Show, Typeable)
 instance B.Binary Reg where
     put _ = B.put (0::Int)
     get = do
-        x <- B.get :: B.Get Int
+        _ <- B.get :: B.Get Int
         return Reg
 
 
