@@ -1,53 +1,59 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Process.Tasker (tasker) where
+module Process.Tasker 
+( tasker
+, doTasks
+) where
 
 
-import           Process.Utils
+import           Process.Configurator (getHostMap, getCheckMap, Update(..))
 import           Types
 
 import           Control.Distributed.Process
-import           Control.Monad.State         (StateT, evalStateT, forever, get,
-                                              lift, put)
+import           Control.Distributed.Process.Platform (Recipient(..))
+import           Control.Distributed.Process.Platform.ManagedProcess
+import           Control.Distributed.Process.Platform.Time
 import           Data.Set                    (Set, toList)
 import           Data.Vector                 (Vector, (!))
 import           Prelude                     hiding (lookup)
+
+tasker :: Process ()
+tasker = serve () initServer server
+
+taskerName :: Recipient
+taskerName = Registered "tasker"
+
+doTasks :: Set CheckHost -> Process ()
+doTasks = cast taskerName
 
 data Tasker = Tasker
   { hosts  :: Vector Hostname
   , checks :: Vector Check
   }
 
-type TaskerState a = StateT Tasker Process a
-
-tasker :: Process ()
-tasker = do
+initServer :: InitHandler () Tasker
+initServer _ = do
+    say "start tasker"
     register "tasker" =<< getSelfPid
-    say "tasker (HostMap) -> configurator"
-    Just x <- request HostMap
-    say "tasker <-(HostMap) configurator"
-    say "tasker (CheckMap) -> configurator"
-    Just y <- request CheckMap
-    say "tasker <-(CheckMap) configurator"
-    evalStateT taskerT $ Tasker x y
+    hm <- getHostMap
+    cm <- getCheckMap
+    return $ InitOk (Tasker hm cm) NoDelay
 
+server :: ProcessDefinition Tasker
+server = defaultProcess 
+    { apiHandlers = [ taskSet
+                    ]
+    , infoHandlers = [updateConfig]
+    }
 
-taskerT :: TaskerState ()
-taskerT = forever $ do
-    st <- get
-    newSt <- lift . receiveWait $ map (\f -> f st) taskerMatch
-    put newSt
-
-taskerMatch :: [Tasker -> Match Tasker]
-taskerMatch = [taskMatch]
-
-taskMatch :: Tasker -> Match Tasker
-taskMatch st = match fun
+taskSet :: Dispatcher Tasker
+taskSet = handleCast fun
     where
-    fun (x :: Set CheckHost) = do
-        say "tasker <- (Set CheckHost)"
+    fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
+    fun st x = do
+        say "hello"
         mapM_ (startCheck st) $ toList x
-        say $ show $ toList x
-        return st
+        say . show . toList $ x
+        continue st
 
 startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
@@ -61,3 +67,9 @@ startCheck st ch = do
 
         c :: CheckHost -> Int
         c (CheckHost (_, i)) = unId i
+
+updateConfig :: DeferredDispatcher Tasker
+updateConfig = handleInfo $ \_ Update  -> do
+    hm <- getHostMap
+    cm <- getCheckMap
+    continue (Tasker hm cm) 

@@ -32,7 +32,6 @@ groups:
     triggers:
       - disk
 
-
 checks:
   - name: http-process
     period: '* * * * *'

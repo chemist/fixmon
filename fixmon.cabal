@@ -38,7 +38,8 @@ executable server
                        unordered-containers >=0.2 && <0.3, 
                        network-transport,
                        network-transport-tcp,
-                       distributed-process >= 0.4.2,
+                       distributed-process>=0.5.0 && <0.6,
+                       distributed-process-platform,
                        cron == 0.2.*,
                        wai == 2.1.*,
                        warp == 2.1.*,
@@ -63,7 +64,8 @@ executable agent
                        network-transport,
                        network-transport-tcp,
                        attoparsec >=0.11 && <0.12, 
-                       distributed-process >= 0.4.2,
+                       distributed-process>=0.5.0 && <0.6,
+                       distributed-process-platform,
                        transformers >=0.3 && <0.4, 
                        mtl >=2.1 && <2.2, 
                        text >=0.11 && <0.12, 
@@ -71,7 +73,7 @@ executable agent
                        -- binary >=0.5 && <0.6, 
                        binary >=0.6.4 && <0.8, 
                        cron == 0.2.*,
-                       lens == 4.1.*,
+                       lens >= 4.1,
                        wreq
   hs-source-dirs:      src
   default-language:    Haskell2010

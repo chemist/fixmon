@@ -1,68 +1,62 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-module Process.Cron (clock, cron) where
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
+module Process.Cron (cron) where
 
-import           Process.Utils
+import           Process.Configurator (getCronMap, Update(..))
+import           Process.Tasker (doTasks)
 import           Types
 
-import           Control.Concurrent
-import           Control.Distributed.Process
-import           Control.Monad.State         (StateT, evalStateT, forever, lift)
-import qualified Control.Monad.State         as S
+import           Control.Distributed.Process (Process, register, say, getSelfPid, liftIO)
+import           Control.Distributed.Process.Platform.ManagedProcess
+import           Control.Distributed.Process.Platform.Time
 import           Data.Map                    (Map, elems, filterWithKey)
 import           Data.Set                    (Set, unions)
 import           Data.Time.Clock
 import           System.Cron
+import Data.Binary
+import GHC.Generics (Generic)
+import Data.Typeable (Typeable)
+import Control.Distributed.Process.Platform (Recipient(..))
 
--- | send message every minutes to cron
-clock :: Process ()
-clock = do
-    register "clock" =<< getSelfPid
-    forever $ do
-        nsend "cron" MinuteMessage
-        liftIO $ threadDelay $ 10 * 100000000
+defDelay :: Delay
+defDelay = Delay $ seconds 20
+
+doCron :: Process ()
+doCron = cast (Registered "cron") MinuteMessage
 
 type ST = Map Cron (Set CheckHost)
-type CronState a = StateT ST Process a
 
--- | get message every minutes, check crontab, start checks
---  get Reload message, reload crontab
+data MinuteMessage = MinuteMessage deriving (Typeable, Generic)
+instance Binary MinuteMessage
+
 cron :: Process ()
-cron = do
+cron = serve () initServer server 
+
+initServer :: InitHandler () ST
+initServer _ = do
     say "start cron"
     register "cron" =<< getSelfPid
-    say "cron (CronMap)-> configurator"
-    Just x <- request CronMap
-    say "cron <-(CronMap) configurator"
-    evalStateT cronT x
+    x <-  getCronMap
+    return $ InitOk x defDelay
 
-cronT :: CronState ()
-cronT = forever $ do
-    st <- S.get
-    newSt <- lift . receiveWait $ map (\f -> f st) cronMatch
-    S.put newSt
+server :: ProcessDefinition ST
+server = defaultProcess 
+    { apiHandlers = [ minuteTask ]
+    , timeoutHandler = \s _ -> do
+        doCron
+        timeoutAfter_ defDelay s
+    , infoHandlers = [updateConfig]
+    }
 
-cronMatch :: [ST -> Match ST]
-cronMatch = [cronMatch']
+minuteTask :: Dispatcher ST
+minuteTask = handleCast $ \st MinuteMessage -> do
+    now <- liftIO getCurrentTime
+    let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
+    doTasks (unions . elems $ tasks)
+    say "cron (Set CheckHost) -> tasker"
+    -- say $ "do tasks " ++ (show . unions . elems $ tasks)
+    continue st
 
-cronMatch' :: ST -> Match ST
-cronMatch' st = match fun
-    where
-    fun MinuteMessage = do
-        now <- liftIO getCurrentTime
-        let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
-        say "cron <- (MinuteMessage)"
-        nsend "tasker" (unions . elems $ tasks)
-        say "cron (Set CheckHost) -> tasker"
-        -- say $ "do tasks " ++ (show . unions . elems $ tasks)
-        return st
-    fun CronMap = do
-        say "cron <- CronMap"
-        Just x <- request CronMap
-        return x
-    fun _ = do
-        say "cron <- BadMessage"
-        return st
-
+updateConfig :: DeferredDispatcher ST
+updateConfig = handleInfo $ \_ Update  -> getCronMap >>= continue
 

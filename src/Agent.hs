@@ -12,7 +12,7 @@ import           Types                                      (Check (..),
 
 import           Control.Concurrent                         (threadDelay)
 import           Control.Distributed.Process
-import           Control.Distributed.Process.Internal.Types
+import           Control.Distributed.Process.Internal.Types hiding (agent)
 import           Control.Distributed.Process.Node
 import           Control.Monad
 import qualified Control.Monad.State                        as ST

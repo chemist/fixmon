@@ -17,9 +17,6 @@ import           Network.Transport                (closeTransport, newEndPoint, 
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
                                                   
-import qualified Network.Transport as NT
-import Control.Concurrent.MVar
-import Data.Map (Map, empty, insert, (!), delete)
 import qualified Data.Binary as B
 import Data.Typeable
 
@@ -34,12 +31,11 @@ main = do
             register "web" =<< getSelfPid
             say "start web"
             liftIO $ web s
-        void . spawnLocal $ cron
         void . spawnLocal $ store
-        void . spawnLocal $ clock
         void . spawnLocal $ tasker
-        void . spawnLocal $ supervisor
-        void . spawnLocal $ registrator
+        void . spawnLocal $ cron
+--         void . spawnLocal $ supervisor
+--         void . spawnLocal $ registrator
         say . show =<< getSelfPid
         _ <- liftIO getLine :: Process String
         say "kill web"
