@@ -39,7 +39,7 @@ initServer _ = do
     -- register "tasker" =<< getSelfPid
     hm <- getHostMap
     cm <- getCheckMap
-    return $ InitOk (Tasker hm cm) NoDelay
+    return $ InitOk (Tasker hm cm) Infinity
 
 server :: ProcessDefinition Tasker
 server = defaultProcess
