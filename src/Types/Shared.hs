@@ -37,7 +37,7 @@ instance IsString GroupName where
     fromString x = GroupName . pack $ x
 
 data Group = Group
- { gname     :: GroupName
+ { gname     :: !GroupName
  , ghosts    :: Set HostId
  , gtriggers :: Set TriggerId
  , gchecks   :: Set CheckId
@@ -90,9 +90,9 @@ instance IsString TriggerName where
     fromString x = TriggerName . pack $ x
 
 data Trigger = Trigger
-  { tname        :: TriggerName
-  , tdescription :: Text
-  , tcheck       :: CheckId
+  { tname        :: !TriggerName
+  , tdescription :: !Text
+  , tcheck       :: !CheckId
   , tresult      :: TriggerRaw Bool
   } deriving (Show, Eq, Typeable, Generic)
 

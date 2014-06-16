@@ -7,9 +7,9 @@ import           Process.Web
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Platform.Supervisor
+import           Control.Distributed.Process.Platform
 import           Control.Distributed.Process.Node
 import           Control.Monad.Reader             (ask)
-import           Control.Monad.State
 import           Network.Transport                (closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
@@ -22,74 +22,27 @@ main = do
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
         s <-  ask
-        void . spawnLocal $ do
-            register "web" =<< getSelfPid
-            say "start web"
-            liftIO $ web s
-        void . spawnLocal $ store
-        void . spawnLocal $ tasker
-        -- c <- toChildStart cron
-        -- void $ super c
-        void . spawnLocal $ cron
---         void . spawnLocal $ supervisor
---         void . spawnLocal $ registrator
-        say . show =<< getSelfPid
+        let webProcess = do
+              say "start web"
+              liftIO $ web s
+        cstart <-  mapM toChildStart [webProcess, store, tasker, cron]
+        let cspec = map child $ zip cstart ["web", "store", "tasker", "cron"]
+        superPid <-  super cspec
         _ <- liftIO getLine :: Process String
-        say "kill web"
-        maybe (return ()) (`kill` "stop web") =<< whereis "web"
+        say "kill super"
+        shutdown (Pid superPid)
         return ()
         -- replLoop
     closeLocalNode node
     closeTransport t
 
-super :: ChildStart -> Process SupervisorPid
-super cronStart = start restartOne ParallelShutdown (childs cronStart)
+super :: [ChildSpec] -> Process SupervisorPid
+super = start restartOne ParallelShutdown 
 
-childs :: ChildStart -> [ChildSpec]
-childs cronStart = [ ChildSpec "cron" Worker Permanent TerminateImmediately cronStart Nothing]
+child :: (ChildStart, String) -> ChildSpec
+child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)
 
 {--
-registrator :: Process ()
-registrator = do
-    p <- getSelfPid
-    register "registrator" p
-    say "start registrator"
-    say $ "registrator " ++ " pid " ++ show p
-    go
-    where
-      go = forever $ do
-              remoteAgentPid <-  expectTimeout 100000 :: Process (Maybe ProcessId)
-              maybe (return ()) (\p -> p `send` Reg >> p `send` testHttp) remoteAgentPid
---               say $ "echo get " ++ show remoteAgentPid
---
-
-data Reg = Reg deriving (Show, Typeable)
-
-instance B.Binary Reg where
-    put _ = B.put (0::Int)
-    get = do
-        _ <- B.get :: B.Get Int
-        return Reg
-
-
-supervisor :: Process ()
-supervisor = do
-    say "start supervisor"
-    Just cronPid <- whereis "cron"
-    Just storePid <- whereis "configurator"
-    Just clockPid <- whereis "clock"
-    Just taskerPid <- whereis "tasker"
-    Just webPid <- whereis "web"
-    void . monitor $ cronPid
-    void . monitor $ storePid
-    void . monitor $ clockPid
-    void . monitor $ taskerPid
-    void . monitor $ webPid
-    names <- zip [cronPid, storePid, clockPid, taskerPid, webPid] <$> sequence [getProcessInfo cronPid, getProcessInfo storePid, getProcessInfo clockPid, getProcessInfo taskerPid, getProcessInfo webPid]
-    forever $ do
-        (ProcessMonitorNotification _ pid _) <- expect :: Process ProcessMonitorNotification
-        say "supervisor <- (ProcessMonitorNotification)"
-        say . show $ lookup pid names
 replLoop :: Process ()
 replLoop = forever $ do
     say . show =<< getSelfPid

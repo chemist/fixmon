@@ -6,9 +6,8 @@ import           Process.Configurator                                (Update (..
 import           Process.Tasker                                      (doTasks)
 import           Types
 
-import           Control.Distributed.Process                         (Process, getSelfPid,
+import           Control.Distributed.Process                         (Process, 
                                                                       liftIO,
-                                                                      register,
                                                                       say)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
@@ -40,7 +39,7 @@ cron = serve () initServer server
 initServer :: InitHandler () ST
 initServer _ = do
     say "start cron"
-    register "cron" =<< getSelfPid
+--    register "cron" =<< getSelfPid
     x <-  getCronMap
     return $ InitOk x defDelay
 

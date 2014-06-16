@@ -16,7 +16,7 @@ where
 import           Process.Configurator.Yaml
 import           Types
 
-import           Control.Distributed.Process (Process, say, register, getSelfPid, nsend)
+import           Control.Distributed.Process (Process, say, nsend)
 import           Control.Distributed.Process.Platform (Recipient(..))
 import           Control.Distributed.Process.Platform.Time
 import           Control.Distributed.Process.Platform.ManagedProcess
@@ -40,7 +40,7 @@ store :: Process ()
 store = serve "fixmon.yaml" initStore server
 
 storeName :: Recipient
-storeName = Registered "configurator"
+storeName = Registered "store"
 
 getCronMap :: Process (Map Cron (Set CheckHost))
 getCronMap = call storeName CronMap
@@ -86,7 +86,7 @@ instance Binary Update
 initStore :: InitHandler FilePath ST
 initStore f = do
     say "start configurator"
-    register "configurator" =<< getSelfPid
+    -- register "configurator" =<< getSelfPid
     m <- liftIO $ parseConfig f
     time <- liftIO $ getModificationTime f
     return $ either InitStop (\x -> InitOk (x,time, f) defDelay) m

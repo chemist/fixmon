@@ -36,7 +36,7 @@ data Tasker = Tasker
 initServer :: InitHandler () Tasker
 initServer _ = do
     say "start tasker"
-    register "tasker" =<< getSelfPid
+    -- register "tasker" =<< getSelfPid
     hm <- getHostMap
     cm <- getCheckMap
     return $ InitOk (Tasker hm cm) NoDelay
