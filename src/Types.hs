@@ -45,3 +45,4 @@ import           System.Cron
 
 testHttp :: Check
 testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", "http://ya.ru") ])
+

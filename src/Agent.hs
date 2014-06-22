@@ -6,7 +6,7 @@ module Main where
 import           Check
 import           Check.Http
 import           Check.System                     ()
-import           Types                            (Check (..), CheckName (..),
+import           Types                            (Check (..), CheckName (..), Hostname (..),
                                                    Cron (..))
 
 import           Control.Concurrent               (threadDelay)
@@ -24,6 +24,8 @@ import           Network.Transport                (EndPointAddress (..),
                                                    closeTransport)
 import           Network.Transport.TCP            (createTransport,
                                                    defaultTCPParameters)
+
+import           Process.Watcher
 import           System.Cron
 
 data H = forall a. Checkable a => H {unH :: a}
@@ -43,9 +45,9 @@ main = do
     Right t <- createTransport host port defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ forever $ do
-        whereisRemoteAsync (NodeId (EndPointAddress remoteAddress)) "registrator"
+        whereisRemoteAsync (NodeId (EndPointAddress remoteAddress)) "watcher"
         mregistrator <- expectTimeout 1000000 :: Process (Maybe WhereIsReply)
-        maybe (say "registrator not found") good (mmm mregistrator)
+        maybe (say "watcher not found") good (mmm mregistrator)
         liftIO $ threadDelay 1000000
     -- _ <- liftIO getLine :: Process String
     closeLocalNode node
@@ -54,12 +56,13 @@ main = do
           mmm :: Maybe WhereIsReply -> Maybe ProcessId
           mmm (Just (WhereIsReply _ x)) = x
           mmm _ = Nothing
-          _ = NodeId (EndPointAddress remoteAddress)
           good pid = do
               say "registrator found"
-              send pid =<< getSelfPid
-              _ <- expect :: Process Reg
-              say "success registered"
+              self <-  getSelfPid
+              r <- hello pid (Hostname "localhost", self)
+              if r
+                 then say "success registered"
+                 else say "cant register"
               runCheckT (agent pid) empty
               return ()
 

@@ -4,6 +4,7 @@ import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
 import           Process.Web
+import           Process.Watcher
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Platform.Supervisor
@@ -25,8 +26,8 @@ main = do
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, store, tasker, cron]
-        let cspec = map child $ zip cstart ["web", "store", "tasker", "cron"]
+        cstart <-  mapM toChildStart [webProcess, store, tasker, cron, watcher]
+        let cspec = map child $ zip cstart ["web", "store", "tasker", "cron", "watcher"]
         superPid <-  super cspec
         _ <- liftIO getLine :: Process String
         say "kill super"
