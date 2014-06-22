@@ -16,12 +16,7 @@ module Types
 , CheckName(..)
 , CheckHost(..)
 , Route(..)
-, AC(..)
 , Checkable(..)
--- , addRoute
--- , runCheck
--- , runCheckT
--- , CheckT
 -- * Группы
 , GroupName(..)
 , GroupId

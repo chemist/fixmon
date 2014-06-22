@@ -6,7 +6,7 @@ module Main where
 import           Check.Http
 import           Check.System                     ()
 import           Types                            (Check (..), CheckName (..), Hostname (..),
-                                                   Cron (..), runCheck, runCheckT, Checkable(..), addRoute, CheckT)
+                                                   Cron (..), Checkable(..))
 
 import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process
@@ -26,11 +26,6 @@ import           Network.Transport.TCP            (createTransport,
 
 import           Process.Watcher
 import           System.Cron
-
-data H = forall a. Checkable a => H {unH :: a}
-
-checks :: [H]
-checks = [H HttpSimple, H Shell]
 
 host, port :: String
 host = "localhost"
@@ -62,31 +57,7 @@ main = do
               if r
                  then say "success registered"
                  else say "cant register"
-              runCheckT (agent pid) empty
               return ()
-
-type Agent = CheckT Process
-
-agent :: ProcessId -> Agent ()
-agent pid = do
-    mapM_ (\(H x) -> addRoute x) checks
-    st <- ST.get
-    forever $ lift . receiveWait $ map match [ \x -> runCheckT (receiveCheck pid x) st ]
-
-receiveCheck :: ProcessId -> Check -> Agent ()
-receiveCheck _ ch = do
-    lift $ say $ show ch
-    r <- runCheck ch
-    lift $ say $ show r
-
-
-data Reg = Reg deriving (Show, Typeable)
-
-instance B.Binary Reg where
-    put _ = B.put (0::Int)
-    get = do
-        _ <- B.get :: B.Get Int
-        return Reg
 
 
 
