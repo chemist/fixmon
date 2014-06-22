@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-module Process.Watcher (watcher, hello) where
+{-# LANGUAGE ScopedTypeVariables      #-}
+module Process.Watcher (watcher, hello, lookupAgent) where
 
 import           Types
 
@@ -11,13 +12,17 @@ import           Control.Distributed.Process.Platform                (Recipient 
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 import           Data.Binary
-import           Data.Map                                            (Map, empty, insert,
+import           Data.Map                                            (Map, empty, insert, lookup,
                                                                       elems, filterWithKey)
 import           Data.Typeable                                       (Typeable)
 import           GHC.Generics                                        (Generic)
+import Prelude hiding (lookup)
 
 hello :: ProcessId -> (Hostname, ProcessId) -> Process Bool
-hello p ph = call p ph
+hello = call 
+
+lookupAgent :: ProcessId -> Hostname -> Process (Maybe ProcessId)
+lookupAgent = call 
 
 defDelay :: Delay
 defDelay = Delay $ seconds 20
@@ -36,7 +41,7 @@ initServer _ = do
 
 server :: ProcessDefinition ST
 server = defaultProcess
-    { apiHandlers = [ registerNew ]
+    { apiHandlers = [ registerNew, searchAgent ]
     , infoHandlers = []
     }
 
@@ -46,6 +51,9 @@ registerNew = handleCall $ \st (Hostname t, p) -> do
     say "register new agent"
     reply True $ insert (Hostname t) p st
 
-
+searchAgent :: Dispatcher ST
+searchAgent = handleCall $ \st (h :: Hostname) -> do
+    say "search agent"
+    reply (lookup h st) st
 
 

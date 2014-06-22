@@ -3,11 +3,10 @@
 {-# LANGUAGE OverloadedStrings         #-}
 module Main where
 
-import           Check
 import           Check.Http
 import           Check.System                     ()
 import           Types                            (Check (..), CheckName (..), Hostname (..),
-                                                   Cron (..))
+                                                   Cron (..), runCheck, runCheckT, Checkable(..), addRoute, CheckT)
 
 import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process

@@ -5,7 +5,7 @@ import           Control.Applicative  ((<$>))
 import           Control.Exception
 import           Control.Lens         ((&), (.~), (^.))
 import           Data.ByteString.Lazy (ByteString)
-import           Data.Map             (fromList, lookup)
+import           Data.Map             (fromList, lookup, singleton)
 import           Data.Maybe           (fromMaybe)
 import           Data.Text            (Text, unpack)
 import           Debug.Trace
@@ -13,7 +13,6 @@ import           Network.URI
 import           Network.Wreq
 import           Prelude              hiding (lookup)
 
-import           Check
 import           Types
 
 
@@ -22,7 +21,7 @@ data Shell = Shell deriving Show
 
 instance Checkable Shell where
     describe Shell = undefined
-    route Shell = ("cmd.run", undefined)
+    route Shell = singleton "cmd.run" undefined
     isCorrect _ Shell = undefined
 
 instance Checkable Http where
@@ -30,7 +29,7 @@ instance Checkable Http where
                             , ("agent", False, "Host - as string, check will be starting from this host, default start from server")
                             , ("redirects", False, "Count - as integer, default 0")
                             ]
-    route (HttpSimple) = ("http.simple", doHttp)
+    route (HttpSimple) = singleton "http.simple" doHttp
     isCorrect ch HttpSimple =
       let url = lookup "url" (cparams ch)
       in case url of

@@ -1,13 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Check.System where
 
-import           Check
 import           Types
 
 import           Control.Applicative
 import           Control.Monad         (void)
 import           Data.Attoparsec.Text
-import           Data.Map              (fromList)
+import           Data.Map              (fromList, singleton)
 import           Data.Maybe
 import           Data.Monoid           ((<>))
 import           Data.Text             (Text, isPrefixOf, pack, toLower)
@@ -34,15 +33,15 @@ data System = HostName
             deriving (Show)
 
 instance Checkable System where
-    route HostName = ("system.hostname", doHostname)
-    route Uptime   = ("system.uptime",   doUptime)
-    route Boottime = ("system.boottime",   doBootTime)
-    route CpuIntr  = ("system.cpu.intr",   doCpuIntr)
-    route CpuLoad  = ("system.cpu.loadavg",   doCpuLoad)
-    route CpuInfo  =  ("system.cpu.info",   doCpuInfo)
-    route CpuSwitches  =  ("system.cpu.switches",   doCpuSwitches)
-    route CpuUtil  =  ("system.cpu.util",   doCpuUtil)
-    route LocalTime  =  ("system.localtime",   doLocalTime)
+    route HostName =     singleton "system.hostname"       doHostname
+    route Uptime   =     singleton "system.uptime"         doUptime
+    route Boottime =     singleton "system.boottime"       doBootTime
+    route CpuIntr  =     singleton "system.cpu.intr"       doCpuIntr
+    route CpuLoad  =     singleton "system.cpu.loadavg"    doCpuLoad
+    route CpuInfo  =     singleton "system.cpu.info"       doCpuInfo
+    route CpuSwitches  = singleton "system.cpu.switches"   doCpuSwitches
+    route CpuUtil  =     singleton "system.cpu.util"       doCpuUtil
+    route LocalTime  =   singleton "system.localtime"      doLocalTime
 
     describe HostName = []
     describe Uptime   = []

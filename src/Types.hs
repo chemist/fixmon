@@ -15,6 +15,13 @@ module Types
 , CheckId
 , CheckName(..)
 , CheckHost(..)
+, Route(..)
+, AC(..)
+, Checkable(..)
+-- , addRoute
+-- , runCheck
+-- , runCheckT
+-- , CheckT
 -- * Группы
 , GroupName(..)
 , GroupId
@@ -39,6 +46,7 @@ module Types
 import           Types.Cron
 import           Types.DslTypes
 import           Types.Shared
+import           Types.Check
 
 import           Data.Map       (fromList)
 import           System.Cron
