@@ -11,7 +11,7 @@ import           Data.HashMap.Strict      (toList)
 import qualified Data.Map                 as M
 import           Data.Monoid              ((<>))
 import qualified Data.Set                 as S
-import           Data.Text                (Text)
+import           Data.Text                (Text, unpack)
 import           Data.Vector              (Vector, filter, findIndex, foldl, elemIndex,
                                            foldl', foldl1, map, mapM, (!))
 import           Data.Vector.Binary       ()
@@ -93,10 +93,10 @@ instance FromJSON IGroup where
     parseJSON _ = mzero
 
 decodeConf :: FilePath -> IO (Either String Config)
-decodeConf fp = conv <$> decodeFileEither fp
+decodeConf fp = conv "Problem with parse yaml format: " <$> decodeFileEither fp
 
 transformCheck :: ICheck -> Either String Check
-transformCheck ch = makeCheck =<< parseOnly cronSchedule (icperiod ch)
+transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> icname ch) (parseOnly cronSchedule (icperiod ch))
   where
     makeCheck cr = return Check
       { cname = CheckName (icname ch)
@@ -106,15 +106,15 @@ transformCheck ch = makeCheck =<< parseOnly cronSchedule (icperiod ch)
       }
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
-transformTrigger chs tr = makeTrigger =<< conv (parseTrigger (itresult tr))
+transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))
   where
     makeTrigger tr' = case findIndex (\c -> cname c == CheckName (itcheck tr)) chs of
                            Nothing -> fail $ "check " ++ show (itcheck tr) ++ " not found"
                            Just i -> return $ Trigger (TriggerName (itname tr)) (itdescription tr) (pId i) tr'
 
-conv :: Show a => Either a b -> Either String b
-conv x = case x of
-              Left y -> Left $ show y
+conv :: Show a => Text -> Either a b -> Either String b
+conv tag x = case x of
+              Left y -> Left $ unpack tag <> " | error: " <> show y
               Right y -> Right y
 
 transformGroup :: Vector Check -> Vector Hostname -> Vector Trigger -> IGroup -> Either String Group
