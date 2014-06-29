@@ -13,7 +13,6 @@ import Data.Text (Text, pack)
 import Control.Applicative ((<$>),(<*>))
 import Data.String (fromString)
 import Data.Binary (Binary, decode, encode)
-import Text.Peggy.Prim (ParseError)
 import Data.Monoid (mempty)
 
 
@@ -33,9 +32,6 @@ checkBinary = \x -> en x == x
 
 checkParse :: TriggerRaw Bool -> Bool
 checkParse = \x -> parseTrigger (ps x) == Right x
-
-instance Eq ParseError where
-    (==) x y = undefined
 
 instance Arbitrary (TriggerRaw Int) where
     arbitrary = Int <$> (arbitrary :: Gen Int)
