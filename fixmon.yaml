@@ -45,6 +45,14 @@ checks:
     period: '* * * * *'
     command: uptime
     type: shell
+  - name: disk-usr
+    period: '* * * * *'
+    command: uptime
+    type: shell
+  - name: disk-home
+    period: '* * * * *'
+    command: uptime
+    type: shell
   - name: process-java
     period: '* * * * *'
     command: uptime
@@ -65,6 +73,9 @@ triggers:
     description: Проверяем что java работает
     result: return equal 1
   - name: disk
-    check: disk-root
+    checks:
+      - disk-root
+      - disk-usr
+      - disk-home
     description: Проверка свободного места
-    result: free more 1000000 and used less 100
+    result: disk-home.free more 1000000 and disk-root.used less 100

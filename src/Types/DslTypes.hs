@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} 
 module Types.DslTypes
 ( TriggerRaw(..), Any(..), TypeError, ToAny(..), Tag )
 where
@@ -13,7 +13,7 @@ import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, getWord8, put, putWord8)
 import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
-import           Data.Typeable       (Typeable, Typeable1, typeOf)
+import           Data.Typeable       (Typeable, typeOf)
 import Data.Time
 
 data TypeError = TypeError String deriving (Show, Typeable)
@@ -128,7 +128,7 @@ data TriggerRaw a where
   More :: TriggerRaw Text -> Any -> TriggerRaw Bool
   Equal :: TriggerRaw Text -> Any -> TriggerRaw Bool
 
-deriving instance Typeable1 TriggerRaw
+deriving instance Typeable TriggerRaw
 deriving instance Eq (TriggerRaw a)
 
 instance Binary (TriggerRaw Int) where

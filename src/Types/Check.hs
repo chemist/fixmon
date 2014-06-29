@@ -1,11 +1,7 @@
 {-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Types.Check where
-import           Control.Applicative (Applicative)
-import           Control.Monad
-import           Control.Monad.State
-import           Data.Map            (Map, insert, lookup, keys)
+import           Data.Map            (Map, keys)
 import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import           Data.Yaml.Builder

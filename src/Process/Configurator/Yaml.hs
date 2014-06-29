@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} 
 module Process.Configurator.Yaml
 (parseConfig) where
 
@@ -11,21 +12,23 @@ import           Data.HashMap.Strict      (toList)
 import qualified Data.Map                 as M
 import           Data.Monoid              ((<>))
 import qualified Data.Set                 as S
-import           Data.Text                (Text, unpack)
+import           Data.Text                (Text, unpack, concat)
 import           Data.Vector              (Vector, filter, findIndex, foldl, elemIndex,
                                            foldl', foldl1, map, mapM, (!))
 import           Data.Vector.Binary       ()
 import           Data.Yaml                (FromJSON (..), Value (..),
                                            decodeFileEither, (.:), (.:?))
 import           System.Cron.Parser       (cronSchedule)
+import Data.Either (lefts, rights)
 
-import           Prelude                  hiding (filter, foldl, foldl1, map)
+import           Prelude                  hiding (filter, foldl, concat, foldl1, map)
+import qualified Prelude
 
 import           Process.Configurator.Dsl (parseTrigger)
 import           Types                    (Check (..), CheckHost (..),
                                            CheckId, CheckName (..),
                                            Group (..), GroupName (..),
-                                           HostId, Hostname (..),
+                                           HostId, Hostname (..), TriggerRaw(..),
                                            Monitoring (..), Status (..),
                                            Trigger (..), TriggerHost (..),
                                            TriggerId, TriggerName (..), IntId(..))
@@ -34,7 +37,7 @@ import           Types.Cron               (Cron (..))
 data ITrigger = ITrigger
   { itname        :: Text
   , itdescription :: Text
-  , itcheck       :: Text
+  , itcheck       :: [Text]
   , itresult      :: Text
   } deriving Show
 
@@ -70,10 +73,25 @@ instance FromJSON Config where
 
 
 instance FromJSON ITrigger where
-    parseJSON (Object v) = ITrigger <$>
+    parseJSON (Object v) = do
+        n <- v .: "name"
+        d <- v .: "description" 
+        c <- v .:? "check" 
+        ch <- v .:? "checks"
+        r <- v .: "result"
+        let ch' = case (c, ch) of
+                       (Just x, Just xs) -> x : xs
+                       (Just x, Nothing) -> [x]
+                       (Nothing, Just xs) -> xs
+                       (Nothing, Nothing) -> mzero
+        return $ ITrigger n d ch' r
+        {--
+        ITrigger <$>
                            v .: "name" <*>
                            v .: "description" <*>
-                           v .: "check" <*> v .: "result"
+                           (v .: "check" <|> v .: "checks") <*> 
+                           v .: "result"
+                           --}
     parseJSON _ = mzero
 
 instance FromJSON ICheck where
@@ -108,10 +126,22 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
 transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))
   where
-    makeTrigger tr' = case findIndex (\c -> cname c == CheckName (itcheck tr)) chs of
-                           Nothing -> fail $ "check " ++ show (itcheck tr) ++ " not found"
-                           Just i -> return $ Trigger (TriggerName (itname tr)) (itdescription tr) (pId i) tr'
-
+  makeTrigger :: TriggerRaw Bool -> Either String Trigger
+  makeTrigger tr' = do
+      ch <- checks'' 
+      return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch tr'
+  checks'' :: Either String [CheckId]
+  checks'' = let l = concat . lefts . checks' . itcheck $ tr
+                 r = rights . checks' . itcheck $ tr
+             in case l of
+                    "" -> Right r
+                    e -> Left $ unpack e
+  checks' :: [Text] -> [Either Text CheckId]
+  checks' = Prelude.map 
+              $ \x -> case findIndex (\c -> cname c == CheckName x) chs of
+                       Nothing -> Left $ "check " <> x  <> " not found"
+                       Just i -> Right $ pId i
+                       
 conv :: Show a => Text -> Either a b -> Either String b
 conv tag x = case x of
               Left y -> Left $ unpack tag <> " | error: " <> show y
@@ -123,22 +153,22 @@ transformGroup ch hs tr gr = do
                                  thosts = Prelude.mapM funh $ ighosts gr
                                  funh :: Hostname -> Either String HostId
                                  funh h = case elemIndex h hs of
-                                              Nothing -> fail "bad hostname in group"
-                                              Just i -> return $ pId i
+                                              Nothing -> Left "bad hostname in group"
+                                              Just i -> Right $ pId i
                                  tchecks :: Maybe [Text] -> Either String [CheckId]
                                  tchecks Nothing = return []
                                  tchecks (Just xs) = Prelude.mapM func xs
                                  func :: Text -> Either String CheckId
                                  func h = case findIndex (\a -> cname a == CheckName h) ch of
-                                               Nothing -> fail "bad check in group"
-                                               Just i -> return $ pId i
+                                               Nothing -> Left "bad check in group"
+                                               Just i -> Right $ pId i
                                  ttriggers :: Maybe [Text] -> Either String [TriggerId]
                                  ttriggers Nothing = return []
                                  ttriggers (Just xs) = Prelude.mapM funt xs
                                  funt :: Text -> Either String TriggerId
                                  funt h = case findIndex (\a -> tname a == TriggerName h) tr of
-                                               Nothing -> fail "bad trigger in group"
-                                               Just i -> return $ pId i
+                                               Nothing -> Left "bad trigger in group"
+                                               Just i -> Right $ pId i
                              hh <- thosts
                              cc <- tchecks $ igchecks gr
                              tt <- ttriggers $ igtriggers gr
@@ -149,7 +179,7 @@ transformGroup ch hs tr gr = do
 --------------------------------------------------------------------------------------------------
 checksFromTriggers :: Vector Trigger -> Group -> (S.Set HostId, S.Set CheckId)
 checksFromTriggers t g =
-  let ch = S.map (\i -> tcheck (t ! unId i)) $ gtriggers g
+  let ch = S.fromList . Prelude.concat . S.toList . S.map (\i -> tcheck (t ! unId i)) $ gtriggers g
   in (ghosts g, ch)
 
 checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
@@ -164,7 +194,7 @@ triggersByCheckHost tv gv =
   let fun :: CheckHost -> Vector Group -> S.Set TriggerId
       fun (CheckHost (a, b)) tv' = foldl S.union S.empty $ map gtriggers . filter (filterFun a b) $ tv'
       filterFun :: HostId -> CheckId -> Group -> Bool
-      filterFun h c g = S.member h (ghosts g)  && S.member c (S.map (\i -> tcheck (tv ! unId i)) $ gtriggers g)
+      filterFun h c g = S.member h (ghosts g)  && S.member c (S.fromList . Prelude.concat . S.toList . S.map (\i -> tcheck (tv ! unId i)) $ gtriggers g)
   in M.fromSet (`fun` gv) $ checkHosts tv gv
 
 --------------------------------------------------------------------------------------------------
