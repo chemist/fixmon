@@ -28,16 +28,16 @@ tests = [ testProperty "Binary" checkBinary
         ]
 
 checkBinary :: TriggerRaw Bool -> Bool
-checkBinary = \x -> en x == x 
+checkBinary x = en x == x 
 
 checkParse :: TriggerRaw Bool -> Bool
-checkParse = \x -> parseTrigger (ps x) == Right x
+checkParse x = parseTrigger (ps x) == Right x
 
 instance Arbitrary (TriggerRaw Int) where
     arbitrary = Int <$> (arbitrary :: Gen Int)
 
-allowed :: [Char] 
-allowed = [ 'A' .. 'Z'] ++ [ 'a' .. 'z' ] ++ ['0' .. '9'] 
+allowed :: String 
+allowed = [ 'A' .. 'Z'] ++ [ 'a' .. 'z' ] ++ ['0' .. '9'] ++ "."
 
 instance Arbitrary (TriggerRaw Text) where
         arbitrary = Text . fromString <$> (vectorOf 8 $ elements allowed)

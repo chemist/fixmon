@@ -15,6 +15,7 @@ import qualified Control.Monad.Reader as R
 import qualified Control.Monad.Error as E
 import Control.Applicative ((<$>), (<*>), (*>), (<*), (<|>), pure)
 import Data.Typeable
+import Data.Char (isSpace)
 import Data.Attoparsec.Text
 -- import Data.Text (pack)
 import Data.Scientific (floatingOrInteger)
@@ -36,12 +37,12 @@ loToLogic A = And
 loToLogic O = Or 
 
 aP, oP, spliter :: Parser Lo
-aP = skipSpace *> string "and" *> skipSpace *> pure A
-oP = skipSpace *> string "or"  *> skipSpace *> pure O
+aP = string "and" *> sp *> pure A
+oP = string "or"  *> sp *> pure O
 spliter = aP <|> oP 
 
 expr :: Parser (TriggerRaw Bool)
-expr = Not <$> (string "not" *> skipSpace *> simpl) <|> simpl
+expr = Not <$> (string "not" *> sp *> simpl) <|> simpl
 
 simpl :: Parser (TriggerRaw Bool)
 simpl = eql <|> boolP
@@ -49,15 +50,15 @@ simpl = eql <|> boolP
 eql :: Parser (TriggerRaw Bool)
 eql = equalP <|> moreP <|> lessP
   where
-  equalP = Equal <$> (nameP <* skipSpace <* string "equal") <*> (skipSpace *> returnP)
-  moreP = More <$> (nameP <* skipSpace <* string "more") <*> (skipSpace *> returnP)
-  lessP = Less <$> (nameP <* skipSpace <* string "less") <*> (skipSpace *> returnP)
+  equalP = Equal <$> (nameP <* string "equal") <*> (sp *> returnP)
+  moreP = More <$> (nameP <* string "more") <*> (sp *> returnP)
+  lessP = Less <$> (nameP <* string "less") <*> (sp *> returnP)
  
 boolP :: Parser (TriggerRaw Bool)
-boolP = Bool <$> ((string "true" *> pure True) <|> (string "True" *> pure True) <|> (string "False" *> pure False) <|> (string "false" *> pure False))
+boolP = Bool <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
 
 nameP :: Parser (TriggerRaw Text)
-nameP = Text <$> takeWhile1 (inClass "a-zA-Z0-9.")
+nameP = Text <$> takeWhile1 (inClass "a-zA-Z0-9.") <* sp
 
 returnP :: Parser Any
 returnP = (Any <$> boolP) <|> num <|> (Any <$> nameP)
@@ -65,11 +66,13 @@ returnP = (Any <$> boolP) <|> num <|> (Any <$> nameP)
 
 num :: Parser Any
 num = do
-    c <- scientific
+    c <- scientific <* sp
     case floatingOrInteger c of
          Right x -> return $ Any . Int $ x
          Left x -> return $ Any . Double $ x
 
+sp :: Parser ()
+sp = takeWhile1 isSpace *> pure () <|> takeWhile isSpace *> endOfInput *> pure ()
 
 parseTrigger :: Text -> Either String (TriggerRaw Bool)
 parseTrigger = parseOnly top 
