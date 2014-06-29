@@ -102,6 +102,7 @@ test-suite tests
                        test-framework-quickcheck2,
                        HUnit, 
                        scientific,
+                       attoparsec , 
                        QuickCheck
 
 source-repository head
