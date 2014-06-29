@@ -7,61 +7,75 @@ where
 
 import           Types
 
-import qualified Data.ListLike        as LL
 import           Data.Map             (lookup)
-import           Data.Text            hiding (empty, filter, foldl1, head, map)
-import           Data.Text.Encoding   (encodeUtf8)
-import           Prelude              hiding (lookup)
-import qualified Prelude              as P
-import           Text.Peggy           hiding (And, Not)
+import           Data.Text            hiding (empty, filter, foldl1, head, map, takeWhile)
+-- import           Data.Text.Encoding   (encodeUtf8)
+-- import qualified Prelude              as P
 import qualified Control.Monad.Reader as R
 import qualified Control.Monad.Error as E
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>), (<*>), (*>), (<*), (<|>), pure)
 import Data.Typeable
+import Data.Char (isSpace)
+import Data.Attoparsec.Text
+-- import Data.Text (pack)
+import Data.Scientific (floatingOrInteger)
+
+import           Prelude              hiding (lookup, takeWhile)
+
+top :: Parser (TriggerRaw Bool)
+top = logic <$> many1 (eitherP expr spliter)
+
+logic :: [Either (TriggerRaw Bool) Lo] -> TriggerRaw Bool
+logic (Left x:[]) = x
+logic (Left x : Right y : xs) = loToLogic y x (logic xs)
+logic _ = error "bad expression in trigger"
+
+data Lo = A | O 
+
+loToLogic :: Lo -> TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
+loToLogic A = And 
+loToLogic O = Or 
+
+aP, oP, spliter :: Parser Lo
+aP = string "and" *> sp *> pure A
+oP = string "or"  *> sp *> pure O
+spliter = aP <|> oP 
+
+expr :: Parser (TriggerRaw Bool)
+expr = Not <$> (string "not" *> sp *> simpl) <|> simpl
+
+simpl :: Parser (TriggerRaw Bool)
+simpl = eql <|> boolP
+
+eql :: Parser (TriggerRaw Bool)
+eql = equalP <|> moreP <|> lessP
+  where
+  equalP = Equal <$> (nameP <* string "equal") <*> (sp *> returnP)
+  moreP = More <$> (nameP <* string "more") <*> (sp *> returnP)
+  lessP = Less <$> (nameP <* string "less") <*> (sp *> returnP)
+ 
+boolP :: Parser (TriggerRaw Bool)
+boolP = Bool <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
+
+nameP :: Parser (TriggerRaw Text)
+nameP = Text <$> takeWhile1 (inClass "a-zA-Z0-9.") <* sp
+
+returnP :: Parser Any
+returnP = (Any <$> boolP) <|> num <|> (Any <$> nameP)
 
 
+num :: Parser Any
+num = do
+    c <- scientific <* sp
+    case floatingOrInteger c of
+         Right x -> return $ Any . Int $ x
+         Left x -> return $ Any . Double $ x
 
-[peggy|
+sp :: Parser ()
+sp = takeWhile1 isSpace *> pure () <|> takeWhile isSpace *> endOfInput *> pure ()
 
-top :: TriggerRaw Bool = expr
-
-expr :: TriggerRaw Bool
-  = expr "and" simpl { And $1 $2 }
-  / expr "or"  simpl { Or  $1 $2 }
-  / "not" expr { Not $1 }
-  / simpl { $1 }
-
-simpl :: TriggerRaw Bool 
-  = pName "equal" pReturn { Equal $1 $2 }
-  / pName "more"  pReturn { More  $1 $2 }
-  / pName "less"  pReturn { Less  $1 $2 }
-  / pBool
-
-pName :: TriggerRaw Text
-  =  [a-zA-Z0-9]+ { Text (pack $1) }
-
-pBool :: TriggerRaw Bool
-  = "false" { Bool False }
-  / "False" { Bool False }
-  / "true"  { Bool True }
-  / "True"  { Bool True }
-
-pReturn :: Any
-  = "true" { Any $ Bool True }
-  / "True" { Any $ Bool True }
-  / "false" { Any $ Bool False }
-  / "False" { Any $ Bool False }
-  / num     { Any $ Int $1 }
-  / pName   { Any $ $1 }
-
-num ::: Int
-  = [0-9]+ { read $1 }
-  / [-] [0-9]+ { read ($1:$2) }
-
-|]
-
-parseTrigger :: Text -> Either ParseError (TriggerRaw Bool)
-parseTrigger x = parseString top "<stdin>" $ LL.CS $ encodeUtf8 x  
+parseTrigger :: Text -> Either String (TriggerRaw Bool)
+parseTrigger = parseOnly top 
 
 
 data Env = Env 

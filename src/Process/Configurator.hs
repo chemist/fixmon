@@ -88,6 +88,7 @@ initStore f = do
     say "start configurator"
     -- register "configurator" =<< getSelfPid
     m <- liftIO $ parseConfig f
+    either (say . show) (\_ ->  say "success parse config") m
     time <- liftIO $ getModificationTime f
     return $ either InitStop (\x -> InitOk (x,time, f) defDelay) m
 

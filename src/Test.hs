@@ -13,7 +13,6 @@ import Data.Text (Text, pack)
 import Control.Applicative ((<$>),(<*>))
 import Data.String (fromString)
 import Data.Binary (Binary, decode, encode)
-import Text.Peggy.Prim (ParseError)
 import Data.Monoid (mempty)
 
 
@@ -29,19 +28,16 @@ tests = [ testProperty "Binary" checkBinary
         ]
 
 checkBinary :: TriggerRaw Bool -> Bool
-checkBinary = \x -> en x == x 
+checkBinary x = en x == x 
 
 checkParse :: TriggerRaw Bool -> Bool
-checkParse = \x -> parseTrigger (ps x) == Right x
-
-instance Eq ParseError where
-    (==) x y = undefined
+checkParse x = parseTrigger (ps x) == Right x
 
 instance Arbitrary (TriggerRaw Int) where
     arbitrary = Int <$> (arbitrary :: Gen Int)
 
-allowed :: [Char] 
-allowed = [ 'A' .. 'Z'] ++ [ 'a' .. 'z' ] ++ ['0' .. '9'] 
+allowed :: String 
+allowed = [ 'A' .. 'Z'] ++ [ 'a' .. 'z' ] ++ ['0' .. '9'] ++ "."
 
 instance Arbitrary (TriggerRaw Text) where
         arbitrary = Text . fromString <$> (vectorOf 8 $ elements allowed)

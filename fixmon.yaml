@@ -55,7 +55,7 @@ triggers:
   - name: process
     check: http-process
     description: Проверка процессинга по админке
-    result: status equal 500
+    result: status equal 5
   - name: oracle
     check: base-check
     description: Проверка базы

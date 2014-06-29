@@ -8,6 +8,7 @@ import           Network.Wai
 import           Network.Wai.Handler.Warp                   (run)
 import           Network.Wai.Middleware.RequestLogger       (logStdoutDev)
 import           Network.Wai.Middleware.Static
+import Control.Exception (bracket_)
 
 import           Types                                      ()
 
@@ -20,5 +21,8 @@ staticHandler :: Middleware
 staticHandler = staticPolicy (noDots >-> addBase "static")
 
 frontend :: LocalProcess -> Application
-frontend _ = const . return $ responseFile status200 [] "static/index.html" Nothing
+frontend _ req respond  = bracket_
+  (putStrLn "Accocation")
+  (putStrLn "Cleaning")
+  $ respond $responseFile status200 [] "static/index.html" Nothing
 
