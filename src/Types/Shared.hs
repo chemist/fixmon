@@ -92,7 +92,7 @@ instance IsString TriggerName where
 data Trigger = Trigger
   { tname        :: !TriggerName
   , tdescription :: !Text
-  , tcheck       :: !CheckId
+  , tcheck       :: [CheckId]
   , tresult      :: TriggerRaw Bool
   } deriving (Show, Eq, Typeable, Generic)
 
