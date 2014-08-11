@@ -11,6 +11,8 @@ import           Types                            (Check (..), CheckName (..), H
 import           Control.Concurrent               (threadDelay)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
+import           Control.Distributed.Process.Platform.Supervisor
+import           Control.Distributed.Process.Platform
 import           Control.Monad
 import qualified Control.Monad.State              as ST
 import           Control.Monad.Trans.Class
@@ -26,6 +28,7 @@ import           Network.Transport.TCP            (createTransport,
 
 import           Process.Watcher
 import           System.Cron
+import           Process.RegisterAgent
 
 host, port :: String
 host = "localhost"
@@ -38,28 +41,22 @@ main :: IO ()
 main = do
     Right t <- createTransport host port defaultTCPParameters
     node <- newLocalNode t initRemoteTable
-    runProcess node $ forever $ do
-        whereisRemoteAsync (NodeId (EndPointAddress remoteAddress)) "watcher"
-        mregistrator <- expectTimeout 1000000 :: Process (Maybe WhereIsReply)
-        maybe (say "watcher not found") good (mmm mregistrator)
-        liftIO $ threadDelay 1000000
-    -- _ <- liftIO getLine :: Process String
+    runProcess node $ do
+        cstart <-  mapM toChildStart [registerAgent] 
+        let cspec = map child $ zip cstart ["registerAgent"]
+        superPid <- super cspec
+        _ <- liftIO $ getLine :: Process String
+        say "kill super"
+        shutdown (Pid superPid)
+        return ()
     closeLocalNode node
     closeTransport t
-        where
-          mmm :: Maybe WhereIsReply -> Maybe ProcessId
-          mmm (Just (WhereIsReply _ x)) = x
-          mmm _ = Nothing
-          good pid = do
-              say "registrator found"
-              self <-  getSelfPid
-              r <- hello pid (Hostname "localhost", self)
-              if r
-                 then say "success registered"
-                 else say "cant register"
-              return ()
 
+super :: [ChildSpec] -> Process SupervisorPid
+super = start restartOne ParallelShutdown 
 
+child :: (ChildStart, String) -> ChildSpec
+child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)
 
 testHttp :: Check
 testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", "http://www.ubank.neta") ])

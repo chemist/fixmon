@@ -58,7 +58,7 @@ boolP :: Parser (TriggerRaw Bool)
 boolP = Bool <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
 
 nameP :: Parser (TriggerRaw Text)
-nameP = Text <$> takeWhile1 (inClass "a-zA-Z0-9.") <* sp
+nameP = Text <$> takeWhile1 (inClass "a-zA-Z0-9.-") <* sp
 
 returnP :: Parser Any
 returnP = (Any <$> boolP) <|> num <|> (Any <$> nameP)

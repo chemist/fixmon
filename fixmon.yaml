@@ -79,3 +79,4 @@ triggers:
       - disk-home
     description: Проверка свободного места
     result: disk-home.free more 1000000 and disk-root.used less 100
+
