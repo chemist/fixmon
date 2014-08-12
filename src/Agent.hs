@@ -30,6 +30,7 @@ import           Process.Watcher
 import           System.Cron
 import           Process.RegisterAgent
 import           Process.Checker
+import Check.System
 
 host, port :: String
 host = "localhost"
@@ -48,6 +49,9 @@ main = do
         cstart <-  mapM toChildStart [checker, registerAgent localhost remoteAddress] 
         let cspec = map child $ zip cstart ["checker", "registerAgent"]
         superPid <- super cspec
+        _ <- liftIO $ getLine :: Process String
+        a <- doTask checkerName testHostname
+        say $ show a
         _ <- liftIO $ getLine :: Process String
         say "kill super"
         shutdown (Pid superPid)

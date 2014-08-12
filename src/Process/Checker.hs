@@ -24,8 +24,8 @@ checker = serve () initServer server
 checkerName :: Recipient
 checkerName = Registered "checker"
 
-doTask :: Check -> Process Complex
-doTask = call checkerName
+doTask :: Recipient -> Check -> Process Complex
+doTask = call
 
 initServer :: InitHandler () Route
 initServer _ = do
