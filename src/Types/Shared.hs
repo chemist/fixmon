@@ -109,7 +109,7 @@ instance Monoid Log where
 
 newtype Status = Status { unStatus :: Bool } deriving (Show, Eq, Ord, Binary)
 
-newtype Complex = Complex (Map Text Any) deriving Show
+newtype Complex = Complex (Map Text Any) deriving (Show, Eq, Binary, Typeable)
 
 newtype TriggerFun = TriggerFun (Complex -> Status)
 

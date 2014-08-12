@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE ScopedTypeVariables         #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 module Process.RegisterAgent where
@@ -20,26 +21,27 @@ import           Data.Binary
 import Process.Watcher (hello)
 import Types
 
-registerAgent :: Process ()
-registerAgent = serve remoteAddress initServer server
+registerAgent :: LocalHost -> Server -> Process ()
+registerAgent localHostname remoteAddress = serve (localHostname, remoteAddress) initServer server
 
 defDelay :: Delay
 defDelay = Delay $ seconds 1
 
-remoteAddress :: ByteString
-remoteAddress = "127.0.0.1:10501:0"
-
 tryFound :: Process ()
 tryFound = cast (Registered "registerAgent") PingServer
 
-data ST = New ByteString
-        | Founded ProcessId
-        | RegisteredInServer
+type LocalHost = Hostname
+type Server = ByteString
 
-initServer :: InitHandler ByteString ST
-initServer server = do
+data ST = New LocalHost Server
+        | Founded LocalHost Server ProcessId
+        | RegisteredInServer LocalHost Server ProcessId MonitorRef
+        deriving Show
+
+initServer :: InitHandler (LocalHost, Server) ST
+initServer (hostname, server) = do
     say "start register agent"
-    return $ InitOk (New server) defDelay
+    return $ InitOk (New hostname server) defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess
@@ -47,61 +49,45 @@ server = defaultProcess
     , timeoutHandler = \s _ -> do
         tryFound
         timeoutAfter_ defDelay s
-    , infoHandlers = [handleInfo handleServerRequest]
+    , infoHandlers = [catchRegister, catchDeadServer]
     }
 
 data PingServer = PingServer deriving (Typeable, Generic)
 instance Binary PingServer
 
 
-handleServerRequest st (WhereIsReply _ m) = 
+catchRegister :: DeferredDispatcher ST
+catchRegister = handleInfo $ \st (WhereIsReply _ m) ->
   case (st, m) of
-       (New _, Just x) -> do
+       (New l s, Just x) -> do
            say "reply from server"
            say $ show x
-           continue (Founded x)
-       _     -> do
-           say "skip"
-           continue st
+           continue (Founded l s x)
+       _     -> continue st
+
+catchDeadServer :: DeferredDispatcher ST
+catchDeadServer = handleInfo $ \(RegisteredInServer l s p m) (x :: ProcessMonitorNotification) -> do
+    say "Zed dead baby!!!"
+    say $ show x
+    continue $ New l s
 
 foundServer :: Dispatcher ST
 foundServer = handleCast $ \st PingServer -> case st of
-         New x -> do
-            whereisRemoteAsync (NodeId (EndPointAddress x)) "watcher"
+         New l s -> do
+            whereisRemoteAsync (NodeId (EndPointAddress s)) "watcher"
             say "try register"
             continue st
-         Founded pid -> do
+         Founded l s pid -> do
              self <- getSelfPid
-             r <- hello pid (Hostname "localhost", self)
+             r <- hello pid (l, self)
              if r
-                then continue RegisteredInServer
-                else continue (Founded pid)
-         _ -> say "all good" >> continue st
+                then do
+                    m <- monitor pid
+                    say "agent make monitor"
+                    continue $ RegisteredInServer l s pid m
+                else continue (Founded l s pid)
+         _ -> continue st
 
---    whereisRemoteAsync (NodeId (EndPointAddress server)) "watcher"
---
-        {--
-        whereisRemoteAsync (NodeId (EndPointAddress remoteAddress)) "watcher"
-        mregistrator <- expectTimeout 1000000 :: Process (Maybe WhereIsReply)
-        maybe (say "watcher not found") good (mmm mregistrator)
-        liftIO $ threadDelay 1000000
-    -- _ <- liftIO getLine :: Process String
-    closeLocalNode node
-    closeTransport t
-        where
-          mmm :: Maybe WhereIsReply -> Maybe ProcessId
-          mmm (Just (WhereIsReply _ x)) = x
-          mmm _ = Nothing
-          good pid = do
-              say "registrator found"
-              self <-  getSelfPid
-              r <- hello pid (Hostname "localhost", self)
-              if r
-                 then say "success registered"
-                 else say "cant register"
-              return ()
-
---}
 
 
 

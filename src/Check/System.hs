@@ -70,6 +70,9 @@ doHostname (Check _ _ "system.hostname" _) = do
     h <- getHostName
     return $ Complex $ fromList [ ( "system.hostname", toAny (pack h)) ]
 doHostname _ = undefined
+
+testHostname :: Check
+testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" (fromList []) 
 --------------------------------------------------------------------------------------
 
 -- "3023604.41 11190196.16\n"

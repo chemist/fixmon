@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Process.Checker
 where
 
@@ -7,12 +8,13 @@ import           Types
 import           Check.System
 import           Check.Http
 
-import           Control.Distributed.Process
+import           Control.Distributed.Process hiding (try, call)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 
-import Data.Map (empty, lookup, insert, unions)
+import Control.Exception
+import Data.Map (empty, lookup, insert, unions, fromList)
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -22,11 +24,8 @@ checker = serve () initServer server
 checkerName :: Recipient
 checkerName = Registered "checker"
 
-{-- 
-doTasks :: Set CheckHost -> Process ()
-doTasks = cast taskerName
-
---}
+doTask :: Check -> Process Complex
+doTask = call checkerName
 
 initServer :: InitHandler () Route
 initServer _ = do
@@ -39,18 +38,19 @@ initServer _ = do
 
 server :: ProcessDefinition Route
 server = defaultProcess
-    { apiHandlers = [ ]
+    { apiHandlers = [ taskDispatcher ]
     , infoHandlers = []
     }
 
-{--
-taskSet :: Dispatcher Tasker
-taskSet = handleCast fun
+taskDispatcher :: Dispatcher Route
+taskDispatcher = handleCall $ \st (check :: Check) -> do
+    let ch = lookup (ctype check) st
+    maybe (notFound st) (doCheck st check) ch
     where
-    fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
-    fun st x = do
-        mapM_ (startCheck st) $ toList x
-        say . show . toList $ x
-        continue st
+      notFound = reply (Complex $ fromList [("_status_", Any $ Bool False)])
+      doCheck st check doCheck = do
+          checkResult <- liftIO $ try $ doCheck check
+          case checkResult of
+               Left (e :: SomeException) -> reply (Complex $ fromList [("_status_", Any $ Bool False)]) st
+               Right r -> reply r st
 
---}

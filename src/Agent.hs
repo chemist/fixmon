@@ -29,6 +29,7 @@ import           Network.Transport.TCP            (createTransport,
 import           Process.Watcher
 import           System.Cron
 import           Process.RegisterAgent
+import           Process.Checker
 
 host, port :: String
 host = "localhost"
@@ -37,13 +38,15 @@ port = "10503"
 remoteAddress :: ByteString
 remoteAddress = "127.0.0.1:10501:0"
 
+localhost = Hostname "localhost"
+
 main :: IO ()
 main = do
     Right t <- createTransport host port defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
-        cstart <-  mapM toChildStart [registerAgent] 
-        let cspec = map child $ zip cstart ["registerAgent"]
+        cstart <-  mapM toChildStart [checker, registerAgent localhost remoteAddress] 
+        let cspec = map child $ zip cstart ["checker", "registerAgent"]
         superPid <- super cspec
         _ <- liftIO $ getLine :: Process String
         say "kill super"
