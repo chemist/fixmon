@@ -21,7 +21,7 @@ staticHandler :: Middleware
 staticHandler = staticPolicy (noDots >-> addBase "static")
 
 frontend :: LocalProcess -> Application
-frontend _ req respond  = bracket_
+frontend _ _ respond  = bracket_
   (putStrLn "Accocation")
   (putStrLn "Cleaning")
   $ respond $responseFile status200 [] "static/index.html" Nothing

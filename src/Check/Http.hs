@@ -2,13 +2,11 @@
 module Check.Http where
 
 import           Control.Applicative  ((<$>))
-import           Control.Exception
+-- import           Control.Exception
 import           Control.Lens         ((&), (.~), (^.))
-import           Data.ByteString.Lazy (ByteString)
 import           Data.Map             (fromList, lookup, singleton)
 import           Data.Maybe           (fromMaybe)
 import           Data.Text            (Text, unpack)
-import           Debug.Trace
 import           Network.URI
 import           Network.Wreq
 import           Prelude              hiding (lookup)
@@ -46,7 +44,6 @@ doHttp (Check _ _ _ p) = do
     let Just url = unpack <$> lookup "url" p
         unpackRedirects :: Text -> Int
         unpackRedirects = fst . head . reads . unpack
-        Just _ = lookup "agent" p
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
         opts = defaults & redirects .~ redirects'
     resp <- getWith opts url

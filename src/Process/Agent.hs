@@ -2,11 +2,14 @@
 {-# LANGUAGE ScopedTypeVariables         #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-module Process.RegisterAgent where
+module Process.Agent
+( agent
+)
+where
 
 
-import           Control.Distributed.Process                        
-import           Control.Distributed.Process.Platform                (Recipient (..))
+import           Control.Distributed.Process hiding (monitor)                       
+import           Control.Distributed.Process.Platform                (Recipient (..), resolve, monitor)
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 import           Control.Distributed.Process.Platform.Supervisor
@@ -18,17 +21,25 @@ import Data.ByteString (ByteString)
 import           Data.Typeable                                       (Typeable)
 import           GHC.Generics                                        (Generic)
 import           Data.Binary
-import Process.Watcher (hello)
+import Process.Watcher (registerAgent)
 import Types
 
-registerAgent :: LocalHost -> Server -> Process ()
-registerAgent localHostname remoteAddress = serve (localHostname, remoteAddress) initServer server
+---------------------------------------------------------------------------------------------------
+-- public
+---------------------------------------------------------------------------------------------------
 
-defDelay :: Delay
-defDelay = Delay $ seconds 1
+agent :: LocalHost -> Server -> Process ()
+agent localHostname remoteAddress = serve (localHostname, remoteAddress) initServer server
+
+--------------------------------------------------------------------------------------------------
+-- private
+--------------------------------------------------------------------------------------------------
 
 tryFound :: Process ()
 tryFound = cast (Registered "registerAgent") PingServer
+
+defDelay :: Delay
+defDelay = Delay $ seconds 1
 
 type LocalHost = Hostname
 type Server = ByteString
@@ -79,17 +90,14 @@ foundServer = handleCast $ \st PingServer -> case st of
             continue st
          Founded l s pid -> do
              self <- getSelfPid
-             r <- hello pid (l, self)
-             if r
-                then do
-                    m <- monitor pid
-                    say "agent make monitor"
-                    continue $ RegisteredInServer l s pid m
-                else continue (Founded l s pid)
+             checkerP <- resolve (Registered "checker")
+             mm <- monitor pid
+             case (checkerP, mm) of
+                  (Just cp, Just m) -> do
+                      r <- registerAgent pid (l, self, cp)
+                      if r 
+                         then continue (RegisteredInServer l s pid m)
+                         else continue (Founded l s pid)
+                  _ -> continue (Founded l s pid)
          _ -> continue st
-
-
-
-
-
 

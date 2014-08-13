@@ -22,19 +22,27 @@ import           Data.Typeable                                       (Typeable)
 import           GHC.Generics                                        (Generic)
 import           System.Cron
 
-defDelay :: Delay
-defDelay = Delay $ seconds 20
+---------------------------------------------------------------------------------------------------
+-- public
+---------------------------------------------------------------------------------------------------
+
+cron :: Process ()
+cron = serve () initServer server
+
+--------------------------------------------------------------------------------------------------
+-- private
+--------------------------------------------------------------------------------------------------
 
 doCron :: Process ()
 doCron = cast (Registered "cron") MinuteMessage
+
+defDelay :: Delay
+defDelay = Delay $ seconds 20
 
 type ST = Map Cron (Set CheckHost)
 
 data MinuteMessage = MinuteMessage deriving (Typeable, Generic)
 instance Binary MinuteMessage
-
-cron :: Process ()
-cron = serve () initServer server
 
 initServer :: InitHandler () ST
 initServer _ = do

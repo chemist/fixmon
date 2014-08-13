@@ -15,7 +15,7 @@ module Types
 , CheckId
 , CheckName(..)
 , CheckHost(..)
-, Route(..)
+, Route
 , Checkable(..)
 -- * Группы
 , GroupName(..)

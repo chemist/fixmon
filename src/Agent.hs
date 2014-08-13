@@ -28,7 +28,7 @@ import           Network.Transport.TCP            (createTransport,
 
 import           Process.Watcher
 import           System.Cron
-import           Process.RegisterAgent
+import           Process.Agent
 import           Process.Checker
 import Check.System
 
@@ -46,12 +46,9 @@ main = do
     Right t <- createTransport host port defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
-        cstart <-  mapM toChildStart [checker, registerAgent localhost remoteAddress] 
-        let cspec = map child $ zip cstart ["checker", "registerAgent"]
+        cstart <-  mapM toChildStart [checker, agent localhost remoteAddress] 
+        let cspec = map child $ zip cstart ["checker", "agent"]
         superPid <- super cspec
-        _ <- liftIO $ getLine :: Process String
-        a <- doTask checkerName testHostname
-        say $ show a
         _ <- liftIO $ getLine :: Process String
         say "kill super"
         shutdown (Pid superPid)

@@ -4,6 +4,7 @@ hosts:
   - example.ru
   - app01.example.ru
   - app02.example.ru
+  - localhost
 
 groups:
   - name: web
@@ -31,8 +32,16 @@ groups:
       - http-process
     triggers:
       - disk
+  - name: local
+    hosts: 
+      - localhost
+    checks:
+      - gethost
 
 checks:
+  - name: gethost
+    period: '* * * * *'
+    type: system.hostname
   - name: http-process
     period: '* * * * *'
     type: httpByStatus
