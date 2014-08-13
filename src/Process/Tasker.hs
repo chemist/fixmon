@@ -9,6 +9,7 @@ import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..), getCheckMap, getHostMap)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
+import           Process.TaskPool
 
 import           Control.Distributed.Process                         hiding
                                                                       (call)
@@ -71,12 +72,14 @@ startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
     let host'' = hosts st ! hostN ch
         check'' = checks st ! checkN ch
-    pidAgent <- lookupAgent host''
-    case pidAgent of
-         Just pid -> do
-             dt <- doTask (Pid pid) check''
-             say $ "for host " ++ show host'' ++ " check " ++ show check'' ++ " result " ++ show dt
-         Nothing -> say $ "host " ++ show host'' ++ " not found"
+    r <- addTask (host'', check'', ch)
+    say $ show r
+--    pidAgent <- lookupAgent host''
+--    case pidAgent of
+--         Just pid -> do
+--             dt <- doTask (Pid pid) check''
+--             say $ "for host " ++ show host'' ++ " check " ++ show check'' ++ " result " ++ show dt
+--         Nothing -> say $ "host " ++ show host'' ++ " not found"
     where
         hostN :: CheckHost -> Int
         hostN (CheckHost (i, _)) = unId i

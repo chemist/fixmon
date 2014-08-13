@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric          #-}
 {-# LANGUAGE DeriveDataTypeable          #-}
 module Process.Configurator
-( store
+( configurator
 , getCronMap
 , getCheckMap
 , getHostMap
@@ -36,11 +36,11 @@ import Data.Binary
 -- public
 ---------------------------------------------------------------------------------------------------
 
-store :: Process ()
-store = serve "fixmon.yaml" initStore server
+configurator :: Process ()
+configurator = serve "fixmon.yaml" initStore server
 
 storeName :: Recipient
-storeName = Registered "store"
+storeName = Registered "configurator"
 
 getCronMap :: Process (Map Cron (Set CheckHost))
 getCronMap = call storeName CronMap
