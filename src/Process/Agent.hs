@@ -36,7 +36,7 @@ agent localHostname remoteAddress = serve (localHostname, remoteAddress) initSer
 --------------------------------------------------------------------------------------------------
 
 tryFound :: Process ()
-tryFound = cast (Registered "registerAgent") PingServer
+tryFound = cast (Registered "agent") PingServer
 
 defDelay :: Delay
 defDelay = Delay $ seconds 1
