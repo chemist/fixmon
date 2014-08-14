@@ -21,16 +21,21 @@ import           Network.Transport.TCP            (createTransport,
 main :: IO ()
 main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
-    node <- newLocalNode t initRemoteTable
+    node <- newLocalNode t $ Process.TaskPool.__remoteTable initRemoteTable
     runProcess node $ do
         s <-  ask
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, configurator, tasker, taskPool, cron, watcher]
-        let cspec = map child $ zip cstart ["web", "configurator", "tasker", "pool", "cron", "watcher"]
+        cstart <-  mapM toChildStart [webProcess, configurator, tasker, taskPool, taskPool, taskPool, cron, watcher]
+        let cspec = map child $ zip cstart ["web", "configurator", "tasker", "pool0", "pool1", "pool2", "cron", "watcher"]
         superPid <-  super cspec
+--        c <- listChildren superPid
+--        say $ show c
         _ <- liftIO getLine :: Process String
+--        cc <- listChildren superPid
+--        say $ show cc
+--        _ <- liftIO getLine :: Process String
         say "kill super"
         shutdown (Pid superPid)
         return ()

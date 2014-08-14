@@ -5,11 +5,9 @@ module Process.Tasker
 ) where
 
 
-import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..), getCheckMap, getHostMap)
-import           Process.Watcher                                     (lookupAgent)
+import           Process.TaskPool                                    (addTask)
 import           Types
-import           Process.TaskPool
 
 import           Control.Distributed.Process                         hiding
                                                                       (call)
@@ -26,12 +24,12 @@ import           Prelude                                             hiding
 ---------------------------------------------------------------------------------------------------
 -- public
 ---------------------------------------------------------------------------------------------------
-
 tasker :: Process ()
 tasker = serve () initServer server
 
 doTasks :: Set CheckHost -> Process ()
 doTasks = cast taskerName
+
 
 --------------------------------------------------------------------------------------------------
 -- private
@@ -72,14 +70,9 @@ startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
     let host'' = hosts st ! hostN ch
         check'' = checks st ! checkN ch
-    r <- addTask (host'', check'', ch)
-    say $ show r
---    pidAgent <- lookupAgent host''
---    case pidAgent of
---         Just pid -> do
---             dt <- doTask (Pid pid) check''
---             say $ "for host " ++ show host'' ++ " check " ++ show check'' ++ " result " ++ show dt
---         Nothing -> say $ "host " ++ show host'' ++ " not found"
+    say "add task"
+    addTask (host'', check'', ch)
+    say "end add task"
     where
         hostN :: CheckHost -> Int
         hostN (CheckHost (i, _)) = unId i
@@ -94,3 +87,5 @@ updateConfig = handleInfo $ \_ Update  -> do
     hm <- getHostMap
     cm <- getCheckMap
     continue (Tasker hm cm)
+
+
