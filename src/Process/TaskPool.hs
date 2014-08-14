@@ -14,7 +14,7 @@ import           Control.Distributed.Process.Closure                 (mkClosure,
                                                                       remotable)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
-import           Control.Distributed.Process.Platform.Task           (BlockingQueue, executeTask,
+import           Control.Distributed.Process.Platform.Task           (BlockingQueue, executeTask, stats, BlockingQueueStats(..),
                                                                       pool,
                                                                       start, )
 import           Control.Distributed.Process.Platform.Time
@@ -26,6 +26,7 @@ import           Process.Checker                                     (doTask)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
 import Control.Monad (void)
+import Control.Applicative
 
 taskmake :: (Hostname, Check, CheckHost) -> Process ()
 taskmake (host, check, ch) = do
@@ -43,6 +44,9 @@ $(remotable ['taskmake])
 
 addTask :: (Hostname, Check, CheckHost) -> Process ()
 addTask x = do
+    poolStatus <-  (stats . Registered) "pool"
+    say $ show $ activeJobs <$> poolStatus
+    say $ show $ queuedJobs <$> poolStatus
     job <- return $ ($(mkClosure 'taskmake) (x :: (Hostname,Check, CheckHost)) )
     spawnLocal $ void $ executeTask taskPoolName job
     return ()
@@ -51,7 +55,7 @@ poolT :: Process (InitResult (BlockingQueue ()))
 poolT = pool 100
 
 taskPoolName :: Recipient
-taskPoolName = Registered "pool0"
+taskPoolName = Registered "pool"
 
 taskPool :: Process ()
 taskPool = start poolT

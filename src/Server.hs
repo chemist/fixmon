@@ -27,8 +27,8 @@ main = do
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, configurator, tasker, taskPool, taskPool, taskPool, cron, watcher]
-        let cspec = map child $ zip cstart ["web", "configurator", "tasker", "pool0", "pool1", "pool2", "cron", "watcher"]
+        cstart <-  mapM toChildStart [webProcess, configurator, tasker, taskPool, cron, watcher]
+        let cspec = map child $ zip cstart ["web", "configurator", "tasker", "pool", "cron", "watcher"]
         superPid <-  super cspec
 --        c <- listChildren superPid
 --        say $ show c
