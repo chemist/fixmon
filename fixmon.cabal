@@ -19,6 +19,8 @@ executable server
   build-depends:       base >=4.6 && <5, 
                        containers , 
                        bimap , 
+                       influxdb , 
+                       http-client , 
                        text , 
                        text-binary,
                        mtl , 
