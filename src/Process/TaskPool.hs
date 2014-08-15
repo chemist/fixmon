@@ -30,9 +30,8 @@ import Control.Applicative
 
 taskmake :: (Hostname, Check, CheckHost) -> Process ()
 taskmake (host, check, ch) = do
-    say "task"
     pidAgent <- lookupAgent host
-    sleep $ seconds 5
+--     sleep $ seconds 5
     case pidAgent of
          Just pid -> do
              dt <- doTask (Pid pid) check

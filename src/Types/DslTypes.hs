@@ -15,6 +15,7 @@ import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
 import           Data.Typeable       (Typeable, typeOf)
 import Data.Time
+import qualified Data.Aeson as A
 
 data TypeError = TypeError String deriving (Show, Typeable)
 instance Error TypeError
@@ -112,6 +113,12 @@ instance Binary Any where
                   11 -> get >>= \x -> return $ AnyList x
                   _ -> fail "unknown mark in binary any"
 
+instance A.ToJSON Any where
+    toJSON (Any (Int x)) = A.toJSON x
+    toJSON (Any (Bool x)) = A.toJSON x
+    toJSON (Any (Text x)) = A.toJSON x
+    toJSON (Any (Double x)) = A.toJSON x
+    toJSON _ = undefined
 
 data TriggerRaw a where
   Int :: Int -> TriggerRaw Int

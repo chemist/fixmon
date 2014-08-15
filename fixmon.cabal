@@ -18,9 +18,8 @@ executable server
   other-extensions:    OverloadedStrings, GeneralizedNewtypeDeriving, GADTs, ExistentialQuantification, FlexibleInstances, DeriveGeneric, DeriveDataTypeable, RankNTypes, ScopedTypeVariables, MultiParamTypeClasses, FlexibleContexts, QuasiQuotes, StandaloneDeriving
   build-depends:       base >=4.6 && <5, 
                        containers , 
+                       aeson , 
                        bimap , 
-                       influxdb , 
-                       http-client , 
                        text , 
                        text-binary,
                        mtl , 
@@ -59,6 +58,7 @@ executable agent
   main-is: Agent.hs
   build-depends:       base >=4.6 && <5,
                        containers , 
+                       aeson , 
                        bimap , 
                        unordered-containers , 
                        bytestring , 
@@ -92,6 +92,7 @@ test-suite tests
   default-language:    Haskell2010
   build-depends:       base >=4.6 && <5,
                        binary , 
+                       aeson , 
                        bimap , 
                        text , 
                        text-binary,
