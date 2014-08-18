@@ -37,8 +37,6 @@ groups:
     hosts: 
       - localhost
       - limbo-air
-    checks:
-      - gethost
     triggers:
       - hostname
 

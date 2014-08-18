@@ -1,37 +1,38 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-} 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Process.Configurator.Yaml
 (parseConfig) where
 
 import           Control.Applicative      ((<$>), (<*>))
-import           Control.Arrow            ((&&&))
 import           Control.Monad            (mzero)
 
 import           Data.Attoparsec.Text     (parseOnly)
+import           Data.Either              (lefts, rights)
 import           Data.HashMap.Strict      (toList)
 import qualified Data.Map                 as M
 import           Data.Monoid              ((<>))
 import qualified Data.Set                 as S
-import           Data.Text                (Text, unpack, concat)
-import           Data.Vector              (Vector, filter, findIndex, foldl, elemIndex,
+import           Data.Text                (Text, concat, unpack)
+import           Data.Vector              (Vector, elemIndex, findIndex, foldl,
                                            foldl', foldl1, map, mapM, (!))
 import           Data.Vector.Binary       ()
 import           Data.Yaml                (FromJSON (..), Value (..),
                                            decodeFileEither, (.:), (.:?))
 import           System.Cron.Parser       (cronSchedule)
-import Data.Either (lefts, rights)
 
-import           Prelude                  hiding (filter, foldl, concat, foldl1, map)
+import           Prelude                  hiding (concat, filter, foldl, foldl1,
+                                           map)
 import qualified Prelude
 
 import           Process.Configurator.Dsl (parseTrigger)
-import           Types                    (Check (..), CheckHost (..),
-                                           CheckId, CheckName (..),
-                                           Group (..), GroupName (..),
-                                           HostId, Hostname (..), TriggerRaw(..),
+import           Types                    (Check (..), CheckHost (..), CheckId,
+                                           CheckName (..), Group (..),
+                                           GroupName (..), HostId,
+                                           Hostname (..), IntId (..),
                                            Monitoring (..), Status (..),
                                            Trigger (..), TriggerHost (..),
-                                           TriggerId, TriggerName (..), IntId(..))
+                                           TriggerId, TriggerName (..),
+                                           TriggerRaw (..))
 import           Types.Cron               (Cron (..))
 
 data ITrigger = ITrigger
@@ -44,7 +45,7 @@ data ITrigger = ITrigger
 data ICheck = ICheck
   { icname   :: Text
   , icperiod :: Text
-  , ictype :: Text
+  , ictype   :: Text
   , icparams :: [(Text, Value)]
   } deriving Show
 
@@ -75,8 +76,8 @@ instance FromJSON Config where
 instance FromJSON ITrigger where
     parseJSON (Object v) = do
         n <- v .: "name"
-        d <- v .: "description" 
-        c <- v .:? "check" 
+        d <- v .: "description"
+        c <- v .:? "check"
         ch <- v .:? "checks"
         r <- v .: "result"
         let ch' = case (c, ch) of
@@ -89,7 +90,7 @@ instance FromJSON ITrigger where
         ITrigger <$>
                            v .: "name" <*>
                            v .: "description" <*>
-                           (v .: "check" <|> v .: "checks") <*> 
+                           (v .: "check" <|> v .: "checks") <*>
                            v .: "result"
                            --}
     parseJSON _ = mzero
@@ -128,7 +129,7 @@ transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in tr
   where
   makeTrigger :: TriggerRaw Bool -> Either String Trigger
   makeTrigger tr' = do
-      ch <- checks'' 
+      ch <- checks''
       return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch tr'
   checks'' :: Either String [CheckId]
   checks'' = let l = concat . lefts . checks' . itcheck $ tr
@@ -137,11 +138,11 @@ transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in tr
                     "" -> Right r
                     e -> Left $ unpack e
   checks' :: [Text] -> [Either Text CheckId]
-  checks' = Prelude.map 
+  checks' = Prelude.map
               $ \x -> case findIndex (\c -> cname c == CheckName x) chs of
                        Nothing -> Left $ "check " <> x  <> " not found"
                        Just i -> Right $ pId i
-                       
+
 conv :: Show a => Text -> Either a b -> Either String b
 conv tag x = case x of
               Left y -> Left $ unpack tag <> " | error: " <> show y
@@ -177,26 +178,23 @@ transformGroup ch hs tr gr = do
 --------------------------------------------------------------------------------------------------
     -- _checkHosts
 --------------------------------------------------------------------------------------------------
-checksFromTriggers :: Vector Trigger -> Group -> (S.Set HostId, S.Set CheckId)
-checksFromTriggers t g =
-  let ch = S.fromList . Prelude.concat . S.toList . S.map (\i -> tcheck (t ! unId i)) $ gtriggers g
-  in (ghosts g, ch)
-
 checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
-checkHosts t m =
-  let pairs = map (checksFromTriggers t) m
-      pairs' = map (ghosts &&& gchecks) m
-      checkHost (x, y) = S.fromList [ CheckHost (a, b) | a <-  S.toList x, b <- S.toList y ]
-  in foldl1 S.union $ map checkHost (pairs <> pairs')
+checkHosts vtrigger vgroup = foldl1 S.union $
+    map checkHostsFromGroup vgroup <> map (checkHostsFromTrigger vtrigger) vgroup
 
-triggersByCheckHost :: Vector Trigger -> Vector Group -> M.Map CheckHost (S.Set TriggerId)
-triggersByCheckHost tv gv =
-  let fun :: CheckHost -> Vector Group -> S.Set TriggerId
-      fun (CheckHost (a, b)) tv' = foldl S.union S.empty $ map gtriggers . filter (filterFun a b) $ tv'
-      filterFun :: HostId -> CheckId -> Group -> Bool
-      filterFun h c g = S.member h (ghosts g)  && S.member c (S.fromList . Prelude.concat . S.toList . S.map (\i -> tcheck (tv ! unId i)) $ gtriggers g)
-  in M.fromSet (`fun` gv) $ checkHosts tv gv
+checkHostsFromGroup :: Group -> S.Set CheckHost
+checkHostsFromGroup gr = S.fromList [ CheckHost (h, c, Nothing)
+                                    | h <- S.toList $ ghosts gr
+                                    , c <- S.toList $ gchecks gr
+                                    ]
 
+checkHostsFromTrigger :: Vector Trigger -> Group -> S.Set CheckHost
+checkHostsFromTrigger vt vg =
+    S.fromList [ CheckHost (h, c, Just t)
+               | h <- S.toList $ ghosts vg
+               , t <- S.toList $ gtriggers vg
+               , c <- tcheck $ vt ! unId t
+               ]
 --------------------------------------------------------------------------------------------------
     -- _periodMap
 --------------------------------------------------------------------------------------------------
@@ -209,7 +207,7 @@ cronChecks vc vt vg = M.fromSet fun cronSet
         fun :: Cron -> S.Set CheckHost
         fun c = S.filter (filterFun c) checkHosts'
         filterFun :: Cron -> CheckHost -> Bool
-        filterFun c (CheckHost (_, i)) = c == cperiod (vc ! unId i)
+        filterFun c (CheckHost (_, i, _)) = c == cperiod (vc ! unId i)
         cronSet :: S.Set Cron
         cronSet = foldl (\sc c -> S.insert (cperiod c) sc) S.empty vc
 
@@ -228,10 +226,9 @@ configToMonitoring x = do
     ch <-  Data.Vector.mapM transformCheck $ cchecks x
     tr <-  Data.Vector.mapM (transformTrigger ch) $ ctriggers x
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
-    let tbch = triggersByCheckHost tr gg
     let crch = cronChecks ch tr gg
     let ths = triggerHosts gg
-    return $ Monitoring crch tbch (chosts x) gg tr ch ths
+    return $ Monitoring crch (chosts x) gg tr ch ths
 
 parseConfig :: FilePath -> IO (Either String Monitoring)
 parseConfig file = do

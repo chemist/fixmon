@@ -7,7 +7,6 @@ module Types.Shared where
 import           Types.Cron
 import           Types.DslTypes
 
-import           Control.Exception   (Exception)
 import           Control.Monad       (mzero)
 import           Data.Map            (Map)
 import qualified Data.Map            as M
@@ -19,7 +18,6 @@ import           Data.Typeable       (Typeable)
 import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
 import           Control.Applicative (pure)
-import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary)
 import           Data.Text.Binary    ()
 import           Data.Vector         (Vector)
@@ -66,7 +64,7 @@ instance IntId GroupId where
     pId = GroupId
 
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
-newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Eq, Ord, Binary, Typeable)
+newtype CheckHost = CheckHost (HostId, CheckId, Maybe TriggerId) deriving (Show, Eq, Ord, Binary, Typeable)
 newtype CheckName = CheckName Text deriving (Eq, Ord, Binary, Typeable)
 
 instance Show CheckName where
@@ -125,18 +123,12 @@ data StartOptions = StartOptions
 
 data Monitoring = Monitoring
  { _periodMap :: Map Cron (Set CheckHost)
- , _checkHost :: Map CheckHost (Set TriggerId)
  , _hosts     :: Vector Hostname
  , _groups    :: Vector Group
  , _triggers  :: Vector Trigger
  , _checks    :: Vector Check
  , _status    :: Map TriggerHost Status
  } deriving Show
-
-data PError = PError String deriving (Show, Typeable)
-
-instance Exception PError
-instance Error PError
 
 instance FromJSON Hostname where
     parseJSON (String x) = pure $ Hostname x
@@ -147,5 +139,5 @@ instance FromJSON Hostname where
 ----------------------------------------------------------------------------------------------------
 
 emptyMonitoring :: Monitoring
-emptyMonitoring = Monitoring M.empty M.empty V.empty V.empty V.empty V.empty M.empty
+emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty
 

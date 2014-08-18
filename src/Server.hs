@@ -5,7 +5,6 @@ import           Process.Cron
 import           Process.Tasker
 import           Process.Web
 import           Process.Watcher
-import           Process.TaskPool
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Platform.Supervisor
@@ -21,7 +20,7 @@ import           Network.Transport.TCP            (createTransport,
 main :: IO ()
 main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
-    node <- newLocalNode t $ Process.TaskPool.__remoteTable initRemoteTable
+    node <- newLocalNode t $ Process.Tasker.__remoteTable initRemoteTable
     runProcess node $ do
         s <-  ask
         let webProcess = do

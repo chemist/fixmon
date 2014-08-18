@@ -5,11 +5,11 @@ module Process.Configurator
 , getCronMap
 , getCheckMap
 , getHostMap
+, getTriggerMap
 , triggerById
-, getTriggers
 , checkById
 , cronSetByCron
-, checkHostById
+, hostById
 , Update(..)
 )
 where
@@ -24,7 +24,6 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Monad.State
 import           Data.Map                    (lookup, Map)
 import           Data.Set                    (Set)
-import  qualified Data.Set as Set
 import           Data.Time                   (UTCTime)
 import           Data.Vector                 ((!?), Vector)
 import           Prelude                     hiding (lookup)
@@ -32,7 +31,6 @@ import           System.Directory
 import GHC.Generics (Generic)
 import Data.Typeable (Typeable)
 import Data.Binary
-import Data.Maybe (fromJust, isJust)
 
 
 ---------------------------------------------------------------------------------------------------
@@ -54,20 +52,20 @@ getCheckMap = call storeName CheckMap
 getHostMap :: Process (Vector Hostname)
 getHostMap = call storeName HostMap
 
+getTriggerMap :: Process (Vector Trigger)
+getTriggerMap = call storeName TriggerMap
+
 triggerById :: TriggerId -> Process (Maybe Trigger)
 triggerById = call storeName 
 
 checkById :: CheckId -> Process (Maybe Check)
 checkById = call storeName
 
+hostById :: HostId -> Process (Maybe Hostname)
+hostById = call storeName
+
 cronSetByCron :: Cron -> Process (Maybe (Set CheckHost))
 cronSetByCron = call storeName
-
-checkHostById :: CheckHost -> Process (Maybe (Set TriggerId))
-checkHostById = call storeName
-
-getTriggers :: CheckHost -> Process (Set Trigger)
-getTriggers ch = call storeName (ch, True)
 
 ---------------------------------------------------------------------------------------------------
 -- private
@@ -82,12 +80,14 @@ type ST = (Monitoring, UTCTime, FilePath)
 data HostMap = HostMap deriving (Generic, Typeable)
 data CheckMap = CheckMap deriving (Generic, Typeable)
 data CronMap = CronMap deriving (Typeable, Generic)
+data TriggerMap = TriggerMap deriving (Generic, Typeable)
 data Update = Update deriving (Typeable, Generic)
 
 instance Binary HostMap
 instance Binary CheckMap
 instance Binary CronMap
 instance Binary Update
+instance Binary TriggerMap
 
 initStore :: InitHandler FilePath ST
 initStore f = do
@@ -105,11 +105,11 @@ server = defaultProcess {
     apiHandlers = [ cronMap
                   , checkMap
                   , hostMap
+                  , triggerMap
                   , lookupTrigger
-                  , lookupTriggers
                   , lookupCheck
+                  , lookupHost
                   , lookupCronSet
-                  , lookupCheckHost
                   ]
     , timeoutHandler = configuratorTimeoutHandler
 
@@ -124,23 +124,20 @@ checkMap = handleCall $ \st@(m,_,_) CheckMap  -> say "call checkMap" >> reply (_
 hostMap :: Dispatcher ST
 hostMap = handleCall $ \st@(m,_,_) HostMap  -> say "call hostMap" >> reply (_hosts m) st
 
+triggerMap :: Dispatcher ST
+triggerMap = handleCall $ \st@(m,_,_) TriggerMap  -> say "call triggerMap" >> reply (_triggers m) st
+
 lookupTrigger :: Dispatcher ST
 lookupTrigger = handleCall fun
   where
   fun :: ST -> TriggerId -> Process (ProcessReply (Maybe Trigger) ST)
   fun st@(m,_,_) i = say "call lookupTrigger" >> reply (_triggers m !? unId i) st
 
-lookupTriggers :: Dispatcher ST
-lookupTriggers = handleCall fun
+lookupHost :: Dispatcher ST
+lookupHost = handleCall fun
   where
-  fun :: ST -> (CheckHost, Bool) -> Process (ProcessReply (Set Trigger) ST)
-  fun st@(m,_,_) (ch,_) = do
-      say "call lookupsTriggers"
-      let ti = lookup ch (_checkHost m)
-      case ti of
-           Nothing -> reply Set.empty st
-           Just ti' -> reply (Set.map fromJust $ Set.filter isJust $ Set.map (\x -> _triggers m !? unId x) ti') st
-
+  fun :: ST -> HostId -> Process (ProcessReply (Maybe Hostname) ST)
+  fun st@(m,_,_) i = say "call lookupHost" >> reply (_hosts m !? unId i) st
 
 lookupCheck :: Dispatcher ST
 lookupCheck = handleCall fun
@@ -153,12 +150,6 @@ lookupCronSet = handleCall fun
   where
   fun :: ST -> Cron -> Process (ProcessReply (Maybe (Set CheckHost)) ST)
   fun st@(m,_,_) c = say "call lookupCronSet" >> reply (lookup c (_periodMap m)) st
-
-lookupCheckHost :: Dispatcher ST
-lookupCheckHost = handleCall fun
-  where
-  fun :: ST -> CheckHost -> Process (ProcessReply (Maybe (Set TriggerId)) ST)
-  fun st@(m,_,_) ch = say "call lookupCheckHost" >> reply (lookup ch (_checkHost m)) st
 
 configuratorTimeoutHandler :: TimeoutHandler ST
 configuratorTimeoutHandler (m,t,f) _ = do
