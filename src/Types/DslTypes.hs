@@ -9,7 +9,6 @@ where
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Exception   (Exception, throw)
-import           Control.Monad.Error (Error)
 import           Data.Binary         (Binary, get, getWord8, put, putWord8)
 import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
@@ -18,7 +17,6 @@ import Data.Time
 import qualified Data.Aeson as A
 
 data TypeError = TypeError String deriving (Show, Typeable)
-instance Error TypeError
 instance Exception TypeError
 
 

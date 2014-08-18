@@ -1,12 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Process.Tasker
 ( tasker
 , doTasks
+, taskPool
+, __remoteTable
 ) where
 
 
-import           Process.Configurator                                (Update (..), getCheckMap, getHostMap)
-import           Process.TaskPool                                    (addTask)
+import           Control.Monad                                       (void)
+import           Process.Configurator                                (Update (..), getCheckMap, getHostMap, getTriggerMap, hostById, checkById)
+import           Process.Checker                                     (doTask)
+import           Process.Watcher                                     (lookupAgent)
 import           Types
 
 import           Control.Distributed.Process                         hiding
@@ -14,12 +19,53 @@ import           Control.Distributed.Process                         hiding
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
+import           Control.Distributed.Process.Closure                 (mkClosure,
+                                                                      remotable)
+import           Control.Distributed.Process.Platform.Task           (BlockingQueue, executeTask,
+                                                                      pool,
+                                                                      start)
 import           Data.Set                                            (Set,
                                                                       toList)
 import           Data.Vector                                         (Vector,
                                                                       (!))
 import           Prelude                                             hiding
                                                                       (lookup)
+
+taskmake :: CheckHost -> Process ()
+taskmake (CheckHost (hid, cid, mt)) = do
+    mhost <- hostById hid
+    mcheck <- checkById cid
+    makeCheck mhost mcheck
+    where
+    makeCheck (Just host) (Just check) = do
+        pidAgent <- lookupAgent host
+        case pidAgent of
+             Just pid -> do
+                 dt <- doTask (Pid pid) check
+                 say $ " result " ++ show dt
+             Nothing -> say $ " not found"
+    makeCheck _ _ = say "Upps!!!! check or host not found, bug here"
+
+$(remotable ['taskmake])
+
+
+addTask :: CheckHost -> Process ()
+addTask x = do
+--    poolStatus <-  (stats . Registered) "pool"
+--    say $ show $ activeJobs <$> poolStatus
+--    say $ show $ queuedJobs <$> poolStatus
+    job <- return $ ($(mkClosure 'taskmake) (x :: CheckHost) )
+    _ <- spawnLocal $ void $ executeTask taskPoolName job
+    return ()
+
+poolT :: Process (InitResult (BlockingQueue ()))
+poolT = pool 100
+
+taskPoolName :: Recipient
+taskPoolName = Registered "pool"
+
+taskPool :: Process ()
+taskPool = start poolT
 
 ---------------------------------------------------------------------------------------------------
 -- public
@@ -40,6 +86,7 @@ taskerName = Registered "tasker"
 data Tasker = Tasker
   { hosts  :: Vector Hostname
   , checks :: Vector Check
+  , triggers :: Vector Trigger
   }
 
 initServer :: InitHandler () Tasker
@@ -48,7 +95,8 @@ initServer _ = do
     -- register "tasker" =<< getSelfPid
     hm <- getHostMap
     cm <- getCheckMap
-    return $ InitOk (Tasker hm cm) Infinity
+    tm <- getTriggerMap
+    return $ InitOk (Tasker hm cm tm) Infinity
 
 
 server :: ProcessDefinition Tasker
@@ -68,17 +116,9 @@ taskSet = handleCast fun
 
 startCheck :: Tasker -> CheckHost -> Process ()
 startCheck st ch = do
-    let host'' = hosts st ! hostN ch
-        check'' = checks st ! checkN ch
     say "add task"
-    addTask (host'', check'', ch)
+    addTask ch
     say "end add task"
-    where
-        hostN :: CheckHost -> Int
-        hostN (CheckHost (i, _)) = unId i
-
-        checkN :: CheckHost -> Int
-        checkN (CheckHost (_, i)) = unId i
 
 
 
@@ -86,6 +126,7 @@ updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do
     hm <- getHostMap
     cm <- getCheckMap
-    continue (Tasker hm cm)
+    tm <- getTriggerMap
+    continue (Tasker hm cm tm)
 
 

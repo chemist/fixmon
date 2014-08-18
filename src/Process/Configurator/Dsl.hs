@@ -12,7 +12,7 @@ import           Data.Text            hiding (empty, filter, foldl1, head, map, 
 -- import           Data.Text.Encoding   (encodeUtf8)
 -- import qualified Prelude              as P
 import qualified Control.Monad.Reader as R
-import qualified Control.Monad.Error as E
+import qualified Control.Monad.Except as E
 import Control.Applicative ((<$>), (<*>), (*>), (<*), (<|>), pure)
 import Data.Typeable
 import Data.Char (isSpace)
@@ -80,11 +80,13 @@ parseTrigger = parseOnly top
 
 data Env = Env 
 
-type Eval a = R.ReaderT Env (E.ErrorT String IO) a
+data ConfigError = ConfigError String
+
+type Eval a = R.ReaderT Env (E.ExceptT String IO) a
 
 
 eval :: Env -> Complex -> TriggerRaw a -> IO (Either String Bool)
-eval env c e = E.runErrorT (R.runReaderT (fun c e) env)
+eval env c e = E.runExceptT (R.runReaderT (fun c e) env)
 
 fun :: Complex -> TriggerRaw a -> Eval Bool
 fun (Complex c) (Less (Text x) y)  = maybe (fail "bad check describe") (less y) (lookup x c)
