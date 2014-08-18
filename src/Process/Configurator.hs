@@ -6,6 +6,7 @@ module Process.Configurator
 , getCheckMap
 , getHostMap
 , triggerById
+, getTriggers
 , checkById
 , cronSetByCron
 , checkHostById
@@ -23,6 +24,7 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Monad.State
 import           Data.Map                    (lookup, Map)
 import           Data.Set                    (Set)
+import  qualified Data.Set as Set
 import           Data.Time                   (UTCTime)
 import           Data.Vector                 ((!?), Vector)
 import           Prelude                     hiding (lookup)
@@ -30,6 +32,7 @@ import           System.Directory
 import GHC.Generics (Generic)
 import Data.Typeable (Typeable)
 import Data.Binary
+import Data.Maybe (fromJust, isJust)
 
 
 ---------------------------------------------------------------------------------------------------
@@ -62,6 +65,9 @@ cronSetByCron = call storeName
 
 checkHostById :: CheckHost -> Process (Maybe (Set TriggerId))
 checkHostById = call storeName
+
+getTriggers :: CheckHost -> Process (Set Trigger)
+getTriggers ch = call storeName (ch, True)
 
 ---------------------------------------------------------------------------------------------------
 -- private
@@ -100,6 +106,7 @@ server = defaultProcess {
                   , checkMap
                   , hostMap
                   , lookupTrigger
+                  , lookupTriggers
                   , lookupCheck
                   , lookupCronSet
                   , lookupCheckHost
@@ -122,6 +129,18 @@ lookupTrigger = handleCall fun
   where
   fun :: ST -> TriggerId -> Process (ProcessReply (Maybe Trigger) ST)
   fun st@(m,_,_) i = say "call lookupTrigger" >> reply (_triggers m !? unId i) st
+
+lookupTriggers :: Dispatcher ST
+lookupTriggers = handleCall fun
+  where
+  fun :: ST -> (CheckHost, Bool) -> Process (ProcessReply (Set Trigger) ST)
+  fun st@(m,_,_) (ch,_) = do
+      say "call lookupsTriggers"
+      let ti = lookup ch (_checkHost m)
+      case ti of
+           Nothing -> reply Set.empty st
+           Just ti' -> reply (Set.map fromJust $ Set.filter isJust $ Set.map (\x -> _triggers m !? unId x) ti') st
+
 
 lookupCheck :: Dispatcher ST
 lookupCheck = handleCall fun

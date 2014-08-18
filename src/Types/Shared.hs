@@ -96,6 +96,9 @@ data Trigger = Trigger
   , tresult      :: TriggerRaw Bool
   } deriving (Show, Eq, Typeable, Generic)
 
+instance Ord Trigger where
+    compare x y = compare (tname x) (tname y)
+
 instance Binary Trigger
 
 newtype Log = Log Text deriving (Show, Eq, Typeable)

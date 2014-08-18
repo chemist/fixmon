@@ -5,6 +5,7 @@ hosts:
   - app01.example.ru
   - app02.example.ru
   - localhost
+  - limbo-air
 
 groups:
   - name: web
@@ -35,8 +36,11 @@ groups:
   - name: local
     hosts: 
       - localhost
+      - limbo-air
     checks:
       - gethost
+    triggers:
+      - hostname
 
 checks:
   - name: gethost
@@ -69,6 +73,11 @@ checks:
 
 
 triggers: 
+  - name: hostname
+    checks: 
+      - gethost
+    description: тупо проверка имени
+    result: system.hostname equal limbo-air 
   - name: process
     check: http-process
     description: Проверка процессинга по админке
