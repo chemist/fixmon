@@ -131,19 +131,19 @@ lookupTrigger :: Dispatcher ST
 lookupTrigger = handleCall fun
   where
   fun :: ST -> TriggerId -> Process (ProcessReply (Maybe Trigger) ST)
-  fun st@(m,_,_) i = say "call lookupTrigger" >> reply (_triggers m !? unId i) st
+  fun st@(m,_,_) i = reply (_triggers m !? unId i) st
 
 lookupHost :: Dispatcher ST
 lookupHost = handleCall fun
   where
   fun :: ST -> HostId -> Process (ProcessReply (Maybe Hostname) ST)
-  fun st@(m,_,_) i = say "call lookupHost" >> reply (_hosts m !? unId i) st
+  fun st@(m,_,_) i = reply (_hosts m !? unId i) st
 
 lookupCheck :: Dispatcher ST
 lookupCheck = handleCall fun
   where
   fun :: ST -> CheckId -> Process (ProcessReply (Maybe Check) ST)
-  fun st@(m,_,_) i = say "call lookupTrigger" >> reply (_checks m !? unId i) st
+  fun st@(m,_,_) i = reply (_checks m !? unId i) st
 
 lookupCronSet :: Dispatcher ST
 lookupCronSet = handleCall fun

@@ -67,9 +67,7 @@ registerNew = handleCall $ \st (Hostname t, p, c) -> do
     maybe (reply False st) (\x -> reply True (insert (Hostname t) (AgentInfo x p c) st)) m
 
 searchAgent :: Dispatcher ST
-searchAgent = handleCall $ \st (h :: Hostname) -> do
-    say "search agent"
-    reply (getPid <$> (lookup h st :: Maybe AgentInfo)) st
+searchAgent = handleCall $ \st (h :: Hostname) -> reply (getPid <$> (lookup h st :: Maybe AgentInfo)) st
 
 catchDead :: DeferredDispatcher ST
 catchDead = handleInfo $ \st (ProcessMonitorNotification x y whyDead) -> do

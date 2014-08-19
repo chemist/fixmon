@@ -9,10 +9,11 @@ module Process.Tasker
 
 
 import           Control.Monad                                       (void)
-import           Process.Configurator                                (Update (..), getCheckMap, getHostMap, getTriggerMap, hostById, checkById)
+import           Process.Configurator                                (Update (..), getCheckMap, getHostMap, getTriggerMap, hostById, checkById, triggerById)
 import           Process.Checker                                     (doTask)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
+import           Process.Configurator.Dsl (eval, Env(..))
 
 import           Control.Distributed.Process                         hiding
                                                                       (call)
@@ -28,6 +29,7 @@ import           Data.Set                                            (Set,
                                                                       toList)
 import           Data.Vector                                         (Vector,
                                                                       (!))
+import Control.Applicative
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -35,16 +37,25 @@ taskmake :: CheckHost -> Process ()
 taskmake (CheckHost (hid, cid, mt)) = do
     mhost <- hostById hid
     mcheck <- checkById cid
-    makeCheck mhost mcheck
+    mtrigger <-  maybe (return Nothing) triggerById mt
+    mpid <- maybe (return Nothing) lookupAgent mhost
+    makeCheck mhost mcheck mtrigger mpid
     where
-    makeCheck (Just host) (Just check) = do
-        pidAgent <- lookupAgent host
-        case pidAgent of
-             Just pid -> do
-                 dt <- doTask (Pid pid) check
-                 say $ " result " ++ show dt
-             Nothing -> say $ " not found"
-    makeCheck _ _ = say "Upps!!!! check or host not found, bug here"
+    makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
+        dt <- doTask (Pid pid) check
+        trR <- liftIO $ eval Env dt (tresult trigger)
+        say $ "check result " ++ show dt
+        say $ "trigger result " ++ show trR
+    makeCheck (Just host) (Just check) (Just trigger) Nothing  = do
+        say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
+    makeCheck (Just host) (Just check) Nothing (Just pid) = do
+        dt <- doTask (Pid pid) check
+        say $ "check result " ++ show dt
+        say " trigger not defined"
+    makeCheck (Just host) (Just check) Nothing Nothing = do
+        say $ "check result unknown " 
+        say " trigger not defined"
+    makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
 
 $(remotable ['taskmake])
 
@@ -111,16 +122,8 @@ taskSet = handleCast fun
     where
     fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
     fun st x = do
-        mapM_ (startCheck st) $ toList x
+        mapM_ addTask $ toList x
         continue st
-
-startCheck :: Tasker -> CheckHost -> Process ()
-startCheck st ch = do
-    say "add task"
-    addTask ch
-    say "end add task"
-
-
 
 updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do
