@@ -73,7 +73,7 @@ cronSetByCron = call storeName
 
 
 defDelay :: Delay
-defDelay = Delay $ seconds 20
+defDelay = Delay $ seconds 5
 
 type ST = (Monitoring, UTCTime, FilePath)
 
@@ -159,7 +159,7 @@ configuratorTimeoutHandler (m,t,f) _ = do
            else do
                say "file was changed, reload"
                nm <- liftIO $ parseConfig "fixmon.yaml"
-               either (bad time) (good t) nm
+               either (bad time) (good time) nm
         where 
           good time new = do
               nsend "cron" Update
