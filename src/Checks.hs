@@ -31,5 +31,5 @@ routes =
 testHttp :: Check
 testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", toDyn ("http://ya.ru" :: Text)) ])
 
-testHttp1 = Check (CheckName "web") (Cron daily) "http.status" (fromList [("url", toDyn ("http://ya.ru":: Text))])
+testHttp1 = Check (CheckName "web") (Cron daily) "http.status" (fromList [("url", toDyn ("http://ubank.ru":: Text)), ("redirects", toDyn (2 :: Int))])
 testShell = Check (CheckName "shell") (Cron daily) "cmd.run" (fromList [("abc", toDyn ("" :: Text)), ("command", toDyn ("uptime" :: Text))])
