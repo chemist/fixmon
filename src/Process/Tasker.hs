@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell     #-}
 module Process.Tasker
 ( tasker
 , doTasks
@@ -9,27 +9,28 @@ module Process.Tasker
 
 
 import           Control.Monad                                       (void)
-import           Process.Configurator                                (Update (..), getCheckMap, getHostMap, getTriggerMap, hostById, checkById, triggerById)
 import           Process.Checker                                     (doTask)
+import           Process.Configurator                                (Update (..),
+                                                                      checkById, getCheckMap, getHostMap, getTriggerMap,
+                                                                      hostById, triggerById)
+import           Process.Configurator.Dsl                            (Env (..),
+                                                                      eval)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
-import           Process.Configurator.Dsl (eval, Env(..))
 
 import           Control.Distributed.Process                         hiding
                                                                       (call)
-import           Control.Distributed.Process.Platform                (Recipient (..))
-import           Control.Distributed.Process.Platform.ManagedProcess
-import           Control.Distributed.Process.Platform.Time
 import           Control.Distributed.Process.Closure                 (mkClosure,
                                                                       remotable)
+import           Control.Distributed.Process.Platform                (Recipient (..))
+import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Task           (BlockingQueue, executeTask,
                                                                       pool,
                                                                       start)
+import           Control.Distributed.Process.Platform.Time
 import           Data.Set                                            (Set,
                                                                       toList)
-import           Data.Vector                                         (Vector,
-                                                                      (!))
-import Control.Applicative
+import           Data.Vector                                         (Vector)
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -44,7 +45,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         trR <- liftIO $ eval Env dt (tresult trigger)
-        say $ "check result " ++ show dt
+        say $ "check result " ++ show dt 
         say $ "trigger result " ++ show trR
     makeCheck (Just host) (Just check) (Just trigger) Nothing  = do
         say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
@@ -53,7 +54,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
         say $ "check result " ++ show dt
         say " trigger not defined"
     makeCheck (Just host) (Just check) Nothing Nothing = do
-        say $ "check result unknown " 
+        say $ "check result unknown "
         say " trigger not defined"
     makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
 
@@ -95,8 +96,8 @@ taskerName :: Recipient
 taskerName = Registered "tasker"
 
 data Tasker = Tasker
-  { hosts  :: Vector Hostname
-  , checks :: Vector Check
+  { hosts    :: Vector Hostname
+  , checks   :: Vector Check
   , triggers :: Vector Trigger
   }
 

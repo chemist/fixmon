@@ -11,6 +11,7 @@ import           Data.Either              (lefts, rights)
 import           Data.HashMap.Strict      (toList)
 import qualified Data.Map                 as M
 import           Data.Monoid              ((<>))
+import           Data.Scientific
 import qualified Data.Set                 as S
 import           Data.Text                (Text, concat, unpack)
 import           Data.Vector              (Vector, elemIndex, findIndex, foldl,
@@ -20,6 +21,8 @@ import           Data.Yaml                (FromJSON (..), Value (..),
                                            decodeFileEither, (.:), (.:?))
 import           System.Cron.Parser       (cronSchedule)
 
+import           Checks
+import           Data.Dynamic
 import           Prelude                  hiding (concat, filter, foldl, foldl1,
                                            map)
 import qualified Prelude
@@ -117,12 +120,24 @@ decodeConf fp = conv "Problem with parse yaml format: " <$> decodeFileEither fp
 transformCheck :: ICheck -> Either String Check
 transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> icname ch) (parseOnly cronSchedule (icperiod ch))
   where
-    makeCheck cr = return Check
-      { cname = CheckName (icname ch)
-      , cperiod = Cron cr
-      , ctype = ictype ch
-      , cparams = M.filterWithKey (\x _ -> x `notElem` ["name", "period", "type"]) $ M.map (\(String x) -> x) $ M.fromList $ icparams ch
-      }
+    makeCheck cr = case M.lookup (ictype ch) checkRoutes of
+                       Nothing -> Left $ "unknown check type " ++ unpack (ictype ch)
+                       Just f -> f Check { cname = CheckName (icname ch)
+                                        , cperiod = Cron cr
+                                        , ctype = ictype ch
+                                        , cparams = convertCparams $ M.fromList $ icparams ch
+                                        }
+
+convertCparams :: M.Map Text Value -> M.Map Text Dynamic
+convertCparams = M.map convertValueToDyn
+  where
+  convertValueToDyn (String x) = toDyn x
+  convertValueToDyn (Data.Yaml.Bool x) = toDyn x
+  convertValueToDyn (Number x) =
+    case floatingOrInteger x of
+         Left y -> toDyn (y :: Double)
+         Right y -> toDyn (y :: Int)
+  convertValueToDyn _ = error "convertValueToDyn, bad type"
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
 transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))

@@ -36,9 +36,10 @@ groups:
   - name: local
     hosts: 
       - localhost
-      - limbo-air
     triggers:
       - hostname
+    checks:
+      - http-process
 
 checks:
   - name: gethost
@@ -46,28 +47,29 @@ checks:
     type: system.hostname
   - name: http-process
     period: '* * * * *'
-    type: httpByStatus
-    url: http://localhost/ok
+    type: http.simple
+    url: http://ya.ru
+    redirects: 4
   - name: base-check
     period: '* * * * *'
     command: uptime
-    type: shell
+    type: system.uptime
   - name: disk-root
     period: '* * * * *'
     command: uptime
-    type: shell
+    type: system.hostname
   - name: disk-usr
     period: '* * * * *'
     command: uptime
-    type: shell
+    type: system.hostname
   - name: disk-home
     period: '* * * * *'
     command: uptime
-    type: shell
+    type: system.hostname
   - name: process-java
     period: '* * * * *'
     command: uptime
-    type: shell
+    type: system.hostname
 
 
 triggers: 

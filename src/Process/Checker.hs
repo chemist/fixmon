@@ -6,9 +6,8 @@ module Process.Checker
 where
 
 
-import           Check.Http
-import           Check.System
 import           Types
+import           Checks
 
 import           Control.Distributed.Process                         hiding
                                                                       (call,
@@ -19,8 +18,7 @@ import           Control.Distributed.Process.Platform.Time
 
 import           Control.Exception
 import           Data.Map                                            (fromList,
-                                                                      lookup,
-                                                                      unions)
+                                                                      lookup)
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -40,11 +38,7 @@ doTask = call
 initServer :: InitHandler () Route
 initServer _ = do
     say "start agent checker"
-    let system' = map route [HostName, Uptime, Boottime, CpuIntr, CpuLoad, CpuInfo, CpuSwitches, CpuUtil, LocalTime]
-        http = map route  [HttpSimple]
-        shell = map route [Shell]
-        all' = unions $ system' ++ http ++ shell
-    return $ InitOk all' Infinity
+    return $ InitOk routes Infinity
 
 server :: ProcessDefinition Route
 server = defaultProcess

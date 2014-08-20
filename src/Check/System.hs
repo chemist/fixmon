@@ -42,6 +42,16 @@ instance Checkable System where
     route CpuSwitches  = singleton "system.cpu.switches"   doCpuSwitches
     route CpuUtil  =     singleton "system.cpu.util"       doCpuUtil
     route LocalTime  =   singleton "system.localtime"      doLocalTime
+    
+    routeCheck HostName    = routeCheck'  HostName    "system.hostname"    
+    routeCheck Uptime      = routeCheck'  Uptime      "system.uptime"      
+    routeCheck Boottime    = routeCheck'  Boottime    "system.boottime"    
+    routeCheck CpuIntr     = routeCheck'  CpuIntr     "system.cpu.intr"    
+    routeCheck CpuLoad     = routeCheck'  CpuLoad     "system.cpu.loadavg" 
+    routeCheck CpuInfo     = routeCheck'  CpuInfo     "system.cpu.info"    
+    routeCheck CpuSwitches = routeCheck'  CpuSwitches "system.cpu.switches"
+    routeCheck CpuUtil     = routeCheck'  CpuUtil     "system.cpu.util"    
+    routeCheck LocalTime   = routeCheck'  LocalTime   "system.localtime"   
 
     describe HostName = []
     describe Uptime   = []
@@ -52,17 +62,6 @@ instance Checkable System where
     describe CpuInfo = []
     describe CpuSwitches = []
     describe CpuUtil = []
-
-    isCorrect ch@(Check _ _ "system.hostname" _) HostName = Right ch
-    isCorrect ch@(Check _ _ "system.uptime" _) Uptime = Right ch
-    isCorrect ch@(Check _ _ "system.boottime" _) Boottime = Right ch
-    isCorrect ch@(Check _ _ "system.cpu.intr" _) CpuIntr = Right ch
-    isCorrect ch@(Check _ _ "system.cpu.loadavg" _) CpuLoad = Right ch
-    isCorrect ch@(Check _ _ "system.cpu.info" _) CpuInfo = Right ch
-    isCorrect ch@(Check _ _ "system.cpu.switches" _) CpuSwitches = Right ch
-    isCorrect ch@(Check _ _ "system.cpu.util" _) CpuUtil = Right ch
-    isCorrect ch@(Check _ _ "system.localtime" _) LocalTime = Right ch
-    isCorrect _ _ = Left "oops, check is not correct"
 
 ---------------------------------- linux checks --------------------------------------
 doHostname :: Check -> IO Complex

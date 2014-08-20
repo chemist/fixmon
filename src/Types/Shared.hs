@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE DeriveGeneric          #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Types.Shared where
 
 import           Types.Cron
@@ -14,16 +15,16 @@ import           Data.Monoid         (Monoid, mappend, mempty, (<>))
 import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
 import           Data.Text           (Text, pack)
-import           Data.Typeable       (Typeable)
 import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
-import           Control.Applicative (pure)
-import           Data.Binary         (Binary)
+import           Control.Applicative (pure, (<$>))
+import           Data.Binary         (Binary, Get, get, getWord8, put, putWord8)
+import           Data.Dynamic
 import           Data.Text.Binary    ()
 import           Data.Vector         (Vector)
 import qualified Data.Vector         as V
 import           Data.Vector.Binary  ()
-import GHC.Generics (Generic)
+import           GHC.Generics        (Generic)
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -76,8 +77,35 @@ instance IsString CheckName where
 data Check = Check { cname   :: CheckName
                    , cperiod :: Cron
                    , ctype   :: Text
-                   , cparams :: Map Text Text
-                   } deriving (Show, Eq, Ord, Typeable, Generic)
+                   , cparams :: Map Text Dynamic
+                   } deriving (Show, Typeable, Generic, Eq, Ord)
+
+instance Eq Dynamic where
+    a == b = dynTypeRep a == dynTypeRep b
+
+instance Ord Dynamic where
+    compare a b = compare (dynTypeRep a) (dynTypeRep b)
+
+textType, intType, boolType, doubleType :: TypeRep
+textType = typeOf (undefined :: Text)
+intType = typeOf (undefined :: Int)
+boolType = typeOf (undefined :: Bool)
+doubleType = typeOf (undefined :: Double)
+
+instance Binary Dynamic where
+    put x 
+      | dynTypeRep x == textType = putWord8 0 >> put (fromDyn x (undefined::Text))
+      | dynTypeRep x == intType = putWord8 1 >> put (fromDyn x (undefined::Int))
+      | dynTypeRep x == boolType = putWord8 2 >> put (fromDyn x (undefined::Bool))
+      | dynTypeRep x == doubleType = putWord8 3 >> put (fromDyn x (undefined::Double))
+      | otherwise = undefined
+    get = unpackDyn =<< getWord8
+      where
+      unpackDyn 0 = toDyn <$> (get :: Get Text)
+      unpackDyn 1 = toDyn <$> (get :: Get Int)
+      unpackDyn 2 = toDyn <$> (get :: Get Bool)
+      unpackDyn _ = undefined
+
 
 instance Binary Check
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)

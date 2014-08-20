@@ -9,6 +9,7 @@ import           Data.Maybe           (fromMaybe)
 import           Data.Text            (Text, unpack)
 import           Network.URI
 import           Network.Wreq
+import           Data.Dynamic
 import           Prelude              hiding (lookup)
 
 import           Types
@@ -20,33 +21,44 @@ data Shell = Shell deriving Show
 instance Checkable Shell where
     describe Shell = undefined
     route Shell = singleton "cmd.run" undefined
-    isCorrect _ Shell = undefined
+    routeCheck Shell = routeCheck' Shell "cmd.run"
 
 instance Checkable Http where
-    describe (HttpSimple) = [ ("url", True, "Uri - as string, RFC3986")
-                            , ("agent", False, "Host - as string, check will be starting from this host, default start from server")
-                            , ("redirects", False, "Count - as integer, default 0")
-                            ]
-    route (HttpSimple) = singleton "http.simple" doHttp
-    isCorrect ch HttpSimple =
-      let url = lookup "url" (cparams ch)
-      in case url of
-              Nothing -> Left "url not found"
-              Just x -> maybe (Right ch) Left $ checkUrl x
+    describe HttpSimple = [ ("url", True, checkUrl, "Uri - as string, RFC3986")
+                          , ("agent", False, checkAgent, "Host - as string, check will be starting from this host, default start from server")
+                          , ("redirects", False, checkRedirects, "Count - as integer, default 0")
+                          ]
+    route HttpSimple = singleton "http.simple" doHttp
+    routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
 
-checkUrl :: Text -> Maybe Text
-checkUrl t = if isAbsoluteURI (unpack t)
-                then Nothing
-                else Just "bad url, must be absolute url"
+checkAgent :: Dynamic -> Either String Dynamic
+checkAgent x 
+    | dynTypeRep x == textType = Right x
+    | otherwise = Left "bad agent type, must be text"
 
-doHttp :: Check -> IO Complex
+checkRedirects :: Dynamic -> Either String Dynamic
+checkRedirects x 
+    | dynTypeRep x == intType = Right x
+    | otherwise = Left "bad redirects type, must be int"
+
+checkUrl :: Dynamic -> Either String Dynamic
+checkUrl x 
+    | dynTypeRep x == textType = checkUrl' x 
+    | otherwise = Left "bad url type, must be text"
+
+checkUrl' :: Dynamic -> Either String Dynamic
+checkUrl' x = let url = fromDyn x (undefined :: Text)
+              in if isAbsoluteURI (unpack url)
+                    then Right x
+                    else Left "check url, it must be absolute uri, see RFC3986"
+
+doHttp :: Check -> IO Complex 
 doHttp (Check _ _ _ p) = do
-    let Just url = unpack <$> lookup "url" p
-        unpackRedirects :: Text -> Int
-        unpackRedirects = fst . head . reads . unpack
+    let Just url = flip fromDyn (undefined :: Text) <$> lookup "url" p
+        unpackRedirects :: Dynamic -> Int
+        unpackRedirects x = fromDyn x (undefined :: Int)
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
         opts = defaults & redirects .~ redirects'
-    resp <- getWith opts url
+    resp <- getWith opts (unpack url )
     return $ Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
-
 

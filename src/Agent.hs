@@ -31,6 +31,8 @@ import           System.Cron
 import           Process.Agent
 import           Process.Checker
 import Check.System
+import Data.Dynamic
+import Data.Text (Text)
 
 host, port :: String
 host = "localhost"
@@ -63,6 +65,6 @@ child :: (ChildStart, String) -> ChildSpec
 child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)
 
 testHttp :: Check
-testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", "http://www.ubank.neta") ])
+testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", toDyn ("http://www.ubank.neta" :: Text)) ])
                                                                       --   , ("redirects", "3") ])
 
