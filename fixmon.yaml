@@ -48,7 +48,7 @@ checks:
   - name: http-process
     period: '* * * * *'
     type: http.simple
-    url: http://ya.ru
+    url: http://ubank.ru
     redirects: 4
   - name: base-check
     period: '* * * * *'

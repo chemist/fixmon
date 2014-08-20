@@ -100,14 +100,14 @@ readMask = maskAsInt
 maskAsInt::ReadP Mask
 maskAsInt = do
     a <- fun <$> many1 (satisfy isDigit)
-    if a >= 0 && a <= 32 
+    if a >= 0 && a <= 32
          then return $ Mask32 $ shiftL (shiftR maxMask (32 - a)) (32 - a)
          else pfail
     where fun = fromIntegral . digitsToInt
           maxMask = maxBound::Word32
 
 toMask32::Int -> Maybe Mask
-toMask32 i = if i >= 0 && i <= 32 
+toMask32 i = if i >= 0 && i <= 32
                 then Just $ Mask32 $ shiftL (shiftR maxMask (32 - i)) (32 - i)
                 else Nothing
            where maxMask = maxBound::Word32
@@ -122,7 +122,7 @@ readIP = do
     c <- fun <$> many1 (satisfy isDigit)
     void $ char '.'
     d <- fun <$> many1 (satisfy isDigit)
-    if right a && right b && right c && right d 
+    if right a && right b && right c && right d
                   then return $ IPv4 (d + a `shift` 24 + b `shift` 16 + c `shift` 8)
                   else pfail
     where fun = fromIntegral . digitsToInt

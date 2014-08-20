@@ -6,8 +6,8 @@ module Process.Checker
 where
 
 
-import           Types
 import           Checks
+import           Types
 
 import           Control.Distributed.Process                         hiding
                                                                       (call,

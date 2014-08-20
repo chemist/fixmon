@@ -3,17 +3,16 @@ module Main where
 import           Process.Configurator
 import           Process.Cron
 import           Process.Tasker
-import           Process.Web
 import           Process.Watcher
+import           Process.Web
 
 import           Control.Distributed.Process
-import           Control.Distributed.Process.Platform.Supervisor
-import           Control.Distributed.Process.Platform
 import           Control.Distributed.Process.Node
-import           Control.Monad.Reader             (ask)
-import           Network.Transport                (closeTransport)
-import           Network.Transport.TCP            (createTransport,
-                                                   defaultTCPParameters)
+import           Control.Distributed.Process.Platform
+import           Control.Distributed.Process.Platform.Supervisor
+import           Control.Monad.Reader                            (ask)
+import           Network.Transport                               (closeTransport)
+import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
 
 
 
@@ -43,7 +42,7 @@ main = do
     closeTransport t
 
 super :: [ChildSpec] -> Process SupervisorPid
-super = start restartOne ParallelShutdown 
+super = start restartOne ParallelShutdown
 
 child :: (ChildStart, String) -> ChildSpec
 child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)

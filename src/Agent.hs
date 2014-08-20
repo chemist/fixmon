@@ -4,35 +4,35 @@
 module Main where
 
 import           Check.Http
-import           Check.System                     ()
-import           Types                            (Check (..), CheckName (..), Hostname (..),
-                                                   Cron (..), Checkable(..))
+import           Check.System                                    ()
+import           Types                                           (Check (..), CheckName (..), Checkable (..),
+                                                                  Cron (..),
+                                                                  Hostname (..))
 
-import           Control.Concurrent               (threadDelay)
+import           Control.Concurrent                              (threadDelay)
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
-import           Control.Distributed.Process.Platform.Supervisor
 import           Control.Distributed.Process.Platform
+import           Control.Distributed.Process.Platform.Supervisor
 import           Control.Monad
-import qualified Control.Monad.State              as ST
+import qualified Control.Monad.State                             as ST
 import           Control.Monad.Trans.Class
 import           Data.Binary
-import qualified Data.Binary                      as B
-import           Data.ByteString                  (ByteString)
-import           Data.Map                         (empty, fromList)
+import qualified Data.Binary                                     as B
+import           Data.ByteString                                 (ByteString)
+import           Data.Map                                        (empty,
+                                                                  fromList)
 import           Data.Typeable
-import           Network.Transport                (EndPointAddress (..),
-                                                   closeTransport)
-import           Network.Transport.TCP            (createTransport,
-                                                   defaultTCPParameters)
+import           Network.Transport                               (EndPointAddress (..), closeTransport)
+import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
 
-import           Process.Watcher
-import           System.Cron
+import           Check.System
+import           Data.Dynamic
+import           Data.Text                                       (Text)
 import           Process.Agent
 import           Process.Checker
-import Check.System
-import Data.Dynamic
-import Data.Text (Text)
+import           Process.Watcher
+import           System.Cron
 
 host, port :: String
 host = "localhost"
@@ -48,7 +48,7 @@ main = do
     Right t <- createTransport host port defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
-        cstart <-  mapM toChildStart [checker, agent localhost remoteAddress] 
+        cstart <-  mapM toChildStart [checker, agent localhost remoteAddress]
         let cspec = map child $ zip cstart ["checker", "agent"]
         superPid <- super cspec
         _ <- liftIO $ getLine :: Process String
@@ -59,12 +59,8 @@ main = do
     closeTransport t
 
 super :: [ChildSpec] -> Process SupervisorPid
-super = start restartOne ParallelShutdown 
+super = start restartOne ParallelShutdown
 
 child :: (ChildStart, String) -> ChildSpec
 child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)
-
-testHttp :: Check
-testHttp = Check (CheckName "web") (Cron daily) "http.simple" (fromList [ ("url", toDyn ("http://www.ubank.neta" :: Text)) ])
-                                                                      --   , ("redirects", "3") ])
 

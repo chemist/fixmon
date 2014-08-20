@@ -1,24 +1,25 @@
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
-{-# LANGUAGE GADTs #-}
 module Process.Configurator.Dsl
 where
 
 import           Types
 
 import           Data.Map             (lookup)
-import           Data.Text            hiding (empty, filter, foldl1, head, map, takeWhile)
+import           Data.Text            hiding (empty, filter, foldl1, head, map,
+                                       takeWhile)
 -- import           Data.Text.Encoding   (encodeUtf8)
 -- import qualified Prelude              as P
-import qualified Control.Monad.Reader as R
+import           Control.Applicative  (pure, (*>), (<$>), (<*), (<*>), (<|>))
 import qualified Control.Monad.Except as E
-import Control.Applicative ((<$>), (<*>), (*>), (<*), (<|>), pure)
-import Data.Typeable
-import Data.Char (isSpace)
-import Data.Attoparsec.Text
+import qualified Control.Monad.Reader as R
+import           Data.Attoparsec.Text
+import           Data.Char            (isSpace)
+import           Data.Typeable
 -- import Data.Text (pack)
-import Data.Scientific (floatingOrInteger)
+import           Data.Scientific      (floatingOrInteger)
 
 import           Prelude              hiding (lookup, takeWhile)
 
@@ -30,16 +31,16 @@ logic (Left x:[]) = x
 logic (Left x : Right y : xs) = loToLogic y x (logic xs)
 logic _ = error "bad expression in trigger"
 
-data Lo = A | O 
+data Lo = A | O
 
 loToLogic :: Lo -> TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
-loToLogic A = And 
-loToLogic O = Or 
+loToLogic A = And
+loToLogic O = Or
 
 aP, oP, spliter :: Parser Lo
 aP = string "and" *> sp *> pure A
 oP = string "or"  *> sp *> pure O
-spliter = aP <|> oP 
+spliter = aP <|> oP
 
 expr :: Parser (TriggerRaw Bool)
 expr = Not <$> (string "not" *> sp *> simpl) <|> simpl
@@ -53,7 +54,7 @@ eql = equalP <|> moreP <|> lessP
   equalP = Equal <$> (nameP <* string "equal") <*> (sp *> returnP)
   moreP = More <$> (nameP <* string "more") <*> (sp *> returnP)
   lessP = Less <$> (nameP <* string "less") <*> (sp *> returnP)
- 
+
 boolP :: Parser (TriggerRaw Bool)
 boolP = Bool <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
 
@@ -75,10 +76,10 @@ sp :: Parser ()
 sp = takeWhile1 isSpace *> pure () <|> takeWhile isSpace *> endOfInput *> pure ()
 
 parseTrigger :: Text -> Either String (TriggerRaw Bool)
-parseTrigger = parseOnly top 
+parseTrigger = parseOnly top
 
 
-data Env = Env 
+data Env = Env
 
 data ConfigError = ConfigError String
 
@@ -91,7 +92,7 @@ eval env c e = E.runExceptT (R.runReaderT (fun c e) env)
 fun :: Complex -> TriggerRaw a -> Eval Bool
 fun (Complex c) (Less (Text x) y)  = maybe (fail "bad check describe") (less y) (lookup x c)
 fun (Complex c) (More (Text x) y)  = maybe (fail "bad check describe") (more y) (lookup x c)
-fun (Complex c) (Equal (Text x) y) = maybe (fail "bad check describe") (equal y) (lookup x c) 
+fun (Complex c) (Equal (Text x) y) = maybe (fail "bad check describe") (equal y) (lookup x c)
 fun (Complex c) (Not x)            = not <$> fun (Complex c) x
 fun (Complex c) (And x y)          = (&&) <$> fun (Complex c) x <*> fun (Complex c) y
 fun (Complex c) (Or x y)           = (||) <$> fun (Complex c) x <*> fun (Complex c) y
@@ -123,13 +124,13 @@ instance Logic Any where
              | otherwise = fail $ "you try do " ++ show (typeOf a) ++ " < " ++ show (typeOf b)
 
 -- | Examples
--- 
+--
 -- >>> let a = Text $ pack "key"
 -- >>> let b = Any $ Bool True
 -- >>> let c = Equal a b
 -- >>> let m = Complex $ Map.fromList [(pack "key", Any (Bool True)), (pack "int", Any (Int 3))]
 -- >>> let m1 = Complex $ Map.fromList [(pack "bool", Any (Bool True)), (pack "key", Any (Int 3))]
--- 
+--
 -- >>> eval c m
 -- Status {unStatus = True}
 -- >>> eval c m1

@@ -2,13 +2,13 @@
 module Process.Web where
 
 import           Control.Distributed.Process.Internal.Types
+import           Control.Exception                          (bracket_)
 import           Data.Vector.Binary                         ()
 import           Network.HTTP.Types.Status
 import           Network.Wai
 import           Network.Wai.Handler.Warp                   (run)
 import           Network.Wai.Middleware.RequestLogger       (logStdoutDev)
 import           Network.Wai.Middleware.Static
-import Control.Exception (bracket_)
 
 import           Types                                      ()
 

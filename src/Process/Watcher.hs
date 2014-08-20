@@ -1,26 +1,28 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Process.Watcher (watcher, registerAgent, lookupAgent) where
 
 import           Types
 
-import           Control.Distributed.Process.Internal.Types (ProcessMonitorNotification(..), MonitorRef(..))
-import           Control.Distributed.Process                         (Process, ProcessId,
+import           Control.Applicative                                 ((<$>))
+import           Control.Distributed.Process                         (Process,
+                                                                      ProcessId,
                                                                       say)
+import           Control.Distributed.Process.Internal.Types          (MonitorRef (..), ProcessMonitorNotification (..))
+import           Control.Distributed.Process.Platform
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
-import           Control.Distributed.Process.Platform
-import Control.Applicative  ((<$>))
-import Data.Bimap
-import Prelude hiding (lookup)
+import           Data.Bimap
+import           Prelude                                             hiding
+                                                                      (lookup)
 
 ---------------------------------------------------------------------------------------------------
 -- public
 ---------------------------------------------------------------------------------------------------
 
 registerAgent :: ProcessId -> (Hostname, ProcessId, ProcessId) -> Process Bool
-registerAgent = call 
+registerAgent = call
 
 lookupAgent :: Hostname -> Process (Maybe ProcessId)
 lookupAgent = call (Registered "watcher")

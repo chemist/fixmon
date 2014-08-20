@@ -42,16 +42,16 @@ instance Checkable System where
     route CpuSwitches  = singleton "system.cpu.switches"   doCpuSwitches
     route CpuUtil  =     singleton "system.cpu.util"       doCpuUtil
     route LocalTime  =   singleton "system.localtime"      doLocalTime
-    
-    routeCheck HostName    = routeCheck'  HostName    "system.hostname"    
-    routeCheck Uptime      = routeCheck'  Uptime      "system.uptime"      
-    routeCheck Boottime    = routeCheck'  Boottime    "system.boottime"    
-    routeCheck CpuIntr     = routeCheck'  CpuIntr     "system.cpu.intr"    
-    routeCheck CpuLoad     = routeCheck'  CpuLoad     "system.cpu.loadavg" 
-    routeCheck CpuInfo     = routeCheck'  CpuInfo     "system.cpu.info"    
+
+    routeCheck HostName    = routeCheck'  HostName    "system.hostname"
+    routeCheck Uptime      = routeCheck'  Uptime      "system.uptime"
+    routeCheck Boottime    = routeCheck'  Boottime    "system.boottime"
+    routeCheck CpuIntr     = routeCheck'  CpuIntr     "system.cpu.intr"
+    routeCheck CpuLoad     = routeCheck'  CpuLoad     "system.cpu.loadavg"
+    routeCheck CpuInfo     = routeCheck'  CpuInfo     "system.cpu.info"
     routeCheck CpuSwitches = routeCheck'  CpuSwitches "system.cpu.switches"
-    routeCheck CpuUtil     = routeCheck'  CpuUtil     "system.cpu.util"    
-    routeCheck LocalTime   = routeCheck'  LocalTime   "system.localtime"   
+    routeCheck CpuUtil     = routeCheck'  CpuUtil     "system.cpu.util"
+    routeCheck LocalTime   = routeCheck'  LocalTime   "system.localtime"
 
     describe HostName = []
     describe Uptime   = []
@@ -71,7 +71,7 @@ doHostname (Check _ _ "system.hostname" _) = do
 doHostname _ = undefined
 
 testHostname :: Check
-testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" (fromList []) 
+testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" (fromList [])
 --------------------------------------------------------------------------------------
 
 -- "3023604.41 11190196.16\n"

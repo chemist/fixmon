@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Check.Http where
 
-import           Control.Applicative  ((<$>))
+import           Control.Applicative ((<$>))
 -- import           Control.Exception
-import           Control.Lens         ((&), (.~), (^.))
-import           Data.Map             (fromList, lookup, singleton)
-import           Data.Maybe           (fromMaybe)
-import           Data.Text            (Text, unpack)
+import           Control.Lens        ((&), (.~), (^.))
+import           Data.Dynamic
+import           Data.Map            (fromList, lookup, singleton)
+import           Data.Maybe          (fromMaybe)
+import           Data.Text           (Text, unpack)
 import           Network.URI
 import           Network.Wreq
-import           Data.Dynamic
-import           Prelude              hiding (lookup)
+import           Prelude             hiding (lookup)
 
 import           Types
 
@@ -32,18 +32,18 @@ instance Checkable Http where
     routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
 
 checkAgent :: Dynamic -> Either String Dynamic
-checkAgent x 
+checkAgent x
     | dynTypeRep x == textType = Right x
     | otherwise = Left "bad agent type, must be text"
 
 checkRedirects :: Dynamic -> Either String Dynamic
-checkRedirects x 
+checkRedirects x
     | dynTypeRep x == intType = Right x
     | otherwise = Left "bad redirects type, must be int"
 
 checkUrl :: Dynamic -> Either String Dynamic
-checkUrl x 
-    | dynTypeRep x == textType = checkUrl' x 
+checkUrl x
+    | dynTypeRep x == textType = checkUrl' x
     | otherwise = Left "bad url type, must be text"
 
 checkUrl' :: Dynamic -> Either String Dynamic
@@ -52,7 +52,7 @@ checkUrl' x = let url = fromDyn x (undefined :: Text)
                     then Right x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
-doHttp :: Check -> IO Complex 
+doHttp :: Check -> IO Complex
 doHttp (Check _ _ _ p) = do
     let Just url = flip fromDyn (undefined :: Text) <$> lookup "url" p
         unpackRedirects :: Dynamic -> Int

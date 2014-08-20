@@ -45,7 +45,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         trR <- liftIO $ eval Env dt (tresult trigger)
-        say $ "check result " ++ show dt 
+        say $ "check result " ++ show dt
         say $ "trigger result " ++ show trR
     makeCheck (Just host) (Just check) (Just trigger) Nothing  = do
         say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"

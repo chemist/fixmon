@@ -2,19 +2,19 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-} 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Types.DslTypes
 ( TriggerRaw(..), Any(..), TypeError, ToAny(..), Tag )
 where
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Exception   (Exception, throw)
+import qualified Data.Aeson          as A
 import           Data.Binary         (Binary, get, getWord8, put, putWord8)
 import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
+import           Data.Time
 import           Data.Typeable       (Typeable, typeOf)
-import Data.Time
-import qualified Data.Aeson as A
 
 data TypeError = TypeError String deriving (Show, Typeable)
 instance Exception TypeError
@@ -33,7 +33,7 @@ class ToAny a where
 instance ToAny Int where
     unAny (Any (Int x)) = x
     unAny _ = undefined
-    toAny = Any . Int 
+    toAny = Any . Int
 
 instance ToAny Bool where
     unAny (Any (Bool x)) = x

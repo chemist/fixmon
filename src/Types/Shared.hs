@@ -93,7 +93,7 @@ boolType = typeOf (undefined :: Bool)
 doubleType = typeOf (undefined :: Double)
 
 instance Binary Dynamic where
-    put x 
+    put x
       | dynTypeRep x == textType = putWord8 0 >> put (fromDyn x (undefined::Text))
       | dynTypeRep x == intType = putWord8 1 >> put (fromDyn x (undefined::Int))
       | dynTypeRep x == boolType = putWord8 2 >> put (fromDyn x (undefined::Bool))

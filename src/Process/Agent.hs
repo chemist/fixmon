@@ -1,28 +1,30 @@
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables         #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Process.Agent
 ( agent
 )
 where
 
 
-import           Control.Distributed.Process hiding (monitor)                       
-import           Control.Distributed.Process.Platform                (Recipient (..), resolve, monitor)
-import           Control.Distributed.Process.Platform.ManagedProcess
-import           Control.Distributed.Process.Platform.Time
-import           Control.Distributed.Process.Platform.Supervisor
+import           Control.Distributed.Process                         hiding
+                                                                      (monitor)
 import           Control.Distributed.Process.Node
-import           Network.Transport                (EndPointAddress (..),
-                                                   closeTransport)
+import           Control.Distributed.Process.Platform                (Recipient (..),
+                                                                      monitor,
+                                                                      resolve)
+import           Control.Distributed.Process.Platform.ManagedProcess
+import           Control.Distributed.Process.Platform.Supervisor
+import           Control.Distributed.Process.Platform.Time
+import           Data.Binary
+import           Data.ByteString                                     (ByteString)
 import           Data.Time.Clock
-import Data.ByteString (ByteString)
 import           Data.Typeable                                       (Typeable)
 import           GHC.Generics                                        (Generic)
-import           Data.Binary
-import Process.Watcher (registerAgent)
-import Types
+import           Network.Transport                                   (EndPointAddress (..), closeTransport)
+import           Process.Watcher                                     (registerAgent)
+import           Types
 
 ---------------------------------------------------------------------------------------------------
 -- public
@@ -95,7 +97,7 @@ foundServer = handleCast $ \st PingServer -> case st of
              case (checkerP, mm) of
                   (Just cp, Just m) -> do
                       r <- registerAgent pid (l, self, cp)
-                      if r 
+                      if r
                          then continue (RegisteredInServer l s pid m)
                          else continue (Founded l s pid)
                   _ -> continue (Founded l s pid)

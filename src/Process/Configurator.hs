@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveGeneric          #-}
-{-# LANGUAGE DeriveDataTypeable          #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric      #-}
 module Process.Configurator
 ( configurator
 , getCronMap
@@ -17,20 +17,25 @@ where
 import           Process.Configurator.Yaml
 import           Types
 
-import           Control.Distributed.Process (Process, say, nsend)
-import           Control.Distributed.Process.Platform (Recipient(..))
-import           Control.Distributed.Process.Platform.Time
+import           Control.Distributed.Process                         (Process,
+                                                                      nsend,
+                                                                      say)
+import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
+import           Control.Distributed.Process.Platform.Time
 import           Control.Monad.State
-import           Data.Map                    (lookup, Map)
-import           Data.Set                    (Set)
-import           Data.Time                   (UTCTime)
-import           Data.Vector                 ((!?), Vector)
-import           Prelude                     hiding (lookup)
+import           Data.Binary
+import           Data.Map                                            (Map,
+                                                                      lookup)
+import           Data.Set                                            (Set)
+import           Data.Time                                           (UTCTime)
+import           Data.Typeable                                       (Typeable)
+import           Data.Vector                                         (Vector,
+                                                                      (!?))
+import           GHC.Generics                                        (Generic)
+import           Prelude                                             hiding
+                                                                      (lookup)
 import           System.Directory
-import GHC.Generics (Generic)
-import Data.Typeable (Typeable)
-import Data.Binary
 
 
 ---------------------------------------------------------------------------------------------------
@@ -56,7 +61,7 @@ getTriggerMap :: Process (Vector Trigger)
 getTriggerMap = call storeName TriggerMap
 
 triggerById :: TriggerId -> Process (Maybe Trigger)
-triggerById = call storeName 
+triggerById = call storeName
 
 checkById :: CheckId -> Process (Maybe Check)
 checkById = call storeName
@@ -154,13 +159,13 @@ lookupCronSet = handleCall fun
 configuratorTimeoutHandler :: TimeoutHandler ST
 configuratorTimeoutHandler (m,t,f) _ = do
         time <- liftIO $ getModificationTime f
-        if t == time 
+        if t == time
            then timeoutAfter defDelay (m,t,f)
            else do
                say "file was changed, reload"
                nm <- liftIO $ parseConfig "fixmon.yaml"
                either (bad time) (good time) nm
-        where 
+        where
           good time new = do
               nsend "cron" Update
               say "configurator (CronMap)-> cron  "

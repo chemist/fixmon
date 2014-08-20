@@ -1,16 +1,16 @@
-{-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Types.Check where
-import           Data.Map            (Map, keys, singleton, (!))
-import qualified Data.Map as M
-import Data.Maybe
-import           Data.Monoid         ((<>))
-import           Data.Text           (Text, unpack)
+import           Data.Dynamic
+import           Data.Map          (Map, keys, singleton, (!))
+import qualified Data.Map          as M
+import           Data.Maybe
+import           Data.Monoid       ((<>))
+import           Data.Text         (Text, unpack)
 import           Data.Yaml.Builder
-import Data.Dynamic
-import           Prelude             hiding (lookup, putStr)
+import           Prelude           hiding (lookup, putStr)
 
-import           Types.Shared             (Check (..), Complex (..))
+import           Types.Shared      (Check (..), Complex (..))
 
 type Route = Map Text (Check -> IO Complex)
 
@@ -43,15 +43,15 @@ type Problem = String
 
 routeCheck' :: Checkable a => a -> Text -> RouteCheck
 routeCheck' x checkT = singleton checkT $ fun (describe x)
-  where 
+  where
     fun :: [(Field, Required, CheckValue, Description)] -> Check -> Either String Check
-    fun desc check = 
+    fun desc check =
       let params = cparams check
           checking = map tryCheck desc
           eitherToMaybeProblem (Left y) = Just y
           eitherToMaybeProblem (Right _) = Nothing
           tryCheck :: (Field, Required, CheckValue, Description) -> Maybe Problem
-          tryCheck (field, isMustBe, cv, _) = 
+          tryCheck (field, isMustBe, cv, _) =
               case (M.member field params, isMustBe)  of
                    (True, True) -> eitherToMaybeProblem $ cv (params ! field)
                    (True, False) -> eitherToMaybeProblem $ cv (params ! field)
@@ -62,9 +62,6 @@ routeCheck' x checkT = singleton checkT $ fun (describe x)
                           [] -> Right check
                           xs -> Left $ foldl1 (\z y -> z ++ " " ++ y) xs
       in result checking
-         
---           checkMustKeys = map M.member  filter (\(_, x, _, _) -> x) desc
-
 
 example' :: Checkable a => a -> YamlBuilder
 example' a = let m = describe a
@@ -76,15 +73,3 @@ example' a = let m = describe a
                                     else (t, string $ "can be: " <> d)
              in mapping nds
 
-{--
-isCorrect :: Check -> Either String Check
-isCorrect check = 
-    let checkT = checkType check 
-        isCorrect' [] = Right check
-    in isCorrect' (describe checkT) 
-    --}
-{--
-testHttp = Check (CheckName "web") (Cron daily) "http.status" (fromList [("url", "http://ya.ru")])
-
-testShell = Check (CheckName "shell") (Cron daily) "cmd.run" (fromList [("abc", ""), ("command", "uptime")])
---}

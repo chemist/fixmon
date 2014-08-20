@@ -6,7 +6,7 @@ import           Process.Configurator                                (Update (..
 import           Process.Tasker                                      (doTasks)
 import           Types
 
-import           Control.Distributed.Process                         (Process, 
+import           Control.Distributed.Process                         (Process,
                                                                       liftIO,
                                                                       say)
 import           Control.Distributed.Process.Platform                (Recipient (..))
