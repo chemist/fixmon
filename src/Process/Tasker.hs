@@ -15,6 +15,7 @@ import           Process.Configurator                                (Update (..
                                                                       hostById, triggerById)
 import           Process.Configurator.Dsl                            (Env (..),
                                                                       eval)
+import           Process.Storage                                     (saveResult)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
 
@@ -44,6 +45,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     where
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
+        saveResult (host, dt)
         trR <- liftIO $ eval Env dt (tresult trigger)
         say $ "check result " ++ show dt
         say $ "trigger result " ++ show trR
@@ -51,6 +53,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
         say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check
+        saveResult (host, dt)
         say $ "check result " ++ show dt
         say " trigger not defined"
     makeCheck (Just host) (Just check) Nothing Nothing = do

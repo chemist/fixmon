@@ -5,6 +5,7 @@ import           Process.Cron
 import           Process.Tasker
 import           Process.Watcher
 import           Process.Web
+import           Process.Storage
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
@@ -25,8 +26,8 @@ main = do
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, configurator, tasker, taskPool, cron, watcher]
-        let cspec = map child $ zip cstart ["web", "configurator", "tasker", "pool", "cron", "watcher"]
+        cstart <-  mapM toChildStart [webProcess, configurator, defStorage, tasker, taskPool, cron, watcher]
+        let cspec = map child $ zip cstart ["web", "configurator", "storage", "tasker", "pool", "cron", "watcher"]
         superPid <-  super cspec
 --        c <- listChildren superPid
 --        say $ show c
