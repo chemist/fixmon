@@ -1,100 +1,60 @@
 hosts:
-  - db01.example.ru
-  - db02.example.ru
-  - example.ru
-  - app01.example.ru
-  - app02.example.ru
   - localhost
-  - limbo-air
 
 groups:
-  - name: web
-    hosts:
-      - example.ru
-    triggers:
-      - process
-      - java
-  - name: db
-    hosts:
-      - db01.example.ru
-      - db02.example.ru
-    triggers:
-      - oracle
-  - name: app
-    hosts:
-      - app01.example.ru
-      - app02.example.ru
-    triggers:
-      - java
-  - name: all-linux
-    hosts: 
-      - app01.example.ru
-    checks:
-      - http-process
-    triggers:
-      - disk
   - name: local
-    hosts: 
+    hosts:
       - localhost
     triggers:
       - hostname
     checks:
-      - http-process
+      - uptime
+      - boottime
+      - loadaverage
+      - intr
+      - cpuinfo
+      - switches
+      - util
+      - localtime
+      - checkUbank
 
 checks:
   - name: gethost
     period: '* * * * *'
     type: system.hostname
-  - name: http-process
+  - name: uptime
+    period: '* * * * *'
+    type: system.uptime
+  - name: boottime
+    period: '*/2 * * * *'
+    type: system.boottime
+  - name: loadaverage
+    period: '* * * * *'
+    type: system.cpu.loadavg
+  - name: intr
+    period: '* * * * *'
+    type: system.cpu.intr
+  - name: cpuinfo
+    period: '* * * * *'
+    type: system.cpu.info
+  - name: switches
+    period: '* * * * *'
+    type: system.cpu.switches
+  - name: util
+    period: '* * * * *'
+    type: system.cpu.util
+  - name: localtime
+    period: '* * * * *'
+    type: system.localtime
+  - name: checkUbank
     period: '* * * * *'
     type: http.simple
     url: http://ubank.ru
-    redirects: 4
-  - name: base-check
-    period: '* * * * *'
-    command: uptime
-    type: system.uptime
-  - name: disk-root
-    period: '* * * * *'
-    command: uptime
-    type: system.hostname
-  - name: disk-usr
-    period: '* * * * *'
-    command: uptime
-    type: system.hostname
-  - name: disk-home
-    period: '* * * * *'
-    command: uptime
-    type: system.hostname
-  - name: process-java
-    period: '* * * * *'
-    command: uptime
-    type: system.hostname
+    redirects: 2
 
-
-triggers: 
+triggers:
   - name: hostname
-    checks: 
+    checks:
       - gethost
     description: тупо проверка имени
-    result: system.hostname equal limbo-air 
-  - name: process
-    check: http-process
-    description: Проверка процессинга по админке
-    result: status equal 5
-  - name: oracle
-    check: base-check
-    description: Проверка базы
-    result: return equal 1
-  - name: java
-    check: process-java
-    description: Проверяем что java работает
-    result: return equal 1
-  - name: disk
-    checks:
-      - disk-root
-      - disk-usr
-      - disk-home
-    description: Проверка свободного места
-    result: disk-home.free more 1000000 and disk-root.used less 100
-
+    result: system.hostname equal limbo-air

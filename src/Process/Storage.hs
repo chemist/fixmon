@@ -95,6 +95,7 @@ saveAll st = do
     unless (series == []) $ do
         r <- liftIO $ try $ postWith opts (influxUrl conf) (toJSON series)
         say $ show (r :: Either SomeException (Response ByteString))
+        say $ show series
         return ()
 
 

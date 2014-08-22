@@ -14,6 +14,7 @@ import           Data.Binary         (Binary, get, getWord8, put, putWord8)
 import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
 import           Data.Time
+import           System.Locale
 import           Data.Typeable       (Typeable, typeOf)
 
 data TypeError = TypeError String deriving (Show, Typeable)
@@ -116,7 +117,9 @@ instance A.ToJSON Any where
     toJSON (Any (Bool x)) = A.toJSON x
     toJSON (Any (Text x)) = A.toJSON x
     toJSON (Any (Double x)) = A.toJSON x
-    toJSON _ = undefined
+    toJSON (Any (UTC x)) = A.toJSON $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ" x
+    toJSON (AnyList x) = A.toJSON $ show x
+    toJSON x = error $ "ToJSON Any " ++ show x
 
 data TriggerRaw a where
   Int :: Int -> TriggerRaw Int
