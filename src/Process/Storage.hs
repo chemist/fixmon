@@ -17,6 +17,8 @@ import           Control.Distributed.Process.Platform                (Recipient 
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 import           Control.Monad
+import Control.Exception 
+import Data.ByteString.Lazy (ByteString)
 
 import           Control.Lens                                        hiding
                                                                       ((.=))
@@ -91,8 +93,8 @@ saveAll st = do
         conf = config st
         series = map toSeries (queue st)
     unless (series == []) $ do
-        r <- liftIO $ postWith opts (influxUrl conf) (toJSON series)
-        say $ show r
+        r <- liftIO $ try $ postWith opts (influxUrl conf) (toJSON series)
+        say $ show (r :: Either SomeException (Response ByteString))
         return ()
 
 
