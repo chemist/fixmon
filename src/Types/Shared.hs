@@ -104,6 +104,7 @@ instance Binary Dynamic where
       unpackDyn 0 = toDyn <$> (get :: Get Text)
       unpackDyn 1 = toDyn <$> (get :: Get Int)
       unpackDyn 2 = toDyn <$> (get :: Get Bool)
+      unpackDyn 3 = toDyn <$> (get :: Get Double)
       unpackDyn _ = undefined
 
 
