@@ -18,9 +18,9 @@ function (Settings) {
         influx: {
             default: true,
             type: 'influxdb',
-            url: 'http://chemist:8086/db/test',
-            username: 'guest',
-            password: 'guest',
+            url: 'http://localhost:8086/db/fixmon',
+            username: 'fixmon',
+            password: 'fixmon',
         }
     },
     /**
