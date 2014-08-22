@@ -47,18 +47,19 @@ taskmake (CheckHost (hid, cid, mt)) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
         trR <- liftIO $ eval Env dt (tresult trigger)
-        say $ "check result " ++ show dt
-        say $ "trigger result " ++ show trR
-    makeCheck (Just host) (Just check) (Just trigger) Nothing  = do
-        say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
+        return ()
+--        say $ "check result " ++ show dt
+--        say $ "trigger result " ++ show trR
+    makeCheck (Just host) (Just check) (Just trigger) Nothing  = return ()
+--        say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
-        say $ "check result " ++ show dt
-        say " trigger not defined"
-    makeCheck (Just host) (Just check) Nothing Nothing = do
-        say $ "check result unknown "
-        say " trigger not defined"
+--        say $ "check result " ++ show dt
+--        say " trigger not defined"
+    makeCheck (Just host) (Just check) Nothing Nothing = return ()
+--        say $ "check result unknown "
+--        say " trigger not defined"
     makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
 
 $(remotable ['taskmake])

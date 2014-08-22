@@ -91,9 +91,9 @@ saveAll st = do
         conf = config st
         series = map toSeries (queue st)
     unless (series == []) $ do
-        _ <- liftIO $ postWith opts (influxUrl conf) (toJSON series)
+        r <- liftIO $ postWith opts (influxUrl conf) (toJSON series)
+        say $ show r
         return ()
---        say $ show r
 
 
 saveToQueue :: Dispatcher ST
