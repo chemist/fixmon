@@ -11,14 +11,14 @@ where
 
 import           Control.Distributed.Process                         (Process,
                                                                       liftIO,
-                                                                      spawnLocal,
-                                                                      say)
+                                                                      say, spawnLocal)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
+import           Control.Exception
 import           Control.Monad
-import Control.Exception 
-import Data.ByteString.Lazy (ByteString)
+import           Data.ByteString.Lazy                                (ByteString)
+import           Data.Either
 
 import           Control.Lens                                        hiding
                                                                       ((.=))
@@ -93,9 +93,10 @@ saveAll st = do
         conf = config st
         series = map toSeries (queue st)
     unless (series == []) $ do
-        r <- liftIO $ try $ postWith opts (influxUrl conf) (toJSON series)
-        say $ show (r :: Either SomeException (Response ByteString))
-        say $ show series
+        r <- liftIO $ (try $ postWith opts (influxUrl conf) (toJSON series) :: IO (Either SomeException (Response ByteString)))
+        when (isLeft r) $ say $ show r
+        -- say $ show (r :: Either SomeException (Response ByteString))
+        -- say $ show series
         return ()
 
 

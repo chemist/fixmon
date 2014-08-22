@@ -21,6 +21,7 @@ function (Settings) {
             url: 'http://localhost:8086/db/fixmon',
             username: 'fixmon',
             password: 'fixmon',
+            grafanaDB: true
         }
     },
     /**
