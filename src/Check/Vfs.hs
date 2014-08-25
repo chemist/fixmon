@@ -19,10 +19,10 @@ data Vfs = Discovery
          deriving (Show)
 
 instance Checkable Vfs where
-    route Discovery             = singleton "vfs.dev.discovery" doDiscovery
-    route Inode                 = singleton "vfs.dev.inode"     doInode
-    route Size                  = singleton "vfs.dev.size"     doInode
-    route DevStat               = singleton "vfs.dev.stats"     doInode
+    route Discovery             = singleton "vfs.fs.discovery" doDiscovery
+    route Inode                 = singleton "vfs.fs.inode"     doInode
+    route Size                  = singleton "vfs.fs.size"     doInode
+    route DevStat               = singleton "vfs.fs.stats"     doInode
     route FileTime              = singleton "vfs.file.time"     doInode
     route FileSize              = singleton "vfs.file.size"     doInode
     route FileRegMatch          = singleton "vfs.file.regmatch"     doInode
@@ -31,10 +31,10 @@ instance Checkable Vfs where
     route FileExists            = singleton "vfs.file.exists"     doInode
     route FileContents          = singleton "vfs.file.contents"     doInode
 
-    routeCheck Discovery    = routeCheck'  Discovery    "vfs.dev.discovery"
-    routeCheck Inode        = routeCheck'  Inode        "vfs.dev.inode"
-    routeCheck Size         = routeCheck'  Size         "vfs.dev.size"
-    routeCheck DevStat      = routeCheck'  DevStat      "vfs.dev.stats"
+    routeCheck Discovery    = routeCheck'  Discovery    "vfs.fs.discovery"
+    routeCheck Inode        = routeCheck'  Inode        "vfs.fs.inode"
+    routeCheck Size         = routeCheck'  Size         "vfs.fs.size"
+    routeCheck DevStat      = routeCheck'  DevStat      "vfs.fs.stats"
     routeCheck FileTime     = routeCheck'  FileTime     "vfs.file.time"
     routeCheck FileSize     = routeCheck'  FileSize     "vfs.file.size"
     routeCheck FileRegMatch = routeCheck'  FileRegMatch "vfs.file.regmatch"
