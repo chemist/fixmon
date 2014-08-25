@@ -2,10 +2,10 @@ module Main where
 
 import           Process.Configurator
 import           Process.Cron
+import           Process.Storage
 import           Process.Tasker
 import           Process.Watcher
 import           Process.Web
-import           Process.Storage
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
@@ -14,8 +14,6 @@ import           Control.Distributed.Process.Platform.Supervisor
 import           Control.Monad.Reader                            (ask)
 import           Network.Transport                               (closeTransport)
 import           Network.Transport.TCP                           (createTransport, defaultTCPParameters)
-
-
 
 main :: IO ()
 main = do
@@ -27,7 +25,7 @@ main = do
               say "start web"
               liftIO $ web s
         cstart <-  mapM toChildStart [webProcess, configurator, defStorage, tasker, taskPool, cron, watcher]
-        let cspec = map child $ zip cstart ["web", "configurator", "storage", "tasker", "pool", "cron", "watcher"]
+        let cspec = zipWith (curry child) cstart ["web", "configurator", "storage", "tasker", "pool", "cron", "watcher"]
         superPid <-  super cspec
 --        c <- listChildren superPid
 --        say $ show c
