@@ -31,6 +31,7 @@ executable server
                        yaml , 
                        bytestring , 
                        conduit , 
+                       http-conduit,
                        transformers , 
                        binary , 
                        cereal , 
@@ -45,7 +46,6 @@ executable server
                        distributed-process-platform,
                        cron ,
                        lens == 4.3.*,
-                       wreq ,
                        wai,
                        warp,
                        wai-extra,
@@ -83,7 +83,8 @@ executable agent
                        cron ,
                        lens ,
                        scientific,
-                       wreq
+                       http-types,
+                       http-conduit
   hs-source-dirs:      src
   default-language:    Haskell2010
 

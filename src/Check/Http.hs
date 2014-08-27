@@ -9,8 +9,9 @@ import           Data.Map            (fromList, lookup, singleton)
 import           Data.Maybe          (fromMaybe)
 import           Data.Text           (Text, unpack)
 import           Network.URI
-import           Network.Wreq
+import           Network.HTTP.Conduit
 import           Prelude             hiding (lookup)
+import           Network.HTTP.Types.Status (statusCode)
 
 import           Types
 
@@ -58,7 +59,14 @@ doHttp (Check _ _ _ p) = do
         unpackRedirects :: Dynamic -> Int
         unpackRedirects x = fromDyn x (undefined :: Int)
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
-        opts = defaults & redirects .~ redirects'
-    resp <- getWith opts (unpack url )
-    return $ Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+    request' <-  parseUrl (unpack url)
+    let request = request' 
+            { method = "GET"
+            , checkStatus = \_ _ _ -> Nothing
+            , redirectCount = redirects'
+            }
+    resp <-  withManager $ \manager -> do
+        response <- http request manager
+        return $ responseStatus response
+    return $ Complex $ fromList [("status", Any $ Int $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
 

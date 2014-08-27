@@ -30,8 +30,11 @@ import           Data.Map                                            hiding
 import           Data.Maybe                                          (fromMaybe)
 import           Data.Monoid                                         ((<>))
 import           Data.Text                                           hiding
-                                                                      (map)
-import           Network.Wreq
+                                                                      (map, pack)
+
+import           Network.HTTP.Conduit hiding (host, port)
+import qualified Network.HTTP.Conduit as H
+import Data.ByteString.Char8 (pack)
 
 import           Types                                               hiding
                                                                       (config)
@@ -94,14 +97,19 @@ isLeft (Right _) = False
 
 saveAll :: ST -> Process ()
 saveAll st = do
-    let opts = defaults & param "u" .~ [pack . user $ defConf] & param "p" .~ [pack . pass $ defConf]
-        conf = config st
+    request' <-  liftIO $ parseUrl $ influxUrl $ config st
+    let conf = config st
+        addQueryStr = setQueryString [("u", Just (pack $ user conf)), ("p", Just (pack $ pass conf))] 
         series = map toSeries (queue st)
+        request = addQueryStr request'
+            { method = "POST"
+            , checkStatus = \_ _ _ -> Nothing
+            , requestBody = RequestBodyLBS $ encode series
+            }
     unless (series == []) $ do
-        r <- liftIO $ (try $ postWith opts (influxUrl conf) (toJSON series) :: IO (Either SomeException (Response ByteString)))
-        when (isLeft r) $ say $ show r
-        -- say $ show (r :: Either SomeException (Response ByteString))
-        -- say $ show series
+        r <- liftIO $ withManager $ \manager -> do
+            response <- http request manager
+            return $ responseStatus response
         return ()
 
 
