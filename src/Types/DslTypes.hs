@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE CPP #-}
 module Types.DslTypes
 ( TriggerRaw(..), Any(..), TypeError, ToAny(..), Tag )
 where
@@ -15,7 +16,12 @@ import           Data.Text           (Text, unpack)
 import           Data.Text.Binary    ()
 import           Data.Time
 import           System.Locale
+
+#if __GLASGOW_HASKELL__ < 780
+import           Data.Typeable       (Typeable, typeOf, Typeable1)
+#else
 import           Data.Typeable       (Typeable, typeOf)
+#endif
 
 data TypeError = TypeError String deriving (Show, Typeable)
 instance Exception TypeError
@@ -136,7 +142,12 @@ data TriggerRaw a where
   More :: TriggerRaw Text -> Any -> TriggerRaw Bool
   Equal :: TriggerRaw Text -> Any -> TriggerRaw Bool
 
+#if __GLASGOW_HASKELL__ < 780
+deriving instance Typeable1 TriggerRaw
+#else
 deriving instance Typeable TriggerRaw
+#endif
+
 deriving instance Eq (TriggerRaw a)
 
 instance Binary (TriggerRaw Int) where
