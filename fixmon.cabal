@@ -44,7 +44,7 @@ executable server
                        distributed-process,
                        distributed-process-platform,
                        cron ,
-                       lens ,
+                       lens == 4.3.*,
                        wreq ,
                        wai,
                        warp,
