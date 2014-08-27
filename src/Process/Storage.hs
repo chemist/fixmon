@@ -18,7 +18,8 @@ import           Control.Distributed.Process.Platform.Time
 import           Control.Exception
 import           Control.Monad
 import           Data.ByteString.Lazy                                (ByteString)
-import           Data.Either
+
+import           Data.Either hiding (isLeft)
 
 import           Control.Lens                                        hiding
                                                                       ((.=))
@@ -86,6 +87,10 @@ server = defaultProcess
         timeoutAfter_ defDelay (st { queue = [] })
     , infoHandlers = []
     }
+
+isLeft :: Either a b -> Bool
+isLeft (Left  _) = True
+isLeft (Right _) = False
 
 saveAll :: ST -> Process ()
 saveAll st = do
