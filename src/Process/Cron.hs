@@ -37,7 +37,7 @@ doCron :: Process ()
 doCron = cast (Registered "cron") MinuteMessage
 
 defDelay :: Delay
-defDelay = Delay $ seconds 3
+defDelay = Delay $ seconds 20
 
 type ST = Map Cron (Set CheckHost)
 
