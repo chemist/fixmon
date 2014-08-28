@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Types.Check where
 import           Data.Dynamic
-import           Data.Map          (Map, keys, singleton, (!))
-import qualified Data.Map          as M
+import           Data.Map.Strict          (Map, keys, singleton, (!))
+import qualified Data.Map.Strict          as M
 import           Data.Maybe
 import           Data.Monoid       ((<>))
 import           Data.Text         (Text, unpack)
@@ -42,7 +42,7 @@ class Checkable a where
 type Problem = String
 
 routeCheck' :: Checkable a => a -> Text -> RouteCheck
-routeCheck' x checkT = singleton checkT $ fun (describe x)
+routeCheck' x checkT = singleton checkT $! fun (describe x)
   where
     fun :: [(Field, Required, CheckValue, Description)] -> Check -> Either String Check
     fun desc check =

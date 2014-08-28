@@ -3,7 +3,10 @@ module Check.Vfs where
 
 import Types
 
-import           Data.Map              (fromList, singleton)
+import Data.Text (Text)
+import Control.Applicative
+import           Data.Attoparsec.Text
+import           Data.Map.Strict              (fromList, singleton)
 
 data Vfs = Discovery
          | Inode
@@ -56,3 +59,16 @@ instance Checkable Vfs where
 
 doDiscovery = undefined
 doInode = undefined
+
+
+-----------------------------------------------------------------------------------------
+
+data Disk = Disk
+    { device :: Text
+    , mountPoint :: Text
+    , fileSystem :: Text
+    , opts  :: Text
+    }
+
+disk :: Parser Disk
+disk = undefined

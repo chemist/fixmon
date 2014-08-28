@@ -6,7 +6,7 @@ import           Types
 import           Control.Applicative
 import           Control.Monad         (void)
 import           Data.Attoparsec.Text
-import           Data.Map              (fromList, singleton)
+import           Data.Map.Strict       (fromList, singleton)
 import           Data.Maybe
 import           Data.Monoid           ((<>))
 import           Data.Text             (Text, isPrefixOf, pack, toLower)

@@ -28,8 +28,8 @@ instance Exception TypeError
 
 
 data Any where
-  Any :: (Eq a, Ord a, Show a, Binary a) => TriggerRaw a -> Any
-  AnyList :: [Any] -> Any
+  Any :: (Eq a, Ord a, Show a, Binary a) => !(TriggerRaw a) -> Any
+  AnyList :: !([Any]) -> Any
 
 type Tag = Text
 
@@ -128,19 +128,19 @@ instance A.ToJSON Any where
     toJSON x = error $ "ToJSON Any " ++ show x
 
 data TriggerRaw a where
-  Int :: Int -> TriggerRaw Int
-  Bool :: Bool -> TriggerRaw Bool
-  Text :: Text -> TriggerRaw Text
-  UTC:: UTCTime -> TriggerRaw UTCTime
-  Double :: Double -> TriggerRaw Double
+  Int :: !Int -> TriggerRaw Int
+  Bool :: !Bool -> TriggerRaw Bool
+  Text :: !Text -> TriggerRaw Text
+  UTC:: !UTCTime -> TriggerRaw UTCTime
+  Double :: !Double -> TriggerRaw Double
 
-  Not :: TriggerRaw Bool -> TriggerRaw Bool
-  Or :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
-  And :: TriggerRaw Bool -> TriggerRaw Bool -> TriggerRaw Bool
+  Not :: !(TriggerRaw Bool) -> TriggerRaw Bool
+  Or :: !(TriggerRaw Bool) -> !(TriggerRaw Bool) -> TriggerRaw Bool
+  And :: !(TriggerRaw Bool) -> !(TriggerRaw Bool) -> TriggerRaw Bool
 
-  Less :: TriggerRaw Text -> Any -> TriggerRaw Bool
-  More :: TriggerRaw Text -> Any -> TriggerRaw Bool
-  Equal :: TriggerRaw Text -> Any -> TriggerRaw Bool
+  Less :: !(TriggerRaw Text) -> !Any -> TriggerRaw Bool
+  More :: !(TriggerRaw Text) -> !Any -> TriggerRaw Bool
+  Equal :: !(TriggerRaw Text) -> !Any -> TriggerRaw Bool
 
 #if __GLASGOW_HASKELL__ < 780
 deriving instance Typeable1 TriggerRaw

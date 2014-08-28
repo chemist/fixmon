@@ -7,7 +7,7 @@ where
 
 import           Types
 
-import           Data.Map             (lookup)
+import           Data.Map.Strict             (lookup)
 import           Data.Text            hiding (empty, filter, foldl1, head, map,
                                        takeWhile)
 -- import           Data.Text.Encoding   (encodeUtf8)

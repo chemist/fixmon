@@ -46,15 +46,15 @@ defDelay = Delay $ seconds 1
 type LocalHost = Hostname
 type Server = ByteString
 
-data ST = New LocalHost Server
-        | Founded LocalHost Server ProcessId
-        | RegisteredInServer LocalHost Server ProcessId MonitorRef
+data ST = New !LocalHost !Server
+        | Founded !LocalHost !Server !ProcessId
+        | RegisteredInServer !LocalHost !Server !ProcessId !MonitorRef
         deriving Show
 
 initServer :: InitHandler (LocalHost, Server) ST
 initServer (hostname, server) = do
     say "start register agent"
-    return $ InitOk (New hostname server) defDelay
+    return $! InitOk (New hostname server) defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess

@@ -25,7 +25,7 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 import           Control.Monad.State
 import           Data.Binary
-import           Data.Map                                            (Map,
+import           Data.Map.Strict                                     (Map,
                                                                       lookup)
 import           Data.Set                                            (Set)
 import           Data.Time                                           (UTCTime)

@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
+{-# LANGUAGE BangPatterns     #-}
 module Process.Tasker
 ( tasker
 , doTasks
@@ -46,7 +47,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
-        trR <- liftIO $ eval Env dt (tresult trigger)
+        !_ <- liftIO $! eval Env dt (tresult trigger)
         return ()
 --        say $ "check result " ++ show dt
 --        say $ "trigger result " ++ show trR
@@ -70,8 +71,8 @@ addTask x = do
 --    poolStatus <-  (stats . Registered) "pool"
 --    say $ show $ activeJobs <$> poolStatus
 --    say $ show $ queuedJobs <$> poolStatus
-    job <- return $ ($(mkClosure 'taskmake) (x :: CheckHost) )
-    _ <- spawnLocal $ void $ executeTask taskPoolName job
+    !job <- return $! ($(mkClosure 'taskmake) (x :: CheckHost) )
+    !_ <- spawnLocal $ void $! executeTask taskPoolName job
     return ()
 
 poolT :: Process (InitResult (BlockingQueue ()))
@@ -100,9 +101,9 @@ taskerName :: Recipient
 taskerName = Registered "tasker"
 
 data Tasker = Tasker
-  { hosts    :: Vector Hostname
-  , checks   :: Vector Check
-  , triggers :: Vector Trigger
+  { hosts    :: !(Vector Hostname)
+  , checks   :: !(Vector Check)
+  , triggers :: !(Vector Trigger)
   }
 
 initServer :: InitHandler () Tasker
@@ -112,7 +113,7 @@ initServer _ = do
     hm <- getHostMap
     cm <- getCheckMap
     tm <- getTriggerMap
-    return $ InitOk (Tasker hm cm tm) Infinity
+    return $! InitOk (Tasker hm cm tm) Infinity
 
 
 server :: ProcessDefinition Tasker
@@ -126,15 +127,13 @@ taskSet :: Dispatcher Tasker
 taskSet = handleCast fun
     where
     fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
-    fun st x = do
-        mapM_ addTask $ toList x
-        continue st
+    fun st x = (mapM_ addTask $ toList x) `seq` continue st
 
 updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do
     hm <- getHostMap
     cm <- getCheckMap
     tm <- getTriggerMap
-    continue (Tasker hm cm tm)
+    continue $! (Tasker hm cm tm)
 
 

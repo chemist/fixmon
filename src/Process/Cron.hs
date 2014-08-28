@@ -13,7 +13,7 @@ import           Control.Distributed.Process.Platform                (Recipient 
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 import           Data.Binary
-import           Data.Map                                            (Map,
+import           Data.Map.Strict                                     (Map,
                                                                       elems, filterWithKey)
 import           Data.Set                                            (Set,
                                                                       unions)
@@ -37,7 +37,7 @@ doCron :: Process ()
 doCron = cast (Registered "cron") MinuteMessage
 
 defDelay :: Delay
-defDelay = Delay $ seconds 20
+defDelay = Delay $ seconds 3
 
 type ST = Map Cron (Set CheckHost)
 
@@ -63,8 +63,8 @@ server = defaultProcess
 minuteTask :: Dispatcher ST
 minuteTask = handleCast $ \st MinuteMessage -> do
     now <- liftIO getCurrentTime
-    let tasks = filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
-    doTasks (unions . elems $ tasks)
+    let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
+    tasks `seq` doTasks tasks
     say "cron (Set CheckHost) -> tasker"
     -- say $ "do tasks " ++ (show . unions . elems $ tasks)
     continue st

@@ -20,7 +20,7 @@ import           Control.Monad.Trans.Class
 import           Data.Binary
 import qualified Data.Binary                                     as B
 import           Data.ByteString                                 (ByteString)
-import           Data.Map                                        (empty,
+import           Data.Map.Strict                                        (empty,
                                                                   fromList)
 import           Data.Typeable
 import           Network.Transport                               (EndPointAddress (..), closeTransport)

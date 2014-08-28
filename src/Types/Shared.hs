@@ -9,8 +9,8 @@ import           Types.Cron
 import           Types.DslTypes
 
 import           Control.Monad       (mzero)
-import           Data.Map            (Map)
-import qualified Data.Map            as M
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as M
 import           Data.Monoid         (Monoid, mappend, mempty, (<>))
 import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
@@ -37,9 +37,9 @@ instance IsString GroupName where
 
 data Group = Group
  { gname     :: !GroupName
- , ghosts    :: Set HostId
- , gtriggers :: Set TriggerId
- , gchecks   :: Set CheckId
+ , ghosts    :: !(Set HostId)
+ , gtriggers :: !(Set TriggerId)
+ , gchecks   :: !(Set CheckId)
  } deriving (Show, Generic)
 
 instance Binary Group
@@ -74,10 +74,10 @@ instance Show CheckName where
 instance IsString CheckName where
     fromString x = CheckName . pack $ x
 
-data Check = Check { cname   :: CheckName
-                   , cperiod :: Cron
-                   , ctype   :: Text
-                   , cparams :: Map Text Dynamic
+data Check = Check { cname   :: !CheckName
+                   , cperiod :: !Cron
+                   , ctype   :: !Text
+                   , cparams :: !(Map Text Dynamic)
                    } deriving (Show, Typeable, Generic, Eq, Ord)
 
 instance Eq Dynamic where
@@ -119,8 +119,8 @@ instance IsString TriggerName where
 data Trigger = Trigger
   { tname        :: !TriggerName
   , tdescription :: !Text
-  , tcheck       :: [CheckId]
-  , tresult      :: TriggerRaw Bool
+  , tcheck       :: !([CheckId])
+  , tresult      :: !(TriggerRaw Bool)
   } deriving (Show, Eq, Typeable, Generic)
 
 instance Ord Trigger where
@@ -147,16 +147,16 @@ instance Show TriggerFun where
      show _ = "trigger fun here"
 
 data StartOptions = StartOptions
-  { config :: FilePath
+  { config :: !FilePath
   } deriving (Show, Eq)
 
 data Monitoring = Monitoring
- { _periodMap :: Map Cron (Set CheckHost)
- , _hosts     :: Vector Hostname
- , _groups    :: Vector Group
- , _triggers  :: Vector Trigger
- , _checks    :: Vector Check
- , _status    :: Map TriggerHost Status
+ { _periodMap :: !(Map Cron (Set CheckHost))
+ , _hosts     :: !(Vector Hostname)
+ , _groups    :: !(Vector Group)
+ , _triggers  :: !(Vector Trigger)
+ , _checks    :: !(Vector Check)
+ , _status    :: !(Map TriggerHost Status)
  } deriving Show
 
 instance FromJSON Hostname where

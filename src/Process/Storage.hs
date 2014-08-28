@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 module Process.Storage
 ( storage
 , defStorage
@@ -25,7 +26,7 @@ import           Control.Lens                                        hiding
                                                                       ((.=))
 import           Data.Aeson
 import qualified Data.Aeson                                          as A
-import           Data.Map                                            hiding
+import           Data.Map.Strict                                     hiding
                                                                       (map)
 import           Data.Maybe                                          (fromMaybe)
 import           Data.Monoid                                         ((<>))
@@ -72,21 +73,21 @@ defDelay :: Delay
 defDelay = Delay $ seconds 1
 
 data ST = ST
-  { config :: InfluxConfig
-  , pool   :: String
-  , queue  :: [(Hostname, Complex)]
+  { config :: !InfluxConfig
+  , pool   :: !String
+  , queue  :: ![(Hostname, Complex)]
   }
 
 initServer :: InitHandler InfluxConfig ST
 initServer conf = do
     say "start storage"
-    return $ InitOk (ST conf "test" []) defDelay
+    return $! InitOk (ST conf "test" []) defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess
     { apiHandlers = [ saveToQueue ]
     , timeoutHandler = \st _ -> do
-        spawnLocal $ saveAll st
+        !_ <- spawnLocal $ saveAll st
         timeoutAfter_ defDelay (st { queue = [] })
     , infoHandlers = []
     }
@@ -101,20 +102,21 @@ saveAll st = do
     let conf = config st
         addQueryStr = setQueryString [("u", Just (pack $ user conf)), ("p", Just (pack $ pass conf))] 
         series = map toSeries (queue st)
-        request = addQueryStr request'
+        request'' = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
+        request = request'' `seq` addQueryStr request''
     unless (series == []) $ do
-        r <- liftIO $ withManager $ \manager -> do
-            response <- http request manager
-            return $ responseStatus response
+        !_ <- liftIO $ withManager $ \manager -> do
+            !response <- http request manager
+            return $! responseStatus response
         return ()
 
 
 saveToQueue :: Dispatcher ST
-saveToQueue = handleCast $ \st (message :: (Hostname, Complex)) -> continue $ st { queue = message : queue st }
+saveToQueue = handleCast $ \st (message :: (Hostname, Complex)) -> continue $! st { queue = message : queue st }
 
 
 --------------------------------------------------------------------------------------------------
@@ -147,8 +149,8 @@ influxUrl conf = let scheme = if ssl conf
                      port' = show . port $ conf
                  in scheme <> host conf <> ":" <> port' <> "/db/" <> db conf <> "/series"
 data Series = Series
-    { seriesName :: Text
-    , seriesData :: SeriesData
+    { seriesName :: !Text
+    , seriesData :: !SeriesData
     } deriving (Show, Eq)
 
 instance ToJSON Series where
@@ -161,8 +163,8 @@ instance ToJSON Series where
         SeriesData {..} = seriesData
 
 data SeriesData = SeriesData
-    { columns :: [Column]
-    , points  :: [[Any]]
+    { columns :: ![Column]
+    , points  :: ![[Any]]
     } deriving (Show, Eq)
 
 type Column = Text

@@ -5,7 +5,7 @@ import           Control.Applicative ((<$>))
 -- import           Control.Exception
 import           Control.Lens        ((&), (.~), (^.))
 import           Data.Dynamic
-import           Data.Map            (fromList, lookup, singleton)
+import           Data.Map.Strict     (fromList, lookup, singleton)
 import           Data.Maybe          (fromMaybe)
 import           Data.Text           (Text, unpack)
 import           Network.URI

@@ -37,7 +37,7 @@ watcher = serve () initServer server
 defDelay :: Delay
 defDelay = Delay $ seconds 20
 
-data AgentInfo = AgentInfo MonitorRef ProcessId ProcessId deriving (Show)
+data AgentInfo = AgentInfo !MonitorRef !ProcessId !ProcessId deriving (Show)
 
 instance Eq AgentInfo where
   AgentInfo x y _ == AgentInfo x1 y1 _ = x == x1 && y == y1
@@ -53,7 +53,7 @@ type ST = Bimap Hostname AgentInfo
 initServer :: InitHandler () ST
 initServer _ = do
     say "start watcher"
-    return $ InitOk empty defDelay
+    return $! InitOk empty defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess
@@ -66,10 +66,10 @@ registerNew :: Dispatcher ST
 registerNew = handleCall $ \st (Hostname t, p, c) -> do
     say "register new agent"
     m <- monitor p
-    maybe (reply False st) (\x -> reply True (insert (Hostname t) (AgentInfo x p c) st)) m
+    maybe (reply False $! st) (\x -> reply True $! (insert (Hostname t) (AgentInfo x p c) st)) m
 
 searchAgent :: Dispatcher ST
-searchAgent = handleCall $ \st (h :: Hostname) -> reply (getPid <$> (lookup h st :: Maybe AgentInfo)) st
+searchAgent = handleCall $! \st (h :: Hostname) -> reply (getPid <$> (lookup h st :: Maybe AgentInfo)) st
 
 catchDead :: DeferredDispatcher ST
 catchDead = handleInfo $ \st (ProcessMonitorNotification x y whyDead) -> do
@@ -77,6 +77,6 @@ catchDead = handleInfo $ \st (ProcessMonitorNotification x y whyDead) -> do
     say $ show whyDead
     let newSt = deleteR (AgentInfo x y undefined) st
     say $ show newSt
-    continue $ newSt
+    continue $! newSt
 
 

@@ -9,7 +9,7 @@ import           Control.Monad            (mzero)
 import           Data.Attoparsec.Text     (parseOnly)
 import           Data.Either              (lefts, rights)
 import           Data.HashMap.Strict      (toList)
-import qualified Data.Map                 as M
+import qualified Data.Map.Strict          as M
 import           Data.Monoid              ((<>))
 import           Data.Scientific
 import qualified Data.Set                 as S
@@ -39,31 +39,31 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
 import           Types.Cron               (Cron (..))
 
 data ITrigger = ITrigger
-  { itname        :: Text
-  , itdescription :: Text
-  , itcheck       :: [Text]
-  , itresult      :: Text
+  { itname        :: !Text
+  , itdescription :: !Text
+  , itcheck       :: ![Text]
+  , itresult      :: !Text
   } deriving Show
 
 data ICheck = ICheck
-  { icname   :: Text
-  , icperiod :: Text
-  , ictype   :: Text
-  , icparams :: [(Text, Value)]
+  { icname   :: !Text
+  , icperiod :: !Text
+  , ictype   :: !Text
+  , icparams :: ![(Text, Value)]
   } deriving Show
 
 data IGroup = IGroup
-  { igname     :: Text
-  , ighosts    :: [Hostname]
-  , igtriggers :: Maybe [Text]
-  , igchecks   :: Maybe [Text]
+  { igname     :: !Text
+  , ighosts    :: ![Hostname]
+  , igtriggers :: !(Maybe [Text])
+  , igchecks   :: !(Maybe [Text])
   } deriving Show
 
 data Config = Config
-  { chosts    :: Vector Hostname
-  , cgroups   :: Vector IGroup
-  , cchecks   :: Vector ICheck
-  , ctriggers :: Vector ITrigger
+  { chosts    :: !(Vector Hostname)
+  , cgroups   :: !(Vector IGroup)
+  , cchecks   :: !(Vector ICheck)
+  , ctriggers :: !(Vector ITrigger)
   } deriving Show
 
 instance FromJSON Config where

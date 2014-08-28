@@ -17,7 +17,7 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 
 import           Control.Exception
-import           Data.Map                                            (fromList,
+import           Data.Map.Strict                                     (fromList,
                                                                       lookup)
 import           Prelude                                             hiding
                                                                       (lookup)
@@ -49,7 +49,7 @@ server = defaultProcess
 taskDispatcher :: Dispatcher Route
 taskDispatcher = handleCall $ \st (check :: Check) -> do
     let ch = lookup (ctype check) st
-    maybe (notFound st) (doCheck' st check) ch
+    ch `seq` maybe (notFound st) (doCheck' st check) ch
     where
       notFound = reply (Complex $ fromList [("_status_", Any $ Bool False)])
       doCheck' st check doCheck'' = do
