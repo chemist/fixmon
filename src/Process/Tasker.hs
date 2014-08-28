@@ -127,7 +127,8 @@ taskSet :: Dispatcher Tasker
 taskSet = handleCast fun
     where
     fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
-    fun st x = (mapM_ addTask $ toList x) `seq` continue st
+    fun st x = let l = toList x
+               in l `seq` mapM_ addTask l  >> continue st
 
 updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do

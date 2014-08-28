@@ -14,17 +14,17 @@ import           System.Cron
 checkRoutes :: RouteCheck
 checkRoutes =
     let http   = map routeCheck [ HttpSimple ]
-        shell  = map routeCheck [ Shell ]
+--        shell  = map routeCheck [ Shell ]
         system' = map routeCheck [ HostName, Uptime, Boottime, CpuIntr, CpuLoad, CpuInfo, CpuSwitches, CpuUtil, LocalTime]
-        all' = system' ++ http ++ shell
+        all' = system' ++ http -- ++ shell
     in all' `seq` unions all'
 
 routes :: Route
 routes =
     let system' = map route [HostName, Uptime, Boottime, CpuIntr, CpuLoad, CpuInfo, CpuSwitches, CpuUtil, LocalTime]
         http = map route  [HttpSimple]
-        shell = map route [Shell]
-        all' = system' ++ http ++ shell
+ --       shell = map route [Shell]
+        all' = system' ++ http --  ++ shell
     in all' `seq` unions all'
 
 
