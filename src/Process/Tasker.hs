@@ -9,6 +9,7 @@ module Process.Tasker
 ) where
 
 
+import           Control.DeepSeq
 import           Control.Monad                                       (void)
 import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..),
@@ -110,9 +111,9 @@ initServer :: InitHandler () Tasker
 initServer _ = do
     say "start tasker"
     -- register "tasker" =<< getSelfPid
-    hm <- getHostMap
-    cm <- getCheckMap
-    tm <- getTriggerMap
+    !hm <- getHostMap
+    !cm <- getCheckMap
+    !tm <- getTriggerMap
     return $! InitOk (Tasker hm cm tm) Infinity
 
 
@@ -127,14 +128,14 @@ taskSet :: Dispatcher Tasker
 taskSet = handleCast fun
     where
     fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
-    fun st x = let l = toList x
-               in l `seq` mapM_ addTask l  >> continue st
+    fun st x = do !_ <- mapM_ (force addTask) (force $ toList x)  
+                  continue st
 
 updateConfig :: DeferredDispatcher Tasker
 updateConfig = handleInfo $ \_ Update  -> do
-    hm <- getHostMap
-    cm <- getCheckMap
-    tm <- getTriggerMap
+    !hm <- getHostMap
+    !cm <- getCheckMap
+    !tm <- getTriggerMap
     continue $! (Tasker hm cm tm)
 
 

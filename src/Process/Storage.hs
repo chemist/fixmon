@@ -87,7 +87,7 @@ server :: ProcessDefinition ST
 server = defaultProcess
     { apiHandlers = [ saveToQueue ]
     , timeoutHandler = \st _ -> do
-        !_ <- spawnLocal $ saveAll st
+        !_ <- spawnLocal $! saveAll st
         timeoutAfter_ defDelay (st { queue = [] })
     , infoHandlers = []
     }
@@ -107,10 +107,10 @@ saveAll st = do
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
-        request = request'' `seq` addQueryStr request''
+        request = addQueryStr request''
     unless (series == []) $ do
         !_ <- liftIO $ withManager $ \manager -> do
-            !response <- http request manager
+            !response <-  request `seq` http request manager
             return $! responseStatus response
         return ()
 

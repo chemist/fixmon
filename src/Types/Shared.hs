@@ -5,6 +5,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Types.Shared where
 
+import           Control.DeepSeq
 import           Types.Cron
 import           Types.DslTypes
 
@@ -26,11 +27,11 @@ import qualified Data.Vector         as V
 import           Data.Vector.Binary  ()
 import           GHC.Generics        (Generic)
 
-newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read)
-newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable)
+newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
+newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)
 
-newtype GroupId = GroupId Int deriving (Show, Eq, Ord, Binary)
-newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary)
+newtype GroupId = GroupId Int deriving (Show, Eq, Ord, Binary, NFData)
+newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary, NFData)
 
 instance IsString GroupName where
     fromString x = GroupName . pack $ x
@@ -64,8 +65,8 @@ instance IntId GroupId where
     unId (GroupId x) = x
     pId = GroupId
 
-newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
-newtype CheckHost = CheckHost (HostId, CheckId, Maybe TriggerId) deriving (Show, Eq, Ord, Binary, Typeable)
+newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
+newtype CheckHost = CheckHost (HostId, CheckId, Maybe TriggerId) deriving (Show, Eq, Ord, Binary, Typeable, NFData)
 newtype CheckName = CheckName Text deriving (Eq, Ord, Binary, Typeable)
 
 instance Show CheckName where
@@ -109,7 +110,7 @@ instance Binary Dynamic where
 
 
 instance Binary Check
-newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable)
+newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
 newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary, Typeable)
 
