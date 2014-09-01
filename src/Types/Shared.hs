@@ -129,15 +129,6 @@ instance Ord Trigger where
 
 instance Binary Trigger
 
-newtype Log = Log Text deriving (Show, Eq, Typeable)
-
-instance IsString Log where
-    fromString x = Log . pack $ x
-
-instance Monoid Log where
-    mempty = Log ""
-    Log x `mappend` Log y = Log $ x <> y
-
 newtype Status = Status { unStatus :: Bool } deriving (Show, Eq, Ord, Binary)
 
 newtype Complex = Complex (Map Text Any) deriving (Show, Eq, Binary, Typeable)
