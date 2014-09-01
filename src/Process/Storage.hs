@@ -90,6 +90,7 @@ server = defaultProcess
         !_ <- spawnLocal $! saveAll st
         timeoutAfter_ defDelay (st { queue = [] })
     , infoHandlers = []
+    , unhandledMessagePolicy = Log
     }
 
 isLeft :: Either a b -> Bool

@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Process.Watcher (watcher, registerAgent, lookupAgent) where
 
-import           Types
+import           Types 
 
 import           Control.Applicative                                 ((<$>))
 import           Control.Distributed.Process                         (Process,
@@ -59,6 +59,7 @@ server :: ProcessDefinition ST
 server = defaultProcess
     { apiHandlers = [ registerNew, searchAgent ]
     , infoHandlers = [catchDead]
+    , unhandledMessagePolicy = Log
     }
 
 

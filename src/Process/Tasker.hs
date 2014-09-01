@@ -122,6 +122,7 @@ server = defaultProcess
     { apiHandlers = [ taskSet
                     ]
     , infoHandlers = [updateConfig]
+    , unhandledMessagePolicy = Log
     }
 
 taskSet :: Dispatcher Tasker

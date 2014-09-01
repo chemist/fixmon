@@ -33,9 +33,6 @@ cron = serve () initServer server
 -- private
 --------------------------------------------------------------------------------------------------
 
-doCron :: Process ()
-doCron = cast (Registered "cron") MinuteMessage
-
 defDelay :: Delay
 defDelay = Delay $ seconds 5
 
@@ -53,21 +50,17 @@ initServer _ = do
 
 server :: ProcessDefinition ST
 server = defaultProcess
-    { apiHandlers = [ minuteTask ]
-    , timeoutHandler = \s _ -> do
-        doCron
-        timeoutAfter_ defDelay s
+    { apiHandlers = []
+    , timeoutHandler = \st _ -> do
+        now <- liftIO getCurrentTime
+        let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
+        tasks `seq` doTasks tasks
+        say "cron (Set CheckHost) -> tasker"
+        -- say $ "do tasks " ++ (show . unions . elems $ tasks)
+        timeoutAfter_ defDelay st
     , infoHandlers = [updateConfig]
+    , unhandledMessagePolicy = Log
     }
-
-minuteTask :: Dispatcher ST
-minuteTask = handleCast $ \st MinuteMessage -> do
-    now <- liftIO getCurrentTime
-    let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
-    tasks `seq` doTasks tasks
-    say "cron (Set CheckHost) -> tasker"
-    -- say $ "do tasks " ++ (show . unions . elems $ tasks)
-    continue st
 
 updateConfig :: DeferredDispatcher ST
 updateConfig = handleInfo $ \_ Update  -> getCronMap >>= continue

@@ -117,7 +117,7 @@ server = defaultProcess {
                   , lookupCronSet
                   ]
     , timeoutHandler = configuratorTimeoutHandler
-
+    , unhandledMessagePolicy = Log
     }
 
 cronMap :: Dispatcher ST

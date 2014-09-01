@@ -27,7 +27,7 @@ module Types
 , Status(..)
 , Monitoring(..)
 , Complex(..)
-, Log(..)
+-- , Log(..)
 , StartOptions(..)
 , IntId(..)
 , Tag

@@ -37,9 +37,6 @@ agent localHostname remoteAddress = serve (localHostname, remoteAddress) initSer
 -- private
 --------------------------------------------------------------------------------------------------
 
-tryFound :: Process ()
-tryFound = cast (Registered "agent") PingServer
-
 defDelay :: Delay
 defDelay = Delay $ seconds 1
 
@@ -58,16 +55,27 @@ initServer (hostname, server) = do
 
 server :: ProcessDefinition ST
 server = defaultProcess
-    { apiHandlers = [ foundServer ]
-    , timeoutHandler = \s _ -> do
-        tryFound
-        timeoutAfter_ defDelay s
+    { apiHandlers = []
+    , timeoutHandler = \st _ -> case st of
+             New l s -> do
+                whereisRemoteAsync (NodeId (EndPointAddress s)) "watcher"
+                say "try register"
+                timeoutAfter_ defDelay st
+             Founded l s pid -> do
+                 self <- getSelfPid
+                 checkerP <- resolve (Registered "checker")
+                 mm <- monitor pid
+                 case (checkerP, mm) of
+                      (Just cp, Just m) -> do
+                          r <- registerAgent pid (l, self, cp)
+                          if r
+                             then timeoutAfter_ defDelay (RegisteredInServer l s pid m)
+                             else timeoutAfter_ defDelay (Founded l s pid)
+                      _ -> timeoutAfter_ defDelay (Founded l s pid)
+             _ -> timeoutAfter_ defDelay st
     , infoHandlers = [catchRegister, catchDeadServer]
+    , unhandledMessagePolicy = Log
     }
-
-data PingServer = PingServer deriving (Typeable, Generic)
-instance Binary PingServer
-
 
 catchRegister :: DeferredDispatcher ST
 catchRegister = handleInfo $ \st (WhereIsReply _ m) ->
@@ -83,23 +91,4 @@ catchDeadServer = handleInfo $ \(RegisteredInServer l s p m) (x :: ProcessMonito
     say "Zed dead baby!!!"
     say $ show x
     continue $ New l s
-
-foundServer :: Dispatcher ST
-foundServer = handleCast $ \st PingServer -> case st of
-         New l s -> do
-            whereisRemoteAsync (NodeId (EndPointAddress s)) "watcher"
-            say "try register"
-            continue st
-         Founded l s pid -> do
-             self <- getSelfPid
-             checkerP <- resolve (Registered "checker")
-             mm <- monitor pid
-             case (checkerP, mm) of
-                  (Just cp, Just m) -> do
-                      r <- registerAgent pid (l, self, cp)
-                      if r
-                         then continue (RegisteredInServer l s pid m)
-                         else continue (Founded l s pid)
-                  _ -> continue (Founded l s pid)
-         _ -> continue st
 

@@ -7,7 +7,7 @@ where
 
 
 import           Checks
-import           Types
+import           Types hiding (Log)
 
 import           Control.Distributed.Process                         hiding
                                                                       (call,
@@ -39,6 +39,7 @@ server :: ProcessDefinition ()
 server = statelessProcess
     { apiHandlers = [ taskDispatcher ]
     , infoHandlers = []
+    , unhandledMessagePolicy = Log
     }
 
 taskDispatcher :: Dispatcher ()
