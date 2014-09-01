@@ -48,6 +48,7 @@ server = defaultProcess
 
 taskDispatcher :: Dispatcher Route
 taskDispatcher = handleCall $ \st (check :: Check) -> do
+    say $ show check
     let ch = lookup (ctype check) st
     ch `seq` maybe (notFound st) (doCheck' st check) ch
     where

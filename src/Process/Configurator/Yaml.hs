@@ -103,7 +103,9 @@ instance FromJSON ICheck where
         n <-  v .: "name"
         p <-  v .: "period"
         t <-  v .: "type"
-        return $ ICheck n p t (toList v)
+        return $ ICheck n p t (clean $ toList v)
+        where
+        clean = Prelude.filter (\(x,_) -> x /= "name" && x /= "period" && x /= "type")
     parseJSON _ = mzero
 
 instance FromJSON IGroup where

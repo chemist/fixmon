@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE OverloadedStrings         #-}
-module Main where
+module Agent (main) where
 
 import           Check.Http
 import           Check.System                                    ()

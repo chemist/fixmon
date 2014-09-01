@@ -1,4 +1,4 @@
-module Main where
+module Server (main) where
 
 import           Process.Configurator
 import           Process.Cron
