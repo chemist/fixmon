@@ -1,6 +1,6 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE BangPatterns     #-}
 module Process.Tasker
 ( tasker
 , doTasks
@@ -13,8 +13,7 @@ import           Control.DeepSeq
 import           Control.Monad                                       (void)
 import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..),
-                                                                      checkById, getCheckMap, getHostMap, getTriggerMap,
-                                                                      hostById, triggerById)
+                                                                      checkById, hostById, triggerById)
 import           Process.Configurator.Dsl                            (Env (..),
                                                                       eval)
 import           Process.Storage                                     (saveResult)
@@ -33,7 +32,6 @@ import           Control.Distributed.Process.Platform.Task           (BlockingQu
 import           Control.Distributed.Process.Platform.Time
 import           Data.Set                                            (Set,
                                                                       toList)
-import           Data.Vector                                         (Vector)
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -45,23 +43,16 @@ taskmake (CheckHost (hid, cid, mt)) = do
     mpid <- maybe (return Nothing) lookupAgent mhost
     makeCheck mhost mcheck mtrigger mpid
     where
+    makeCheck _ _ Nothing Nothing = return ()
+    makeCheck _ _ _ Nothing  = return ()
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
         !_ <- liftIO $! eval Env dt (tresult trigger)
         return ()
---        say $ "check result " ++ show dt
---        say $ "trigger result " ++ show trR
-    makeCheck (Just host) (Just check) (Just trigger) Nothing  = return ()
---        say $ "trigger result for " ++ show host ++ " check " ++ show (ctype check) ++ " unknown becouse agent not found"
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
---        say $ "check result " ++ show dt
---        say " trigger not defined"
-    makeCheck (Just host) (Just check) Nothing Nothing = return ()
---        say $ "check result unknown "
---        say " trigger not defined"
     makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
 
 $(remotable ['taskmake])
@@ -101,42 +92,39 @@ doTasks = cast taskerName
 taskerName :: Recipient
 taskerName = Registered "tasker"
 
+{--
 data Tasker = Tasker
   { hosts    :: !(Vector Hostname)
   , checks   :: !(Vector Check)
   , triggers :: !(Vector Trigger)
   }
+  --}
 
-initServer :: InitHandler () Tasker
+initServer :: InitHandler () ()
 initServer _ = do
     say "start tasker"
     -- register "tasker" =<< getSelfPid
-    !hm <- getHostMap
-    !cm <- getCheckMap
-    !tm <- getTriggerMap
-    return $! InitOk (Tasker hm cm tm) Infinity
+    return $! InitOk () Infinity
 
 
-server :: ProcessDefinition Tasker
-server = defaultProcess
+server :: ProcessDefinition ()
+server = statelessProcess
     { apiHandlers = [ taskSet
                     ]
     , infoHandlers = [updateConfig]
     , unhandledMessagePolicy = Log
     }
 
-taskSet :: Dispatcher Tasker
-taskSet = handleCast fun
+taskSet :: Dispatcher ()
+taskSet = handleCast_ fun
     where
-    fun :: Tasker -> Set CheckHost -> Process (ProcessAction Tasker)
-    fun st x = do !_ <- mapM_ (force addTask) (force $ toList x)  
-                  continue st
+    fun :: Set CheckHost -> () -> Process (ProcessAction ())
+    fun x _ = do 
+        mapM_ (force addTask) (force $ toList x)
+        continue_ ()
 
-updateConfig :: DeferredDispatcher Tasker
+updateConfig :: DeferredDispatcher ()
 updateConfig = handleInfo $ \_ Update  -> do
-    !hm <- getHostMap
-    !cm <- getCheckMap
-    !tm <- getTriggerMap
-    continue $! (Tasker hm cm tm)
+    continue $! ()
 
 

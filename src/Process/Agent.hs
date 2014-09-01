@@ -10,19 +10,13 @@ where
 
 import           Control.Distributed.Process                         hiding
                                                                       (monitor)
-import           Control.Distributed.Process.Node
 import           Control.Distributed.Process.Platform                (Recipient (..),
                                                                       monitor,
                                                                       resolve)
 import           Control.Distributed.Process.Platform.ManagedProcess
-import           Control.Distributed.Process.Platform.Supervisor
 import           Control.Distributed.Process.Platform.Time
-import           Data.Binary
 import           Data.ByteString                                     (ByteString)
-import           Data.Time.Clock
-import           Data.Typeable                                       (Typeable)
-import           GHC.Generics                                        (Generic)
-import           Network.Transport                                   (EndPointAddress (..), closeTransport)
+import           Network.Transport                                   (EndPointAddress (..))
 import           Process.Watcher                                     (registerAgent)
 import           Types
 
@@ -49,15 +43,15 @@ data ST = New !LocalHost !Server
         deriving Show
 
 initServer :: InitHandler (LocalHost, Server) ST
-initServer (hostname, server) = do
+initServer (hostname, server') = do
     say "start register agent"
-    return $! InitOk (New hostname server) defDelay
+    return $! InitOk (New hostname server') defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess
     { apiHandlers = []
     , timeoutHandler = \st _ -> case st of
-             New l s -> do
+             New _ s -> do
                 whereisRemoteAsync (NodeId (EndPointAddress s)) "watcher"
                 say "try register"
                 timeoutAfter_ defDelay st
@@ -87,7 +81,7 @@ catchRegister = handleInfo $ \st (WhereIsReply _ m) ->
        _     -> continue st
 
 catchDeadServer :: DeferredDispatcher ST
-catchDeadServer = handleInfo $ \(RegisteredInServer l s p m) (x :: ProcessMonitorNotification) -> do
+catchDeadServer = handleInfo $ \(RegisteredInServer l s _ _) (x :: ProcessMonitorNotification) -> do
     say "Zed dead baby!!!"
     say $ show x
     continue $ New l s

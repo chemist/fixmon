@@ -16,14 +16,7 @@ import           Control.Distributed.Process                         (Process,
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
-import           Control.Exception
 import           Control.Monad
-import           Data.ByteString.Lazy                                (ByteString)
-
-import           Data.Either hiding (isLeft)
-
-import           Control.Lens                                        hiding
-                                                                      ((.=))
 import           Data.Aeson
 import qualified Data.Aeson                                          as A
 import           Data.Map.Strict                                     hiding
@@ -34,7 +27,6 @@ import           Data.Text                                           hiding
                                                                       (map, pack)
 
 import           Network.HTTP.Conduit hiding (host, port)
-import qualified Network.HTTP.Conduit as H
 import Data.ByteString.Char8 (pack)
 
 import           Types                                               hiding
@@ -74,14 +66,13 @@ defDelay = Delay $ seconds 1
 
 data ST = ST
   { config :: !InfluxConfig
-  , pool   :: !String
   , queue  :: ![(Hostname, Complex)]
   }
 
 initServer :: InitHandler InfluxConfig ST
 initServer conf = do
     say "start storage"
-    return $! InitOk (ST conf "test" []) defDelay
+    return $! InitOk (ST conf []) defDelay
 
 server :: ProcessDefinition ST
 server = defaultProcess
@@ -92,10 +83,6 @@ server = defaultProcess
     , infoHandlers = []
     , unhandledMessagePolicy = Log
     }
-
-isLeft :: Either a b -> Bool
-isLeft (Left  _) = True
-isLeft (Right _) = False
 
 saveAll :: ST -> Process ()
 saveAll st = do

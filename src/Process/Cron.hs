@@ -1,27 +1,21 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
 module Process.Cron (cron) where
 
-import           Process.Configurator                                (Update (..), getCronMap)
-import           Process.Tasker                                      (doTasks)
-import           Types
 
 import           Control.Distributed.Process                         (Process,
                                                                       liftIO,
                                                                       say)
-import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
-import           Data.Binary
 import           Data.Map.Strict                                     (Map,
                                                                       elems, filterWithKey)
 import           Data.Set                                            (Set,
                                                                       unions)
 import           Data.Time.Clock
-import           Data.Typeable                                       (Typeable)
-import           GHC.Generics                                        (Generic)
 import           System.Cron
 
+import           Process.Configurator                                (Update (..), getCronMap)
+import           Process.Tasker                                      (doTasks)
+import           Types
 ---------------------------------------------------------------------------------------------------
 -- public
 ---------------------------------------------------------------------------------------------------
@@ -37,9 +31,6 @@ defDelay :: Delay
 defDelay = Delay $ seconds 5
 
 type ST = Map Cron (Set CheckHost)
-
-data MinuteMessage = MinuteMessage deriving (Typeable, Generic)
-instance Binary MinuteMessage
 
 initServer :: InitHandler () ST
 initServer _ = do

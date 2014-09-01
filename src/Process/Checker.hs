@@ -7,7 +7,7 @@ where
 
 
 import           Checks
-import           Types hiding (Log)
+import           Types
 
 import           Control.Distributed.Process                         hiding
                                                                       (call,

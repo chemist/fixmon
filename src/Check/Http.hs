@@ -2,8 +2,6 @@
 module Check.Http where
 
 import           Control.Applicative ((<$>))
--- import           Control.Exception
-import           Control.Lens        ((&), (.~), (^.))
 import           Data.Dynamic
 import           Data.Map.Strict     (fromList, lookup, singleton)
 import           Data.Maybe          (fromMaybe)
