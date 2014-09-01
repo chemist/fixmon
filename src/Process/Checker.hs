@@ -27,7 +27,7 @@ import           Prelude                                             hiding
 ---------------------------------------------------------------------------------------------------
 
 checker :: Process ()
-checker = serve () initServer server
+checker = serve () (statelessInit Infinity)  server
 
 doTask :: Recipient -> Check -> Process Complex
 doTask = call
@@ -35,27 +35,22 @@ doTask = call
 --------------------------------------------------------------------------------------------------
 -- private
 --------------------------------------------------------------------------------------------------
-initServer :: InitHandler () Route
-initServer _ = do
-    say "start agent checker"
-    return $ InitOk routes Infinity
-
-server :: ProcessDefinition Route
-server = defaultProcess
+server :: ProcessDefinition ()
+server = statelessProcess
     { apiHandlers = [ taskDispatcher ]
     , infoHandlers = []
     }
 
-taskDispatcher :: Dispatcher Route
-taskDispatcher = handleCall $ \st (check :: Check) -> do
+taskDispatcher :: Dispatcher ()
+taskDispatcher = handleCall_ $ \(check :: Check) -> do
     say $ show check
-    let ch = lookup (ctype check) st
-    ch `seq` maybe (notFound st) (doCheck' st check) ch
+    let ch = lookup (ctype check) routes
+    maybe notFound (doCheck' check) ch
     where
-      notFound = reply (Complex $ fromList [("_status_", Any $ Bool False)])
-      doCheck' st check doCheck'' = do
+      notFound = return (Complex $ fromList [("_status_", Any $ Bool False)])
+      doCheck' check doCheck'' = do
           checkResult <- liftIO $ try $ doCheck'' check
           case checkResult of
-               Left (_ :: SomeException) -> reply (Complex $ fromList [("_status_", Any $ Bool False)]) st
-               Right r -> reply r st
+               Left (_ :: SomeException) -> return (Complex $ fromList [("_status_", Any $ Bool False)]) 
+               Right r -> return r 
 

@@ -64,7 +64,7 @@ server = defaultProcess
 
 registerNew :: Dispatcher ST
 registerNew = handleCall $ \st (Hostname t, p, c) -> do
-    say "register new agent"
+    say $ "register new agent" ++ show t
     m <- monitor p
     maybe (reply False $! st) (\x -> reply True $! (insert (Hostname t) (AgentInfo x p c) st)) m
 

@@ -56,6 +56,50 @@ executable server
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
 
+executable memory
+  main-is:             Memory.hs            
+  other-extensions:    OverloadedStrings, GeneralizedNewtypeDeriving, GADTs, ExistentialQuantification, FlexibleInstances, DeriveGeneric, DeriveDataTypeable, RankNTypes, ScopedTypeVariables, MultiParamTypeClasses, FlexibleContexts, QuasiQuotes, StandaloneDeriving
+  build-depends:       base >=4.6 && <5, 
+                       containers , 
+                       aeson , 
+                       bimap , 
+                       old-locale , 
+                       text , 
+                       text-binary,
+                       mtl , 
+                       vector , 
+                       vector-binary-instances ,
+                       network , 
+                       network-conduit , 
+                       yaml , 
+                       bytestring , 
+                       conduit , 
+                       http-conduit,
+                       transformers , 
+                       binary , 
+                       cereal , 
+                       attoparsec , 
+                       time ,
+                       directory , 
+                       http-types , 
+                       unordered-containers , 
+                       network-transport,
+                       network-transport-tcp,
+                       distributed-process,
+                       distributed-process-platform,
+                       cron ,
+                       lens == 4.3.*,
+                       wai,
+                       warp,
+                       wai-extra,
+                       scientific,
+                       deepseq,
+                       wai-middleware-static
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
+
+
 test-suite tests
   type:           exitcode-stdio-1.0
   main-is:             Test.hs
