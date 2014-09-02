@@ -81,6 +81,7 @@ instance Ord Dyn where
     compare _ _ = error "bad compare"
 
 instance Binary Dyn where
+    {-# INLINE put #-}
     put (Dyn x)
         | D.dynTypeRep x == typeInt    = putWord8 0 >> put (D.fromDyn x (undefined :: Int))
         | D.dynTypeRep x == typeDouble = putWord8 1 >> put (D.fromDyn x (undefined :: Double))
@@ -89,6 +90,7 @@ instance Binary Dyn where
         | D.dynTypeRep x == typeTime   = putWord8 4 >> put (D.fromDyn x (undefined :: UTCTime))
         | otherwise = error "bad binary"
     put (DynList x) = putWord8 5 >> put x
+    {-# INLINE get #-}
     get = fun =<< getWord8 
         where
         fun :: Word8 -> Get Dyn
