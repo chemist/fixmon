@@ -17,8 +17,7 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 
 import           Control.Exception
-import           Data.Map.Strict                                     (fromList,
-                                                                      lookup)
+import           Data.Map.Strict                                     (lookup)
 import           Prelude                                             hiding
                                                                       (lookup)
 
@@ -48,10 +47,10 @@ taskDispatcher = handleCall_ $ \(check :: Check) -> do
     let ch = lookup (ctype check) routes
     maybe notFound (doCheck' check) ch
     where
-      notFound = return (Complex $ fromList [("_status_", Any $ Bool False)])
+      notFound = return $ Complex [("_status_", toDyn False)]
       doCheck' check doCheck'' = do
           checkResult <- liftIO $ try $ doCheck'' check
           case checkResult of
-               Left (_ :: SomeException) -> return (Complex $ fromList [("_status_", Any $ Bool False)]) 
-               Right r -> return r 
+               Left (_ :: SomeException) -> return $ Complex [("_status_", toDyn False)]
+               Right r -> return r
 

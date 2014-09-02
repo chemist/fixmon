@@ -22,7 +22,6 @@ import           Data.Yaml                (FromJSON (..), Value (..),
 import           System.Cron.Parser       (cronSchedule)
 
 import           Checks
-import           Data.Dynamic
 import           Prelude                  hiding (concat, filter, foldl, foldl1,
                                            map)
 import qualified Prelude
@@ -30,12 +29,11 @@ import qualified Prelude
 import           Process.Configurator.Dsl (parseTrigger)
 import           Types                    (Check (..), CheckHost (..), CheckId,
                                            CheckName (..), Group (..),
-                                           GroupName (..), HostId,
-                                           Hostname (..), IntId (..),
+                                           GroupName (..), HostId, Dyn(..), toDyn,
+                                           Hostname (..), IntId (..), Counter(..),
                                            Monitoring (..), Status (..),
                                            Trigger (..), TriggerHost (..),
-                                           TriggerId, TriggerName (..),
-                                           TriggerRaw (..))
+                                           TriggerId, TriggerName (..), ETrigger)
 import           Types.Cron               (Cron (..))
 
 data ITrigger = ITrigger
@@ -127,24 +125,24 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
                        Just f -> f Check { cname = CheckName (icname ch)
                                         , cperiod = Cron cr
                                         , ctype = ictype ch
-                                        , cparams = convertCparams $ M.fromList $ icparams ch
+                                        , cparams = convertCparams $ icparams ch
                                         }
 
-convertCparams :: M.Map Text Value -> M.Map Text Dynamic
-convertCparams = M.map convertValueToDyn
+convertCparams :: [(Text, Value)] -> [(Counter, Dyn)]
+convertCparams = Prelude.map convertValueToDyn
   where
-  convertValueToDyn (String x) = toDyn x
-  convertValueToDyn (Data.Yaml.Bool x) = toDyn x
-  convertValueToDyn (Number x) =
+  convertValueToDyn (c, (String x)) = (Counter c, toDyn x)
+  convertValueToDyn (c, (Data.Yaml.Bool x)) = (Counter c, toDyn x)
+  convertValueToDyn (c, (Number x)) =
     case floatingOrInteger x of
-         Left y -> toDyn (y :: Double)
-         Right y -> toDyn (y :: Int)
+         Left y -> (Counter c, toDyn (y :: Double))
+         Right y -> (Counter c, toDyn (y :: Int))
   convertValueToDyn _ = error "convertValueToDyn, bad type"
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
 transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))
   where
-  makeTrigger :: TriggerRaw Bool -> Either String Trigger
+  makeTrigger :: ETrigger -> Either String Trigger
   makeTrigger tr' = do
       ch <- checks''
       return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch tr'

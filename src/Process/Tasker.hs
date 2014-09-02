@@ -14,8 +14,6 @@ import           Control.Monad                                       (void)
 import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..),
                                                                       checkById, hostById, triggerById)
-import           Process.Configurator.Dsl                            (Env (..),
-                                                                      eval)
 import           Process.Storage                                     (saveResult)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
@@ -48,7 +46,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
-        !_ <- liftIO $! eval Env dt (tresult trigger)
+--         !_ <- liftIO $! eval Env dt (tresult trigger)
         return ()
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check

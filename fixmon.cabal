@@ -20,6 +20,7 @@ executable server
                        containers , 
                        aeson , 
                        bimap , 
+                       lists , 
                        old-locale , 
                        text , 
                        text-binary,

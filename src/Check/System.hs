@@ -6,7 +6,7 @@ import           Types
 import           Control.Applicative
 import           Control.Monad         (void)
 import           Data.Attoparsec.Text
-import           Data.Map.Strict       (fromList, singleton)
+import           Data.Map.Strict       (singleton)
 import           Data.Maybe
 import           Data.Monoid           ((<>))
 import           Data.Text             (Text, isPrefixOf, pack, toLower)
@@ -67,11 +67,11 @@ instance Checkable System where
 doHostname :: Check -> IO Complex
 doHostname (Check _ _ "system.hostname" _) = do
     h <- getHostName
-    return $ Complex $ fromList [ ( "system.hostname", toAny (pack h)) ]
+    return $ Complex [ ( "system.hostname", toDyn (pack h)) ]
 doHostname _ = undefined
 
 testHostname :: Check
-testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" (fromList [])
+testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" []
 --------------------------------------------------------------------------------------
 
 -- "3023604.41 11190196.16\n"
@@ -81,9 +81,9 @@ uptimeFile = "/proc/uptime"
 doUptime :: Check -> IO Complex
 doUptime (Check _ _ "system.uptime" _) = do
     Done _ (up, idle') <-  parse parserUptime <$> readFile uptimeFile
-    return $ Complex $ fromList [ ("system.uptime.up", toAny (timeToPeriod up))
-                                , ("system.uptime.idle", toAny (timeToPeriod idle'))
-                                ]
+    return $ Complex [ ("system.uptime.up", toDyn (timeToPeriod up))
+                     , ("system.uptime.idle", toDyn (timeToPeriod idle'))
+                     ]
     where
        timeToPeriod x =
          let i = truncate x
@@ -100,7 +100,7 @@ parserUptime :: Parser (Double, Double)
 parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
 
 testUptime :: Check
-testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" (fromList [])
+testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" []
 --------------------------------------------------------------------------------------
 statFile :: String
 statFile = "/proc/stat"
@@ -110,12 +110,12 @@ doBootTime :: Check -> IO Complex
 doBootTime (Check _ _ "system.boottime" _) = do
     Right t <- parseOnly parserBootTime <$> readFile statFile
     let bootTime = posixSecondsToUTCTime t
-    return $ Complex $ fromList [ ("system.boottime", toAny bootTime )]
+    return $ Complex [ ("system.boottime", toDyn bootTime )]
 doBootTime _ = undefined
 
 -- | test check for doBootTime
 testBootTime :: Check
-testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" (fromList [])
+testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" []
 
 -- | helpers for doBootTime
 parserBootTime :: Parser NominalDiffTime
@@ -124,7 +124,7 @@ parserBootTime = head . catMaybes <$> bootOrEmpty `sepBy` endOfLine
 --------------------------------------------------------------------------------------
 
 testIntr :: Check
-testIntr = Check (CheckName "interrupts") (Cron daily) "system.cpu.intr" (fromList [])
+testIntr = Check (CheckName "interrupts") (Cron daily) "system.cpu.intr" []
 
 intrFile :: String
 intrFile = "/proc/interrupts"
@@ -133,21 +133,21 @@ intrFile = "/proc/interrupts"
 doCpuIntr :: Check -> IO Complex
 doCpuIntr (Check _ _ "system.cpu.intr" _) = do
     Right c <- parseOnly parserInterrupts <$> readFile intrFile
-    return $ Complex $ fromList $ mkInterrupts c
+    return $ Complex $ mkInterrupts c
 doCpuIntr _ = undefined
 
-mkInterrupts :: (Cpu, [Interrupt]) -> [(Tag, Any)]
+mkInterrupts :: (Cpu, [Interrupt]) -> [(Counter, Dyn)]
 mkInterrupts (Cpu c, i) =
   let lowerCpuN = map toLower c
-      addAll xs = ("allcpu", sum $ map snd xs) : xs
-      mk (Interrupt t ns _) =  map (\(x, y) -> ("system.cpu.intr." <> x <> "." <> toLower t, toAny y)) $ addAll $ zip lowerCpuN ns
+      addAll xs = map (\(x, y) -> (Counter x, y)) $ ("allcpu", sum $ map snd xs) : xs
+      mk (Interrupt t ns _) =  map (\(Counter x, y) -> (Counter ("system.cpu.intr." <> x <> "." <> toLower t), toDyn y)) $ addAll $ zip lowerCpuN ns
       intr = concatMap mk i
   in interrupsAll intr : intr
 
-interrupsAll :: [(Tag, Any)] -> (Tag, Any)
+interrupsAll :: [(Counter, Dyn)] -> (Counter, Dyn)
 interrupsAll xs =
-  let onlyAll = filter (\(x, _) -> isPrefixOf "system.cpu.intr.allcpu" x) xs
-  in ("system.cpu.intr.total", Any . Int . sum $ map (\(_, x) -> unAny x)  onlyAll)
+  let onlyAll = filter (\(Counter x, _) -> isPrefixOf "system.cpu.intr.allcpu" x) xs
+  in ("system.cpu.intr.total", toDyn $ (sum $ map (\(_, x) -> fromDyn x)  onlyAll :: Int))
 
 spaces :: Parser ()
 spaces = skipWhile isHorizontalSpace
@@ -172,15 +172,15 @@ loadavgFile :: String
 loadavgFile = "/proc/loadavg"
 
 testLoadAvg :: Check
-testLoadAvg = Check (CheckName "loadavg") (Cron daily) "system.cpu.loadavg" (fromList [])
+testLoadAvg = Check (CheckName "loadavg") (Cron daily) "system.cpu.loadavg" []
 
 doCpuLoad :: Check -> IO Complex
 doCpuLoad (Check _ _ "system.cpu.loadavg" _) = do
     Right (x,y,z) <- parseOnly parserLoadavg <$> readFile loadavgFile
-    return . Complex . fromList $ [ ("system.cpu.loadavg.la1", toAny x)
-                                  , ("system.cpu.loadavg.la5", toAny y)
-                                  , ("system.cpu.loadavg.la15", toAny z)
-                                  ]
+    return $ Complex [ ("system.cpu.loadavg.la1", toDyn x)
+                     , ("system.cpu.loadavg.la5", toDyn y)
+                     , ("system.cpu.loadavg.la15", toDyn z)
+                     ]
 doCpuLoad _ = undefined
 
 parserLoadavg :: Parser (Double, Double, Double)
@@ -192,35 +192,35 @@ cpuFile :: String
 cpuFile = "/proc/cpuinfo"
 
 testCpuInfo :: Check
-testCpuInfo = Check (CheckName "cpuinfo") (Cron daily) "system.cpu.info" (fromList [])
+testCpuInfo = Check (CheckName "cpuinfo") (Cron daily) "system.cpu.info" []
 
 doCpuInfo :: Check -> IO Complex
 doCpuInfo (Check _ _ "system.cpu.info" _) = do
     Right cpus <- parseOnly (parserCpuInf `sepBy` char '\n') <$> readFile cpuFile
     let one = head cpus
-    return . Complex . fromList $ [ ("system.cpu.info.num", toAny $ length cpus)
-                                  , ("system.cpu.info.vendor_id", toAny $ vendorId  one)
-                                  , ("system.cpu.info.cpu_family", toAny $ cpuFamily one)
-                                  , ("system.cpu.info.model", toAny $ model one)
-                                  , ("system.cpu.info.model_name", toAny $ modelName one)
-                                  , ("system.cpu.info.stepping", toAny $ stepping one)
-                                  , ("system.cpu.info.microcode", toAny $ microcode one)
-                                  , ("system.cpu.info.cpuMHz", toAny $ cpuMHz one)
-                                  , ("system.cpu.info.cacheSize", toAny $ cacheSize one)
-                                  , ("system.cpu.info.siblings", toAny $ siblings one)
-                                  , ("system.cpu.info.apicid", toAny $ apicid one)
-                                  , ("system.cpu.info.initial_apicid", toAny $ initialApicid one)
-                                  , ("system.cpu.info.fpu", toAny $ fpu one)
-                                  , ("system.cpu.info.fpu_exception", toAny $ fpuException one)
-                                  , ("system.cpu.info.cpuid_level", toAny $ cpuidLevel one)
-                                  , ("system.cpu.info.wp", toAny $ wp one)
-                                  , ("system.cpu.info.flags", AnyList $ map toAny (filter (/= "") $ flags one))
-                                  , ("system.cpu.info.bogomips", toAny $ bogomips one)
-                                  , ("system.cpu.info.cl_flush_size", toAny $ clflushSize one)
-                                  , ("system.cpu.info.cache_alignment", toAny $ cacheAlignment one)
-                                  , ("system.cpu.info.address_sizes", toAny $ addressSizes one)
-                                  , ("system.cpu.info.power_management", toAny $ powerManagement one)
-                                  ]
+    return $ Complex [ ("system.cpu.info.num", toDyn $ length cpus)
+                     , ("system.cpu.info.vendor_id", toDyn $ vendorId  one)
+                     , ("system.cpu.info.cpu_family", toDyn $ cpuFamily one)
+                     , ("system.cpu.info.model", toDyn $ model one)
+                     , ("system.cpu.info.model_name", toDyn $ modelName one)
+                     , ("system.cpu.info.stepping", toDyn $ stepping one)
+                     , ("system.cpu.info.microcode", toDyn $ microcode one)
+                     , ("system.cpu.info.cpuMHz", toDyn $ cpuMHz one)
+                     , ("system.cpu.info.cacheSize", toDyn $ cacheSize one)
+                     , ("system.cpu.info.siblings", toDyn $ siblings one)
+                     , ("system.cpu.info.apicid", toDyn $ apicid one)
+                     , ("system.cpu.info.initial_apicid", toDyn $ initialApicid one)
+                     , ("system.cpu.info.fpu", toDyn $ fpu one)
+                     , ("system.cpu.info.fpu_exception", toDyn $ fpuException one)
+                     , ("system.cpu.info.cpuid_level", toDyn $ cpuidLevel one)
+                     , ("system.cpu.info.wp", toDyn $ wp one)
+                     , ("system.cpu.info.flags", DynList $ map toDyn (filter (/= "") $ flags one))
+                     , ("system.cpu.info.bogomips", toDyn $ bogomips one)
+                     , ("system.cpu.info.cl_flush_size", toDyn $ clflushSize one)
+                     , ("system.cpu.info.cache_alignment", toDyn $ cacheAlignment one)
+                     , ("system.cpu.info.address_sizes", toDyn $ addressSizes one)
+                     , ("system.cpu.info.power_management", toDyn $ powerManagement one)
+                     ]
 doCpuInfo _ = undefined
 
 data CpuInf = CpuInf
@@ -286,12 +286,12 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
 --------------------------------------------------------------------------------------
 
 testCpuSwitches :: Check
-testCpuSwitches = Check (CheckName "switches") (Cron daily) "system.cpu.switches" (fromList [])
+testCpuSwitches = Check (CheckName "switches") (Cron daily) "system.cpu.switches" []
 
 doCpuSwitches :: Check -> IO Complex
 doCpuSwitches (Check _ _ "system.cpu.switches" _) = do
     Right s <- parseOnly parserCpuSwitches <$> readFile statFile
-    return . Complex . fromList $ [ ("system.cpu.switches", toAny s)]
+    return . Complex $ [ ("system.cpu.switches", toDyn s)]
 doCpuSwitches _ = undefined
 
 parserCpuSwitches :: Parser Int
@@ -300,13 +300,13 @@ parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
 --------------------------------------------------------------------------------------
 
 testCpuUtil :: Check
-testCpuUtil = Check (CheckName "cpuutil") (Cron daily) "system.cpu.util" (fromList [])
+testCpuUtil = Check (CheckName "cpuutil") (Cron daily) "system.cpu.util" []
 
 doCpuUtil :: Check -> IO Complex
 doCpuUtil (Check _ _ "system.cpu.util" _) = do
   Right c <- parseOnly parserProcStatCpu <$> readFile statFile
   let ifJust (_, Nothing) = Nothing
-      ifJust (name, Just i) = Just (name, toAny i)
+      ifJust (name, Just i) = Just (name, toDyn i)
       ifJustAll = map ifJust [ ("system.cpu.util.iowait", iowait c)
                              , ("system.cpu.util.irq", irq c)
                              , ("system.cpu.util.softirq", softirq c)
@@ -314,11 +314,11 @@ doCpuUtil (Check _ _ "system.cpu.util" _) = do
                              , ("system.cpu.util.guest", guest c)
                              , ("system.cpu.util.guestnice", guestNice c)
                              ]
-  return . Complex . fromList $ [ ( "system.cpu.util.user", toAny $ user c)
-                                , ( "system.cpu.util.nice", toAny $ nice c)
-                                , ( "system.cpu.util.system", toAny $ system c)
-                                , ( "system.cpu.util.idle"  , toAny $ idle c)
-                                ] ++ catMaybes ifJustAll
+  return . Complex $ [ ( "system.cpu.util.user", toDyn $ user c)
+                     , ( "system.cpu.util.nice", toDyn $ nice c)
+                     , ( "system.cpu.util.system", toDyn $ system c)
+                     , ( "system.cpu.util.idle"  , toDyn $ idle c)
+                     ] ++ catMaybes ifJustAll
 doCpuUtil _ = undefined
 
 parserProcStatCpu :: Parser CpuUtilStat
@@ -366,7 +366,7 @@ doLocalTime :: Check -> IO Complex
 doLocalTime (Check _ _ "system.localtime" _) = do
     t <- getCurrentTime
     z <- timeZoneName <$> getCurrentTimeZone
-    return . Complex . fromList $ [ ("system.localtime.utc", toAny t)
-                                  , ("system.localtime.zone", toAny . pack $ z)
-                                  ]
+    return . Complex $ [ ("system.localtime.utc", toDyn t)
+                       , ("system.localtime.zone", toDyn . pack $ z)
+                       ]
 doLocalTime _ = undefined

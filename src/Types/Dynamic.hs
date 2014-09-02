@@ -1,27 +1,70 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-module Dynamic where
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+module Types.Dynamic
+( dynTypeRep
+, Dyn(..)
+, Dynamic(..)
+, Env(..)
+, Database(..)
+, runTrigger
+, Counter(..)
+, ETrigger
+, Complex(..)
+, iType
+, tType
+, bType
+, dType
+, timeType
+, Exp(..)
+)
+where
 
-import qualified Data.Dynamic as D
-import Data.Binary
-import Data.Typeable
-import GHC.Generics
-import Control.Applicative ((<$>), (<*>))
-import Data.Text (Text, empty)
-import Data.Text.Binary ()
-import Data.Time
-import Control.Monad.Reader
-import Control.Monad.Except
+import           Control.Applicative  ((<$>), (<*>))
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Data.Aeson
+import           Data.Binary
+import qualified Data.Dynamic         as D
+import           Data.Monoid          (Monoid)
+import           Data.String
+import           Data.Text            (Text)
+import           Data.Text            (pack)
+import           Data.Text.Binary     ()
+import           Data.Time
+import           Data.Typeable
+import           GHC.Generics
 
 
 data Dyn = Dyn D.Dynamic
-         | DynList [Dyn]
+         | DynList [Dyn] deriving (Typeable)
+
+dynTypeRep :: Dyn -> TypeRep
+dynTypeRep (Dyn x) = D.dynTypeRep x
+dynTypeRep (DynList x) = typeOf x
+
+iType, tType, bType, dType, timeType :: TypeRep
+iType = typeOf (1 :: Int)
+tType = typeOf ("":: Text)
+bType = typeOf (True :: Bool)
+dType = typeOf (1 :: Double)
+timeType = typeOf (undefined :: UTCTime)
+
+instance ToJSON Dyn where
+    toJSON (Dyn x)
+        | D.dynTypeRep x == iType = toJSON $ D.fromDyn x (undefined :: Int)
+        | D.dynTypeRep x == dType = toJSON $ D.fromDyn x (undefined :: Double)
+        | D.dynTypeRep x == bType = toJSON $ D.fromDyn x (undefined :: Bool)
+        | D.dynTypeRep x == tType = toJSON $ D.fromDyn x (undefined :: Text)
+        | D.dynTypeRep x == timeType = toJSON $ D.fromDyn x (undefined :: UTCTime)
+        | otherwise = error "bad toJson"
+    toJSON (DynList x) = toJSON x
 
 class (Typeable a, Show a, Eq a, Ord a) => Dynamic a where
     toDyn :: a -> Dyn
@@ -49,33 +92,33 @@ instance Dynamic UTCTime where
     fromDyn _ = undefined
 
 instance Show Dyn where
-    show (Dyn x)  
-        | D.dynTypeRep x == typeInt    = show $ D.fromDyn x (undefined :: Int)
-        | D.dynTypeRep x == typeDouble = show $ D.fromDyn x (undefined :: Double)
-        | D.dynTypeRep x == typeText   = show $ D.fromDyn x (undefined :: Text)
-        | D.dynTypeRep x == typeBool   = show $ D.fromDyn x (undefined :: Bool)
-        | D.dynTypeRep x == typeTime   = show $ D.fromDyn x (undefined :: UTCTime)
+    show (Dyn x)
+        | D.dynTypeRep x == iType    = show $ D.fromDyn x (undefined :: Int)
+        | D.dynTypeRep x == dType = show $ D.fromDyn x (undefined :: Double)
+        | D.dynTypeRep x == tType   = show $ D.fromDyn x (undefined :: Text)
+        | D.dynTypeRep x == bType   = show $ D.fromDyn x (undefined :: Bool)
+        | D.dynTypeRep x == timeType   = show $ D.fromDyn x (undefined :: UTCTime)
         | otherwise = error "bad show"
     show (DynList x) = "DynList " ++ show x
 
 instance Eq Dyn where
     xx@(Dyn x) == yy@(Dyn y)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeInt    = (fromDyn xx :: Int) == (fromDyn yy :: Int)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeText   = (fromDyn xx :: Text) == (fromDyn yy :: Text)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeDouble = (fromDyn xx :: Double) == (fromDyn yy :: Double)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeBool   = (fromDyn xx :: Bool) == (fromDyn yy :: Bool)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeTime   = (fromDyn xx :: UTCTime) == (fromDyn yy :: UTCTime)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == iType      = (fromDyn xx :: Int) == (fromDyn yy :: Int)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == tType      = (fromDyn xx :: Text) == (fromDyn yy :: Text)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == dType      = (fromDyn xx :: Double) == (fromDyn yy :: Double)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == bType      = (fromDyn xx :: Bool) == (fromDyn yy :: Bool)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == timeType   = (fromDyn xx :: UTCTime) == (fromDyn yy :: UTCTime)
           | otherwise = error "bad eq"
     DynList x == DynList y = x == y
     _ == _ = error "bad eq"
 
 instance Ord Dyn where
     compare xx@(Dyn x) yy@(Dyn y)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeInt = compare (fromDyn xx :: Int) (fromDyn yy :: Int)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeText = compare (fromDyn xx :: Text) (fromDyn yy :: Text)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeDouble = compare (fromDyn xx :: Double) (fromDyn yy :: Double)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeBool = compare (fromDyn xx :: Bool) (fromDyn yy :: Bool)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == typeTime = compare (fromDyn xx :: UTCTime) (fromDyn yy :: UTCTime)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == iType    = compare (fromDyn xx :: Int) (fromDyn yy :: Int)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == tType    = compare (fromDyn xx :: Text) (fromDyn yy :: Text)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == dType    = compare (fromDyn xx :: Double) (fromDyn yy :: Double)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == bType    = compare (fromDyn xx :: Bool) (fromDyn yy :: Bool)
+          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == timeType = compare (fromDyn xx :: UTCTime) (fromDyn yy :: UTCTime)
           | otherwise = error "bad compare"
     compare (DynList x) (DynList y) = compare x y
     compare _ _ = error "bad compare"
@@ -83,15 +126,15 @@ instance Ord Dyn where
 instance Binary Dyn where
     {-# INLINE put #-}
     put (Dyn x)
-        | D.dynTypeRep x == typeInt    = putWord8 0 >> put (D.fromDyn x (undefined :: Int))
-        | D.dynTypeRep x == typeDouble = putWord8 1 >> put (D.fromDyn x (undefined :: Double))
-        | D.dynTypeRep x == typeBool   = putWord8 2 >> put (D.fromDyn x (undefined :: Bool))
-        | D.dynTypeRep x == typeText   = putWord8 3 >> put (D.fromDyn x (undefined :: Text))
-        | D.dynTypeRep x == typeTime   = putWord8 4 >> put (D.fromDyn x (undefined :: UTCTime))
+        | D.dynTypeRep x == iType      = putWord8 0 >> put (D.fromDyn x (undefined :: Int))
+        | D.dynTypeRep x == dType      = putWord8 1 >> put (D.fromDyn x (undefined :: Double))
+        | D.dynTypeRep x == bType      = putWord8 2 >> put (D.fromDyn x (undefined :: Bool))
+        | D.dynTypeRep x == tType      = putWord8 3 >> put (D.fromDyn x (undefined :: Text))
+        | D.dynTypeRep x == timeType   = putWord8 4 >> put (D.fromDyn x (undefined :: UTCTime))
         | otherwise = error "bad binary"
     put (DynList x) = putWord8 5 >> put x
     {-# INLINE get #-}
-    get = fun =<< getWord8 
+    get = fun =<< getWord8
         where
         fun :: Word8 -> Get Dyn
         fun 0 = toDyn <$> (get :: Get Int)
@@ -101,13 +144,6 @@ instance Binary Dyn where
         fun 4 = toDyn <$> (get :: Get UTCTime)
         fun 5 = DynList <$> (get :: Get [Dyn])
         fun _ = error "bad binary"
-
-typeInt, typeDouble, typeText, typeBool, typeTime :: TypeRep
-typeInt = typeOf (1 :: Int)
-typeDouble = typeOf (1 :: Double)
-typeText = typeOf ( empty :: Text)
-typeBool = typeOf ( True :: Bool)
-typeTime = typeOf ( undefined :: UTCTime)
 
 data Period = Sec Int
             | Count Int
@@ -128,9 +164,30 @@ data Exp a where
   And :: Exp Bool -> Exp Bool -> Exp Bool
   Less :: Exp Dyn -> Exp Dyn -> Exp Bool
   More :: Exp Dyn -> Exp Dyn -> Exp Bool
-  Equal :: Exp Dyn -> Exp Dyn -> Exp Bool 
+  Equal :: Exp Dyn -> Exp Dyn -> Exp Bool
   Change :: Counter -> Exp Bool                -- system.hostname#change
   NoData :: Counter -> Period -> Exp Bool          -- http.simple.status#nodata(300)
+
+instance Show (Exp a) where
+    show (EnvVal x) = "EnvVal " ++ show x
+    show (Val x) = "Val " ++ show x
+    show (Last x y) = "Last " ++ show x ++ " " ++ show y
+    show (Avg x y) = "Avg " ++ show x ++ " " ++ show y
+    show (Prev x) = "Prev " ++ show x
+    show (Min x y) = "Min " ++ show x ++ " " ++ show y
+    show (Max x y) = "Max " ++ show x ++ " " ++ show y
+    show (Not x) = "Not " ++ show x
+    show (Or x y) = "Or " ++ show x ++ " " ++ show y
+    show (And x y) = "And " ++ show x ++ " " ++ show y
+    show (Less x y) = "Less " ++ show x ++ " " ++ show y
+    show (More x y) = "More " ++ show x ++ " " ++ show y
+    show (Equal x y) = "Equal " ++ show x ++ " " ++ show y
+    show (Change x) = "Change " ++ show x
+    show (NoData x y) = "NoData " ++ show x ++ " " ++ show y
+
+instance Eq (Exp a) where
+    x == y = show x == show y
+
 
 instance Binary (Exp Dyn) where
     {-# INLINE put #-}
@@ -144,11 +201,11 @@ instance Binary (Exp Dyn) where
     {-# INLINE get #-}
     get = getWord8 >>= getExp
         where
-            getExp 0  = EnvVal <$> get 
-            getExp 1  = Val    <$> get 
+            getExp 0  = EnvVal <$> get
+            getExp 1  = Val    <$> get
             getExp 9  = Last   <$> get <*> get
             getExp 10 = Avg    <$> get <*> get
-            getExp 11 = Prev   <$> get 
+            getExp 11 = Prev   <$> get
             getExp 12 = Min    <$> get <*> get
             getExp 13 = Max    <$> get <*> get
             getExp _  = error "bad binary"
@@ -177,7 +234,14 @@ instance Binary (Exp Bool) where
             getExp _  = error "bad binary"
 
 
-newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic)
+newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
+
+instance IsString Counter where
+    fromString x = Counter $ pack x
+
+instance ToJSON Counter where
+   toJSON (Counter x) = toJSON x
+
 newtype Table = Table Text deriving (Eq, Show, Ord, Typeable, Generic)
 newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic)
 
@@ -188,7 +252,7 @@ instance Binary Complex
 data Fun = ChangeFun Counter
          | LastFun Counter Period
          | AvgFun Counter Period
-         | PrevFun Counter 
+         | PrevFun Counter
          | MinFun Counter Period
          | MaxFun Counter Period
          | NoDataFun Counter Period
@@ -196,9 +260,9 @@ data Fun = ChangeFun Counter
 
 instance Binary Fun
 
-data Env = Env 
+data Env = Env
   { lastComplex :: Complex
-  , getValue :: Fun -> IO Dyn
+  , getValue    :: Fun -> IO Dyn
   }
 
 class Database db where
@@ -214,7 +278,7 @@ eval env e = runExceptT (runReaderT (evalExp e) env)
 
 evalExp :: Exp Bool -> Eval Bool
 evalExp (Equal x y) = do
-    a <- evalVal x 
+    a <- evalVal x
     b <- evalVal y
     return $ a == b
 evalExp (More x y) = do
@@ -238,7 +302,7 @@ evalExp (Change c) = do
 evalExp (Not e) = not <$> evalExp e
 evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
 evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
-    
+
 
 evalVal :: Exp Dyn -> Eval Dyn
 evalVal (Val x) = return x
@@ -247,7 +311,7 @@ evalVal (EnvVal x) = do
     case lookup x complex of
          Nothing -> error "bad counter"
          Just r -> return r
-evalVal (Last c i) 
+evalVal (Last c i)
     | i == (Count 0) = do
         Complex complex <- lastComplex <$> ask
         case lookup c complex of

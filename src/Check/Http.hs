@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Check.Http where
 
-import           Control.Applicative ((<$>))
-import           Data.Dynamic
-import           Data.Map.Strict     (fromList, lookup, singleton)
-import           Data.Maybe          (fromMaybe)
-import           Data.Text           (Text, unpack)
-import           Network.URI
+import           Control.Applicative       ((<$>))
+import           Data.Map.Strict           (singleton)
+import           Data.Maybe                (fromMaybe)
+import           Data.Text                 (unpack)
 import           Network.HTTP.Conduit
-import           Prelude             hiding (lookup)
 import           Network.HTTP.Types.Status (statusCode)
+import           Network.URI
+import           Prelude
 
 import           Types
 
@@ -30,35 +29,35 @@ instance Checkable Http where
     route HttpSimple = singleton "http.simple" doHttp
     routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
 
-checkAgent :: Dynamic -> Either String Dynamic
+checkAgent :: Dyn -> Either String Dyn
 checkAgent x
-    | dynTypeRep x == textType = Right x
+    | dynTypeRep x == tType = Right x
     | otherwise = Left "bad agent type, must be text"
 
-checkRedirects :: Dynamic -> Either String Dynamic
+checkRedirects :: Dyn -> Either String Dyn
 checkRedirects x
-    | dynTypeRep x == intType = Right x
+    | dynTypeRep x == iType = Right x
     | otherwise = Left "bad redirects type, must be int"
 
-checkUrl :: Dynamic -> Either String Dynamic
+checkUrl :: Dyn -> Either String Dyn
 checkUrl x
-    | dynTypeRep x == textType = checkUrl' x
+    | dynTypeRep x == tType = checkUrl' x
     | otherwise = Left "bad url type, must be text"
 
-checkUrl' :: Dynamic -> Either String Dynamic
-checkUrl' x = let url = fromDyn x (undefined :: Text)
+checkUrl' :: Dyn -> Either String Dyn
+checkUrl' x = let url = fromDyn x
               in if isAbsoluteURI (unpack url)
                     then Right x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
 doHttp :: Check -> IO Complex
 doHttp (Check _ _ _ p) = do
-    let Just url = flip fromDyn (undefined :: Text) <$> lookup "url" p
-        unpackRedirects :: Dynamic -> Int
-        unpackRedirects x = fromDyn x (undefined :: Int)
+    let Just url = fromDyn <$> lookup "url" p
+        unpackRedirects :: Dyn -> Int
+        unpackRedirects x = fromDyn x
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
     request' <-  parseUrl (unpack url)
-    let request = request' 
+    let request = request'
             { method = "GET"
             , checkStatus = \_ _ _ -> Nothing
             , redirectCount = redirects'
@@ -66,5 +65,5 @@ doHttp (Check _ _ _ p) = do
     resp <-  withManager $ \manager -> do
         response <- http request manager
         return $ responseStatus response
-    return $ Complex $ fromList [("status", Any $ Int $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+    return $ Complex [("status", toDyn $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
 

@@ -1,16 +1,16 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Types.Check where
-import           Data.Dynamic
-import           Data.Map.Strict          (Map, keys, singleton, (!))
-import qualified Data.Map.Strict          as M
+import           Data.Map.Strict          (Map, keys, singleton)
 import           Data.Maybe
 import           Data.Monoid       ((<>))
-import           Data.Text         (Text, unpack)
+import           Data.Text         (Text)
 import           Data.Yaml.Builder
 import           Prelude           hiding (lookup, putStr)
+import Data.Lists
 
-import           Types.Shared      (Check (..), Complex (..))
+import           Types.Shared      (Check (..))
+import           Types.Dynamic     (Complex(..), Dyn(..), Counter(..))
 
 type Route = Map Text (Check -> IO Complex)
 
@@ -27,13 +27,12 @@ describeCheck (Check _ _ t _) = do
 
 type Description = Text
 type Name = Text
-type Field = Text
 type Required = Bool
-type CheckValue = Dynamic -> Either String Dynamic
+type CheckValue = Dyn -> Either String Dyn 
 
 class Checkable a where
     route :: a -> Route
-    describe :: a -> [(Field, Required, CheckValue, Description)]
+    describe :: a -> [(Counter, Required, CheckValue, Description)]
     routeCheck :: a -> RouteCheck
 
     example :: [a] -> YamlBuilder
@@ -44,18 +43,18 @@ type Problem = String
 routeCheck' :: Checkable a => a -> Text -> RouteCheck
 routeCheck' x checkT = singleton checkT $! fun (describe x)
   where
-    fun :: [(Field, Required, CheckValue, Description)] -> Check -> Either String Check
+    fun :: [(Counter, Required, CheckValue, Description)] -> Check -> Either String Check
     fun desc check =
       let params = cparams check
           checking = map tryCheck desc
           eitherToMaybeProblem (Left y) = Just y
           eitherToMaybeProblem (Right _) = Nothing
-          tryCheck :: (Field, Required, CheckValue, Description) -> Maybe Problem
+          tryCheck :: (Counter, Required, CheckValue, Description) -> Maybe Problem
           tryCheck (field, isMustBe, cv, _) =
-              case (M.member field params, isMustBe)  of
-                   (True, True) -> eitherToMaybeProblem $ cv (params ! field)
-                   (True, False) -> eitherToMaybeProblem $ cv (params ! field)
-                   (False, True) -> Just $ "field not found " <> unpack field
+              case (hasKeyAL field params, isMustBe)  of
+                   (True, True) -> eitherToMaybeProblem $ cv (fromJust $ lookup field params)
+                   (True, False) -> eitherToMaybeProblem $ cv (fromJust $ lookup field params)
+                   (False, True) -> Just $ "field not found " <> show field
                    (False, False) -> Nothing
           result :: [Maybe Problem] -> Either String Check
           result r = case catMaybes r of
@@ -65,11 +64,14 @@ routeCheck' x checkT = singleton checkT $! fun (describe x)
 
 example' :: Checkable a => a -> YamlBuilder
 example' a = let m = describe a
-                 def = [("name", string "must be"), ("period", string "must be, in cron format")]
-                 ty = [("type", string $ head $ keys $ route a)]
+                 def = [(Counter "name", string "must be"), (Counter "period", string "must be, in cron format")]
+                 ty = [(Counter "type", string $ head $ keys $ route a)]
                  nds = def <> ty <> map fun m
                  fun (t, b, _, d) = if b
                                     then (t, string $ "must be: " <> d)
                                     else (t, string $ "can be: " <> d)
-             in mapping nds
+             in mapping $ map (\(x, y) -> (unCounter x, y)) nds
+
+unCounter :: Counter -> Text
+unCounter (Counter x) = x
 

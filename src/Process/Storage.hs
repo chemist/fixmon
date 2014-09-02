@@ -1,7 +1,7 @@
+{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE BangPatterns #-}
 module Process.Storage
 ( storage
 , defStorage
@@ -19,15 +19,16 @@ import           Control.Distributed.Process.Platform.Time
 import           Control.Monad
 import           Data.Aeson
 import qualified Data.Aeson                                          as A
-import           Data.Map.Strict                                     hiding
-                                                                      (map)
 import           Data.Maybe                                          (fromMaybe)
 import           Data.Monoid                                         ((<>))
 import           Data.Text                                           hiding
-                                                                      (map, pack)
+                                                                      (map,
+                                                                      pack)
 
-import           Network.HTTP.Conduit hiding (host, port)
-import Data.ByteString.Char8 (pack)
+import           Data.ByteString.Char8                               (pack)
+import           Network.HTTP.Conduit                                hiding
+                                                                      (host,
+                                                                      port)
 
 import           Types                                               hiding
                                                                       (config)
@@ -88,7 +89,7 @@ saveAll :: ST -> Process ()
 saveAll st = do
     request' <-  liftIO $ parseUrl $ influxUrl $ config st
     let conf = config st
-        addQueryStr = setQueryString [("u", Just (pack $ user conf)), ("p", Just (pack $ pass conf))] 
+        addQueryStr = setQueryString [("u", Just (pack $ user conf)), ("p", Just (pack $ pass conf))]
         series = map toSeries (queue st)
         request'' = request'
             { method = "POST"
@@ -152,13 +153,13 @@ instance ToJSON Series where
 
 data SeriesData = SeriesData
     { columns :: ![Column]
-    , points  :: ![[Any]]
+    , points  :: ![[Dyn]]
     } deriving (Show, Eq)
 
-type Column = Text
+type Column = Counter
 
 complexToSeriesData :: Complex -> SeriesData
-complexToSeriesData (Complex x) = let (c', p') = unzip  $ toList x
+complexToSeriesData (Complex x) = let (c', p') = unzip x
                                   in SeriesData c' [p']
 
 toSeries :: (Hostname, Complex) -> Series
