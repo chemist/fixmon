@@ -68,7 +68,7 @@ doHostname :: Check -> IO Complex
 doHostname (Check _ _ "system.hostname" _) = do
     h <- getHostName
     return $ Complex [ ( "system.hostname", toDyn (pack h)) ]
-doHostname _ = undefined
+doHostname _ = error "system check"
 
 testHostname :: Check
 testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" []
@@ -94,7 +94,7 @@ doUptime (Check _ _ "system.uptime" _) = do
              showH = if hours /= 0 then pack (show hours) <> " hours " else ""
              showM = if mins /= 0 then pack (show mins) <> " minunes" else ""
          in "up " <> showD <> showH <> showM
-doUptime _ = undefined
+doUptime _ = error "system check"
 
 parserUptime :: Parser (Double, Double)
 parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
@@ -111,7 +111,7 @@ doBootTime (Check _ _ "system.boottime" _) = do
     Right t <- parseOnly parserBootTime <$> readFile statFile
     let bootTime = posixSecondsToUTCTime t
     return $ Complex [ ("system.boottime", toDyn bootTime )]
-doBootTime _ = undefined
+doBootTime _ = error "system check"
 
 -- | test check for doBootTime
 testBootTime :: Check
@@ -134,7 +134,7 @@ doCpuIntr :: Check -> IO Complex
 doCpuIntr (Check _ _ "system.cpu.intr" _) = do
     Right c <- parseOnly parserInterrupts <$> readFile intrFile
     return $ Complex $ mkInterrupts c
-doCpuIntr _ = undefined
+doCpuIntr _ = error "system check"
 
 mkInterrupts :: (Cpu, [Interrupt]) -> [(Counter, Dyn)]
 mkInterrupts (Cpu c, i) =
@@ -181,7 +181,7 @@ doCpuLoad (Check _ _ "system.cpu.loadavg" _) = do
                      , ("system.cpu.loadavg.la5", toDyn y)
                      , ("system.cpu.loadavg.la15", toDyn z)
                      ]
-doCpuLoad _ = undefined
+doCpuLoad _ = error "system check"
 
 parserLoadavg :: Parser (Double, Double, Double)
 parserLoadavg = (,,) <$> rational <* space <*> rational <* space <*> rational
@@ -221,7 +221,7 @@ doCpuInfo (Check _ _ "system.cpu.info" _) = do
                      , ("system.cpu.info.address_sizes", toDyn $ addressSizes one)
                      , ("system.cpu.info.power_management", toDyn $ powerManagement one)
                      ]
-doCpuInfo _ = undefined
+doCpuInfo _ = error "system check"
 
 data CpuInf = CpuInf
   { processor       :: {-# UNPACK #-} !Int
@@ -292,7 +292,7 @@ doCpuSwitches :: Check -> IO Complex
 doCpuSwitches (Check _ _ "system.cpu.switches" _) = do
     Right s <- parseOnly parserCpuSwitches <$> readFile statFile
     return . Complex $ [ ("system.cpu.switches", toDyn s)]
-doCpuSwitches _ = undefined
+doCpuSwitches _ = error "system check"
 
 parserCpuSwitches :: Parser Int
 parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
@@ -319,7 +319,7 @@ doCpuUtil (Check _ _ "system.cpu.util" _) = do
                      , ( "system.cpu.util.system", toDyn $ system c)
                      , ( "system.cpu.util.idle"  , toDyn $ idle c)
                      ] ++ catMaybes ifJustAll
-doCpuUtil _ = undefined
+doCpuUtil _ = error "system check"
 
 parserProcStatCpu :: Parser CpuUtilStat
 parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
@@ -369,4 +369,4 @@ doLocalTime (Check _ _ "system.localtime" _) = do
     return . Complex $ [ ("system.localtime.utc", toDyn t)
                        , ("system.localtime.zone", toDyn . pack $ z)
                        ]
-doLocalTime _ = undefined
+doLocalTime _ = error "system check"

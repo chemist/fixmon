@@ -17,8 +17,8 @@ data Http = HttpSimple deriving Show
 data Shell = Shell deriving Show
 
 instance Checkable Shell where
-    describe Shell = undefined
-    route Shell = singleton "cmd.run" undefined
+    describe Shell = error "http check"
+    route Shell = singleton "cmd.run" (error "http check")
     routeCheck Shell = routeCheck' Shell "cmd.run"
 
 instance Checkable Http where

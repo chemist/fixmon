@@ -76,7 +76,7 @@ catchDead :: DeferredDispatcher ST
 catchDead = handleInfo $ \st (ProcessMonitorNotification x y whyDead) -> do
     say "catch dead"
     say $ show whyDead
-    let newSt = deleteR (AgentInfo x y undefined) st
+    let newSt = deleteR (AgentInfo x y (error "catch Dead")) st
     say $ show newSt
     continue $! newSt
 

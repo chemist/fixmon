@@ -50,19 +50,19 @@ dynTypeRep (Dyn x) = D.dynTypeRep x
 dynTypeRep (DynList x) = typeOf x
 
 iType, tType, bType, dType, timeType :: TypeRep
-iType = typeOf (1 :: Int)
-tType = typeOf ("":: Text)
-bType = typeOf (True :: Bool)
-dType = typeOf (1 :: Double)
-timeType = typeOf (undefined :: UTCTime)
+iType = typeOf (error "" :: Int)
+tType = typeOf (error "":: Text)
+bType = typeOf (error "" :: Bool)
+dType = typeOf (error "" :: Double)
+timeType = typeOf (error "" :: UTCTime)
 
 instance ToJSON Dyn where
     toJSON (Dyn x)
-        | D.dynTypeRep x == iType = toJSON $ D.fromDyn x (undefined :: Int)
-        | D.dynTypeRep x == dType = toJSON $ D.fromDyn x (undefined :: Double)
-        | D.dynTypeRep x == bType = toJSON $ D.fromDyn x (undefined :: Bool)
-        | D.dynTypeRep x == tType = toJSON $ D.fromDyn x (undefined :: Text)
-        | D.dynTypeRep x == timeType = toJSON $ D.fromDyn x (undefined :: UTCTime)
+        | D.dynTypeRep x == iType = toJSON $ D.fromDyn x (error "toJson" :: Int)
+        | D.dynTypeRep x == dType = toJSON $ D.fromDyn x (error "toJson" :: Double)
+        | D.dynTypeRep x == bType = toJSON $ D.fromDyn x (error "toJson" :: Bool)
+        | D.dynTypeRep x == tType = toJSON $ D.fromDyn x (error "toJson" :: Text)
+        | D.dynTypeRep x == timeType = toJSON $ D.fromDyn x (error "toJson" :: UTCTime)
         | otherwise = error "bad toJson"
     toJSON (DynList x) = toJSON x
 
@@ -72,32 +72,32 @@ class (Typeable a, Show a, Eq a, Ord a) => Dynamic a where
     fromDyn :: Dyn -> a
 
 instance Dynamic Int where
-    fromDyn (Dyn x) = D.fromDyn x (undefined :: Int)
-    fromDyn _ = undefined
+    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Int)
+    fromDyn _ = error "fromDyn"
 
 instance Dynamic Text where
-    fromDyn (Dyn x) = D.fromDyn x (undefined :: Text)
-    fromDyn _ = undefined
+    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Text)
+    fromDyn _ = error "fromDyn"
 
 instance Dynamic Bool where
-    fromDyn (Dyn x) = D.fromDyn x (undefined :: Bool)
-    fromDyn _ = undefined
+    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Bool)
+    fromDyn _ = error "fromDyn"
 
 instance Dynamic Double where
-    fromDyn (Dyn x) = D.fromDyn x (undefined :: Double)
-    fromDyn _ = undefined
+    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Double)
+    fromDyn _ = error "fromDyn"
 
 instance Dynamic UTCTime where
-    fromDyn (Dyn x) = D.fromDyn x (undefined :: UTCTime)
-    fromDyn _ = undefined
+    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: UTCTime)
+    fromDyn _ = error "fromDyn"
 
 instance Show Dyn where
     show (Dyn x)
-        | D.dynTypeRep x == iType    = show $ D.fromDyn x (undefined :: Int)
-        | D.dynTypeRep x == dType = show $ D.fromDyn x (undefined :: Double)
-        | D.dynTypeRep x == tType   = show $ D.fromDyn x (undefined :: Text)
-        | D.dynTypeRep x == bType   = show $ D.fromDyn x (undefined :: Bool)
-        | D.dynTypeRep x == timeType   = show $ D.fromDyn x (undefined :: UTCTime)
+        | D.dynTypeRep x == iType    = show $ D.fromDyn x (error "show dyn" :: Int)
+        | D.dynTypeRep x == dType = show $ D.fromDyn x (error "show dyn" :: Double)
+        | D.dynTypeRep x == tType   = show $ D.fromDyn x (error "show dyn" :: Text)
+        | D.dynTypeRep x == bType   = show $ D.fromDyn x (error "show dyn" :: Bool)
+        | D.dynTypeRep x == timeType   = show $ D.fromDyn x (error "show dyn":: UTCTime)
         | otherwise = error "bad show"
     show (DynList x) = "DynList " ++ show x
 
@@ -126,11 +126,11 @@ instance Ord Dyn where
 instance Binary Dyn where
     {-# INLINE put #-}
     put (Dyn x)
-        | D.dynTypeRep x == iType      = putWord8 0 >> put (D.fromDyn x (undefined :: Int))
-        | D.dynTypeRep x == dType      = putWord8 1 >> put (D.fromDyn x (undefined :: Double))
-        | D.dynTypeRep x == bType      = putWord8 2 >> put (D.fromDyn x (undefined :: Bool))
-        | D.dynTypeRep x == tType      = putWord8 3 >> put (D.fromDyn x (undefined :: Text))
-        | D.dynTypeRep x == timeType   = putWord8 4 >> put (D.fromDyn x (undefined :: UTCTime))
+        | D.dynTypeRep x == iType      = putWord8 0 >> put (D.fromDyn x (error "Binary Dyn" :: Int))
+        | D.dynTypeRep x == dType      = putWord8 1 >> put (D.fromDyn x (error "Binary Dyn" :: Double))
+        | D.dynTypeRep x == bType      = putWord8 2 >> put (D.fromDyn x (error "Binary Dyn" :: Bool))
+        | D.dynTypeRep x == tType      = putWord8 3 >> put (D.fromDyn x (error "Binary Dyn" :: Text))
+        | D.dynTypeRep x == timeType   = putWord8 4 >> put (D.fromDyn x (error "Binary Dyn" :: UTCTime))
         | otherwise = error "bad binary"
     put (DynList x) = putWord8 5 >> put x
     {-# INLINE get #-}
