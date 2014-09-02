@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Dynamic where
 
 import qualified Data.Dynamic as D
@@ -13,6 +14,8 @@ import GHC.Generics
 import Control.Applicative ((<$>))
 import Data.Text (Text, empty)
 import Data.Time
+import qualified Control.Monad.State as ST
+import Data.Map (Map, fromList)
 
 
 newtype Dyn = Dyn D.Dynamic
@@ -110,37 +113,37 @@ instance ItText Text
 instance ItDouble Double 
 instance ItTime Double 
 
-data Ev a  = In Int
-         | Doubl Double
-         | Tex Text
-         | Boo a
-         | UT UTCTime
-         | No (Ev a) (Ev a)
-         | O (Ev a) (Ev a)
-         | An (Ev a) (Ev a)
-         | Les Text Dyn (Ev a)
-         | Mor Text Dyn (Ev a)
-         | Equa Text Dyn (Ev a)
+data Simpl = Simpl Dyn deriving (Show, Eq, Generic, Typeable)
+ 
+instance Binary Simpl
+
+data Ev  = S Simpl
+         | No Ev Ev 
+         | O Ev Ev 
+         | An Ev Ev 
+         | Les Text Simpl 
+         | Mor Text Simpl 
+         | Equa Text Simpl 
          deriving (Show, Eq, Typeable, Generic)
 
-instance Binary a => Binary (Ev a)
+instance Binary Ev 
 
 data Evalable a where
-  Int :: (Binary a, Typeable a, Show a, ItInt a) => a -> Evalable Int
-  Bool :: (Binary a, Typeable a, Show a, ItBool a) => a -> Evalable Bool
-  Text :: (Binary a, Typeable a, Show a, ItText a) => a -> Evalable Text
-  Double :: (Binary a, Typeable a, Show a, ItDouble a) => a -> Evalable Double
-  UTC  :: (Binary a, Typeable a, Show a, ItTime a) => a -> Evalable UTCTime
+  Int :: Int -> Evalable Int
+  Bool :: Bool -> Evalable Bool
+  Text :: Text -> Evalable Text
+  Double :: Double -> Evalable Double
+  UTC  :: UTCTime -> Evalable UTCTime
 
-  Not :: Evalable Bool -> Evalable Bool -> Evalable Bool
-  Or ::  Evalable Bool -> Evalable Bool -> Evalable Bool
-  And :: Evalable Bool -> Evalable Bool -> Evalable Bool
+  Not :: Evalable (Bool -> Bool)
+  Or ::  Evalable (Bool -> Bool -> Bool)
+  And :: Evalable (Bool -> Bool -> Bool)
 
-  Less :: (Binary a, Typeable a, Show a, Eq a, ItDyn a) =>  Evalable Text -> a -> Evalable Bool
-  More :: (Binary a, Typeable a, Show a, Eq a, ItDyn a) =>  Evalable Text -> a -> Evalable Bool
-  Equal :: (Binary a, Typeable a, Show a, Eq a, ItDyn a) =>  Evalable Text -> a -> Evalable Bool
+  Less :: Evalable (Text -> Evalable a -> Bool)
+  More :: Evalable (Text -> Evalable a -> Bool)
+  Equal :: Evalable (Text -> Evalable a -> Bool)
+  Ops :: Evalable (a -> b) -> Evalable a -> Evalable b
 
-deriving instance Show a => Show (Evalable a)
 
 instance Binary UTCTime where
     put (UTCTime x y) = put (fromEnum x) >> put (fromEnum y)
