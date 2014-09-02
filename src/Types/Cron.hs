@@ -15,12 +15,13 @@ instance Ord Cron where
     compare x y = show x `compare` show y
 
 instance Binary CronField where
+    {-# INLINE put #-}
     put (Star) = putWord8 0
     put (SpecificField x) = putWord8 1 >> put x
     put (RangeField x y) = putWord8 2 >> put x >> put y
     put (ListField x) = putWord8 3 >> put x
     put (StepField x y) = putWord8 4 >> put x >> put y
-
+    {-# INLINE get #-}
     get = do x <- getWord8
              case x of
                   0 -> return Star
@@ -31,13 +32,15 @@ instance Binary CronField where
                   _ -> fail "bad binary"
 
 instance Binary Cron where
+    {-# INLINE put #-}
     put (Cron (CronSchedule (Minutes a) (Hours b) (DaysOfMonth c) (Months d) (DaysOfWeek e))) = put a >> put b >> put c >> put d >> put e
+    {-# INLINE get #-}
     get = do
         a <- get
         b <- get
         c <- get
         d <- get
         e <- get
-        return $ Cron (CronSchedule (Minutes a) (Hours b) (DaysOfMonth c) (Months d) (DaysOfWeek e))
+        return $! Cron (CronSchedule (Minutes a) (Hours b) (DaysOfMonth c) (Months d) (DaysOfWeek e))
 
 

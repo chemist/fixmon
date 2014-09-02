@@ -155,8 +155,8 @@ spaces = skipWhile isHorizontalSpace
 cpuN :: Parser Text
 cpuN = takeWhile1 (inClass "a-zA-Z0-9")
 
-data Cpu = Cpu [Text] deriving (Show, Eq)
-data Interrupt = Interrupt Text [Int] Text deriving (Show, Eq)
+data Cpu = Cpu {-# UNPACK #-} ![Text] deriving (Show, Eq)
+data Interrupt = Interrupt {-# UNPACK #-} !Text {-# UNPACK #-} ![Int] {-# UNPACK #-} !Text deriving (Show, Eq)
 
 parserInterruptsCPU :: Parser Cpu
 parserInterruptsCPU = Cpu <$> manyTill' (spaces *> cpuN) (spaces *> endOfLine)
@@ -224,31 +224,31 @@ doCpuInfo (Check _ _ "system.cpu.info" _) = do
 doCpuInfo _ = undefined
 
 data CpuInf = CpuInf
-  { processor       :: Int
-  , vendorId        :: Text
-  , cpuFamily       :: Text
-  , model           :: Int
-  , modelName       :: Text
-  , stepping        :: Int
-  , microcode       :: Text
-  , cpuMHz          :: Double
-  , cacheSize       :: Text
-  , physicalId      :: Int
-  , siblings        :: Int
-  , coreId          :: Int
-  , cpuCores        :: Int
-  , apicid          :: Int
-  , initialApicid   :: Int
-  , fpu             :: Bool
-  , fpuException    :: Bool
-  , cpuidLevel      :: Int
-  , wp              :: Bool
-  , flags           :: [Text]
-  , bogomips        :: Double
-  , clflushSize     :: Int
-  , cacheAlignment  :: Int
-  , addressSizes    :: Text
-  , powerManagement :: Text
+  { processor       :: {-# UNPACK #-} !Int
+  , vendorId        :: {-# UNPACK #-} !Text
+  , cpuFamily       :: {-# UNPACK #-} !Text
+  , model           :: {-# UNPACK #-} !Int
+  , modelName       :: {-# UNPACK #-} !Text
+  , stepping        :: {-# UNPACK #-} !Int
+  , microcode       :: {-# UNPACK #-} !Text
+  , cpuMHz          :: {-# UNPACK #-} !Double
+  , cacheSize       :: {-# UNPACK #-} !Text
+  , physicalId      :: {-# UNPACK #-} !Int
+  , siblings        :: {-# UNPACK #-} !Int
+  , coreId          :: {-# UNPACK #-} !Int
+  , cpuCores        :: {-# UNPACK #-} !Int
+  , apicid          :: {-# UNPACK #-} !Int
+  , initialApicid   :: {-# UNPACK #-} !Int
+  , fpu             :: {-# UNPACK #-} !Bool
+  , fpuException    :: {-# UNPACK #-} !Bool
+  , cpuidLevel      :: {-# UNPACK #-} !Int
+  , wp              :: {-# UNPACK #-} !Bool
+  , flags           :: {-# UNPACK #-} ![Text]
+  , bogomips        :: {-# UNPACK #-} !Double
+  , clflushSize     :: {-# UNPACK #-} !Int
+  , cacheAlignment  :: {-# UNPACK #-} !Int
+  , addressSizes    :: {-# UNPACK #-} !Text
+  , powerManagement :: {-# UNPACK #-} !Text
   } deriving Show
 
 parserYesNo :: Parser Bool
@@ -348,16 +348,16 @@ parserProcStatCpu = head . catMaybes <$> (cpuOrEmpty `sepBy` endOfLine)
                             | otherwise = Nothing
 
 data CpuUtilStat = CpuUtilStat
-  { user      :: Int
-  , nice      :: Int
-  , system    :: Int
-  , idle      :: Int
-  , iowait    :: Maybe Int
-  , irq       :: Maybe Int
-  , softirq   :: Maybe Int
-  , steal     :: Maybe Int
-  , guest     :: Maybe Int
-  , guestNice :: Maybe Int
+  { user      :: {-# UNPACK #-} !Int
+  , nice      :: {-# UNPACK #-} !Int
+  , system    :: {-# UNPACK #-} !Int
+  , idle      :: {-# UNPACK #-} !Int
+  , iowait    :: {-# UNPACK #-} !(Maybe Int)
+  , irq       :: {-# UNPACK #-} !(Maybe Int)
+  , softirq   :: {-# UNPACK #-} !(Maybe Int)
+  , steal     :: {-# UNPACK #-} !(Maybe Int)
+  , guest     :: {-# UNPACK #-} !(Maybe Int)
+  , guestNice :: {-# UNPACK #-} !(Maybe Int)
   } deriving Show
 
 --------------------------------------------------------------------------------------

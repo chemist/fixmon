@@ -42,8 +42,8 @@ import           Data.Typeable
 import           GHC.Generics
 
 
-data Dyn = Dyn D.Dynamic
-         | DynList [Dyn] deriving (Typeable)
+data Dyn = Dyn     {-# UNPACK #-} !D.Dynamic
+         | DynList {-# UNPACK #-} ![Dyn] deriving (Typeable)
 
 dynTypeRep :: Dyn -> TypeRep
 dynTypeRep (Dyn x) = D.dynTypeRep x

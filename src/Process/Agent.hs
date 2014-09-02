@@ -37,9 +37,9 @@ defDelay = Delay $ seconds 1
 type LocalHost = Hostname
 type Server = ByteString
 
-data ST = New !LocalHost !Server
-        | Founded !LocalHost !Server !ProcessId
-        | RegisteredInServer !LocalHost !Server !ProcessId !MonitorRef
+data ST = New {-# UNPACK #-}  !LocalHost {-# UNPACK #-}  !Server
+        | Founded {-# UNPACK #-}  !LocalHost {-# UNPACK #-}  !Server {-# UNPACK #-}  !ProcessId
+        | RegisteredInServer {-# UNPACK #-}  !LocalHost {-# UNPACK #-}  !Server {-# UNPACK #-}  !ProcessId {-# UNPACK #-}  !MonitorRef
         deriving Show
 
 initServer :: InitHandler (LocalHost, Server) ST
