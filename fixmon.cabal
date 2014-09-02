@@ -66,6 +66,7 @@ executable memory
                        bimap , 
                        old-locale , 
                        text , 
+                       lists , 
                        text-binary,
                        mtl , 
                        vector , 
