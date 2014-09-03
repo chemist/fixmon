@@ -66,7 +66,7 @@ addTask x = do
     return ()
 
 poolT :: Process (InitResult (BlockingQueue ()))
-poolT = pool 100
+poolT = pool 1
 
 taskPoolName :: Recipient
 taskPoolName = Registered "pool"
@@ -118,7 +118,7 @@ taskSet = handleCast_ fun
     where
     fun :: Set CheckHost -> () -> Process (ProcessAction ())
     fun x _ = do 
-        mapM_ (force addTask) (force $ toList x)
+        mapM_ taskmake (force $ toList x)
         continue_ ()
 
 updateConfig :: DeferredDispatcher ()
