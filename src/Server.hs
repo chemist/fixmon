@@ -18,14 +18,14 @@ import           Network.Transport.TCP                           (createTranspor
 main :: IO ()
 main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
-    node <- newLocalNode t $ Process.Tasker.__remoteTable initRemoteTable
+    node <- newLocalNode t initRemoteTable
     runProcess node $ do
         s <-  ask
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, configurator, defStorage, tasker, taskPool, cron, watcher]
-        let cspec = zipWith (curry child) cstart ["web", "configurator", "storage", "tasker", "pool", "cron", "watcher"]
+        cstart <-  mapM toChildStart [webProcess, configurator, defStorage, tasker, cron, watcher]
+        let cspec = zipWith (curry child) cstart ["web", "configurator", "storage", "tasker", "cron", "watcher"]
         superPid <-  super cspec
 --        c <- listChildren superPid
 --        say $ show c

@@ -43,7 +43,6 @@ server = statelessProcess
 
 taskDispatcher :: Dispatcher ()
 taskDispatcher = handleCall_ $ \(check :: Check) -> do
-    say $ show check
     let ch = lookup (ctype check) routes
     maybe notFound (doCheck' check) ch
     where

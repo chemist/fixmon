@@ -4,8 +4,6 @@
 module Process.Tasker
 ( tasker
 , doTasks
-, taskPool
-, __remoteTable
 ) where
 
 
@@ -52,27 +50,6 @@ taskmake (CheckHost (hid, cid, mt)) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
     makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
-
-$(remotable ['taskmake])
-
-
-addTask :: CheckHost -> Process ()
-addTask x = do
---    poolStatus <-  (stats . Registered) "pool"
---    say $ show $ activeJobs <$> poolStatus
---    say $ show $ queuedJobs <$> poolStatus
-    !job <- return $! ($(mkClosure 'taskmake) (x :: CheckHost) )
-    !_ <- spawnLocal $ void $! executeTask taskPoolName job
-    return ()
-
-poolT :: Process (InitResult (BlockingQueue ()))
-poolT = pool 1
-
-taskPoolName :: Recipient
-taskPoolName = Registered "pool"
-
-taskPool :: Process ()
-taskPool = start poolT
 
 ---------------------------------------------------------------------------------------------------
 -- public
