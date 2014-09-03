@@ -13,46 +13,41 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >= 1.12
 
-executable server
-  main-is:             Main.hs            
-  other-extensions:    OverloadedStrings, GeneralizedNewtypeDeriving, GADTs, ExistentialQuantification, FlexibleInstances, DeriveGeneric, DeriveDataTypeable, RankNTypes, ScopedTypeVariables, MultiParamTypeClasses, FlexibleContexts, QuasiQuotes, StandaloneDeriving
-  build-depends:       base >=4.6 && <5, 
-                       containers , 
-                       aeson , 
-                       bimap , 
-                       lists , 
-                       old-locale , 
-                       text , 
-                       text-binary,
-                       mtl , 
-                       vector , 
-                       vector-binary-instances ,
-                       network , 
-                       network-conduit , 
-                       yaml , 
-                       bytestring , 
-                       conduit , 
-                       http-conduit,
-                       transformers , 
-                       binary , 
-                       cereal , 
-                       attoparsec , 
-                       time ,
-                       directory , 
-                       http-types , 
-                       unordered-containers , 
-                       network-transport,
-                       network-transport-tcp,
-                       distributed-process,
-                       distributed-process-platform,
-                       cron ,
-                       lens == 4.3.*,
-                       wai,
-                       warp,
-                       wai-extra,
-                       scientific,
-                       deepseq,
-                       wai-middleware-static
+executable fixmon
+  main-is:             Main.hs
+  -- other-modules:
+  other-extensions:    OverloadedStrings, FlexibleInstances, GADTs, DeriveDataTypeable, ExistentialQuantification, BangPatterns, RecordWildCards, ScopedTypeVariables, DeriveGeneric, TemplateHaskell, FlexibleContexts, QuasiQuotes, GeneralizedNewtypeDeriving, StandaloneDeriving
+  build-depends:       base >=4.7 && <5
+                     , binary >=0.7 && <0.8
+                     , containers >=0.5 && <0.6
+                     , bytestring >=0.10 && <0.11
+                     , time >=1.4 && <1.5
+                     , directory >=1.2 && <1.3
+                     , deepseq >=1.3 && <1.4
+                     , vector
+                     , vector-binary-instances
+                     , yaml
+                     , text
+                     , distributed-process
+                     , distributed-process-platform
+                     , text-binary
+                     , mtl
+                     , aeson
+                     , cron
+                     , lists
+                     , warp
+                     , wai
+                     , wai-extra
+                     , wai-middleware-static
+                     , bimap
+                     , scientific
+                     , unordered-containers
+                     , network
+                     , network-transport
+                     , network-transport-tcp
+                     , attoparsec
+                     , http-types
+                     , http-conduit
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
