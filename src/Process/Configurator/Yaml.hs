@@ -37,31 +37,31 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
 import           Types.Cron               (Cron (..))
 
 data ITrigger = ITrigger
-  { itname        :: {-# UNPACK #-}  !Text
-  , itdescription :: {-# UNPACK #-}  !Text
-  , itcheck       :: {-# UNPACK #-}  ![Text]
-  , itresult      :: {-# UNPACK #-}  !Text
+  { itname        :: !Text
+  , itdescription :: !Text
+  , itcheck       :: ![Text]
+  , itresult      :: !Text
   } deriving Show
 
 data ICheck = ICheck
-  { icname   :: {-# UNPACK #-}  !Text
-  , icperiod :: {-# UNPACK #-}  !Text
-  , ictype   :: {-# UNPACK #-}  !Text
-  , icparams :: {-# UNPACK #-}  ![(Text, Value)]
+  { icname   :: !Text
+  , icperiod :: !Text
+  , ictype   :: !Text
+  , icparams :: ![(Text, Value)]
   } deriving Show
 
 data IGroup = IGroup
-  { igname     :: {-# UNPACK #-}  !Text
-  , ighosts    :: {-# UNPACK #-}  ![Hostname]
-  , igtriggers :: {-# UNPACK #-}  !(Maybe [Text])
-  , igchecks   :: {-# UNPACK #-}  !(Maybe [Text])
+  { igname     :: !Text
+  , ighosts    :: ![Hostname]
+  , igtriggers :: !(Maybe [Text])
+  , igchecks   :: !(Maybe [Text])
   } deriving Show
 
 data Config = Config
-  { chosts    :: {-# UNPACK #-}  !(Vector Hostname)
-  , cgroups   :: {-# UNPACK #-}  !(Vector IGroup)
-  , cchecks   :: {-# UNPACK #-}  !(Vector ICheck)
-  , ctriggers :: {-# UNPACK #-}  !(Vector ITrigger)
+  { chosts    :: !(Vector Hostname)
+  , cgroups   :: !(Vector IGroup)
+  , cchecks   :: !(Vector ICheck)
+  , ctriggers :: !(Vector ITrigger)
   } deriving Show
 
 instance FromJSON Config where

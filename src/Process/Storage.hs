@@ -66,8 +66,8 @@ defDelay :: Delay
 defDelay = Delay $ seconds 1
 
 data ST = ST
-  { config :: {-# UNPACK #-}  !InfluxConfig
-  , queue  :: {-# UNPACK #-}  ![(Hostname, Complex)]
+  { config :: !InfluxConfig
+  , queue  :: ![(Hostname, Complex)]
   }
 
 initServer :: InitHandler InfluxConfig ST
@@ -120,12 +120,12 @@ type Port = Int
 type EnableSSL = Bool
 
 data InfluxConfig = InfluxConfig
-  { db   :: {-# UNPACK #-}  !DB
-  , user :: {-# UNPACK #-}  !User
-  , pass :: {-# UNPACK #-}  !Password
-  , host :: {-# UNPACK #-}  !Host
-  , port :: {-# UNPACK #-}  !Port
-  , ssl  :: {-# UNPACK #-}  !EnableSSL
+  { db   :: !DB
+  , user :: !User
+  , pass :: !Password
+  , host :: !Host
+  , port :: !Port
+  , ssl  :: !EnableSSL
   } deriving Show
 
 defConf :: InfluxConfig
@@ -138,8 +138,8 @@ influxUrl conf = let scheme = if ssl conf
                      port' = show . port $ conf
                  in scheme <> host conf <> ":" <> port' <> "/db/" <> db conf <> "/series"
 data Series = Series
-    { seriesName :: {-# UNPACK #-}  !Text
-    , seriesData :: {-# UNPACK #-}  !SeriesData
+    { seriesName :: !Text
+    , seriesData :: !SeriesData
     } deriving (Show, Eq)
 
 instance ToJSON Series where
@@ -152,8 +152,8 @@ instance ToJSON Series where
         SeriesData {..} = seriesData
 
 data SeriesData = SeriesData
-    { columns :: {-# UNPACK #-}  ![Column]
-    , points  :: {-# UNPACK #-}  ![[Dyn]]
+    { columns :: ![Column]
+    , points  :: ![[Dyn]]
     } deriving (Show, Eq)
 
 type Column = Counter

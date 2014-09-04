@@ -36,10 +36,10 @@ instance IsString GroupName where
     fromString x = GroupName . pack $ x
 
 data Group = Group
- { gname     :: {-# UNPACK #-} !GroupName
- , ghosts    :: {-# UNPACK #-} !(Set HostId)
- , gtriggers :: {-# UNPACK #-} !(Set TriggerId)
- , gchecks   :: {-# UNPACK #-} !(Set CheckId)
+ { gname     :: !GroupName
+ , ghosts    :: !(Set HostId)
+ , gtriggers :: !(Set TriggerId)
+ , gchecks   :: !(Set CheckId)
  } deriving (Show, Generic)
 
 instance Binary Group
@@ -74,10 +74,10 @@ instance Show CheckName where
 instance IsString CheckName where
     fromString x = CheckName . pack $ x
 
-data Check = Check { cname   :: {-# UNPACK #-} !CheckName
-                   , cperiod :: {-# UNPACK #-} !Cron
-                   , ctype   :: {-# UNPACK #-} !Text
-                   , cparams :: {-# UNPACK #-} ![(Counter, Dyn)]
+data Check = Check { cname   :: !CheckName
+                   , cperiod :: !Cron
+                   , ctype   :: !Text
+                   , cparams :: ![(Counter, Dyn)]
                    } deriving (Show, Typeable, Generic, Eq, Ord)
 
 instance Binary Check
@@ -89,10 +89,10 @@ instance IsString TriggerName where
     fromString x = TriggerName . pack $ x
 
 data Trigger = Trigger
-  { tname        :: {-# UNPACK #-} !TriggerName
-  , tdescription :: {-# UNPACK #-} !Text
-  , tcheck       :: {-# UNPACK #-} ![CheckId]
-  , tresult      :: {-# UNPACK #-} !ETrigger
+  { tname        :: !TriggerName
+  , tdescription :: !Text
+  , tcheck       :: ![CheckId]
+  , tresult      :: !ETrigger
   } deriving (Show, Eq, Typeable, Generic)
 
 instance Ord Trigger where
@@ -112,12 +112,12 @@ data StartOptions = StartOptions
   } deriving (Show, Eq)
 
 data Monitoring = Monitoring
- { _periodMap :: {-# UNPACK #-} !(Map Cron (Set CheckHost))
- , _hosts     :: {-# UNPACK #-} !(Vector Hostname)
- , _groups    :: {-# UNPACK #-} !(Vector Group)
- , _triggers  :: {-# UNPACK #-} !(Vector Trigger)
- , _checks    :: {-# UNPACK #-} !(Vector Check)
- , _status    :: {-# UNPACK #-} !(Map TriggerHost Status)
+ { _periodMap :: !(Map Cron (Set CheckHost))
+ , _hosts     :: !(Vector Hostname)
+ , _groups    :: !(Vector Group)
+ , _triggers  :: !(Vector Trigger)
+ , _checks    :: !(Vector Check)
+ , _status    :: !(Map TriggerHost Status)
  } deriving Show
 
 instance FromJSON Hostname where
