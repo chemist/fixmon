@@ -51,7 +51,7 @@ boolP :: Parser (Exp Dyn)
 boolP = Val . toDyn <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
 
 nameP :: Parser (Exp Dyn)
-nameP = Val . toDyn <$> takeWhile1 (inClass "a-zA-Z0-9.-") <* sp
+nameP = EnvVal . Counter <$> takeWhile1 (inClass "a-zA-Z0-9.-") <* sp
 
 returnP :: Parser (Exp Dyn)
 returnP = boolP <|> num <|> nameP
