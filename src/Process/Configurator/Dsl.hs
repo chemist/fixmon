@@ -1,89 +1,116 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 module Process.Configurator.Dsl
 where
 
-import           Types
-import           Data.Text            hiding (empty, filter, foldl1, head, map,
-                                       takeWhile)
-import           Control.Applicative  (pure, (*>), (<$>), (<*), (<*>), (<|>))
-import           Data.Attoparsec.Text
-import           Data.Char            (isSpace)
+import           Types.Dynamic
+import           Data.Text  (Text, pack) 
+import           Control.Applicative hiding ((<|>))
+import           Data.Either
+-- import           Data.Char            (isSpace)
 import           Data.Scientific      (floatingOrInteger)
-
-import           Prelude              hiding (lookup, takeWhile)
-
-top :: Parser (Exp Bool)
-top = logic <$> many1 (eitherP expr spliter)
-
-logic :: [Either (Exp Bool) Lo] -> Exp Bool
-logic (Left x:[]) = x
-logic (Left x : Right y : xs) = loToLogic y x (logic xs)
-logic _ = error "bad expression in trigger"
-
-data Lo = A | O
-
-loToLogic :: Lo -> Exp Bool -> Exp Bool -> Exp Bool
-loToLogic A = And
-loToLogic O = Or
-
-aP, oP, spliter :: Parser Lo
-aP = string "and" *> sp *> pure A
-oP = string "or"  *> sp *> pure O
-spliter = aP <|> oP
-
-expr :: Parser (Exp Bool)
-expr = Not <$> (string "not" *> sp *> simpl) <|> simpl
-
-simpl :: Parser (Exp Bool)
-simpl = eql 
-
-eql :: Parser (Exp Bool)
-eql = equalP <|> moreP <|> lessP
-  where
-  equalP = Equal <$> (nameP <* string "equal") <*> (sp *> returnP)
-  moreP = More <$> (nameP <* string "more") <*> (sp *> returnP)
-  lessP = Less <$> (nameP <* string "less") <*> (sp *> returnP)
-
-boolP :: Parser (Exp Dyn)
-boolP = Val . toDyn <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
-
-nameP :: Parser (Exp Dyn)
-nameP = EnvVal . Counter <$> takeWhile1 (inClass "a-zA-Z0-9.-") <* sp
-
-returnP :: Parser (Exp Dyn)
-returnP = boolP <|> num <|> nameP
-
-
-num :: Parser (Exp Dyn)
-num = do
-    c <- scientific <* sp
-    case floatingOrInteger c of
-         Right x -> return $ Val . toDyn $ (x :: Int)
-         Left x -> return $ Val . toDyn $ (x :: Double)
-
-sp :: Parser ()
-sp = takeWhile1 isSpace *> pure () <|> takeWhile isSpace *> endOfInput *> pure ()
+import           Text.ParserCombinators.Parsec hiding (spaces)
+import           Control.Monad (void)
+import Prelude hiding (min, max, last)
 
 parseTrigger :: Text -> Either String (Exp Bool)
-parseTrigger = parseOnly top
+parseTrigger = undefined
 
+{-| functions:
+- data Fun = ChangeFun Counter
+-          | LastFun Counter Period
+-          | AvgFun Counter Period
+-          | PrevFun Counter
+-          | MinFun Counter Period
+-          | MaxFun Counter Period
+-          | NoDataFun Counter Period
+-}
+-- change, last, avg, prev, min, max, nodata
+funP:: Parser Fun
+funP = lastS <|> change <|> avg <|> prev <|> min <|> max <|> nodata <|> lastF 
 
-data Env = Env
+change :: Parser Fun
+change = ChangeFun <$> (string "change" *> openQuote *> counterP <* closeQuote)
 
-data ConfigError = ConfigError String
+lastF :: Parser Fun 
+lastF = LastFun <$> (string "last" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
 
--- | Examples
---
--- >>> let a = Text $ pack "key"
--- >>> let b = Any $ Bool True
--- >>> let c = Equal a b
--- >>> let m = Complex $ Map.fromList [(pack "key", Any (Bool True)), (pack "int", Any (Int 3))]
--- >>> let m1 = Complex $ Map.fromList [(pack "bool", Any (Bool True)), (pack "key", Any (Int 3))]
---
--- >>> eval c m
--- Status {unStatus = True}
--- >>> eval c m1
--- Status {unStatus = *** Exception: TypeError "you try do Int == Bool"
+lastS :: Parser Fun 
+lastS = LastFun <$> counterP <*> pure (Count 0)
+
+avg :: Parser Fun
+avg = AvgFun <$> (string "avg" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+
+prev :: Parser Fun 
+prev = PrevFun <$> (string "prev" *> openQuote *> counterP <* closeQuote)
+
+min :: Parser Fun
+min = MinFun <$> (string "min" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+
+max :: Parser Fun
+max = MinFun <$> (string "max" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+
+nodata :: Parser Fun
+nodata = NoDataFun <$> (string "nodata" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+
+fun :: String -> Either ParseError Fun
+fun = parse funP "fun parse"
+
+------------------------------------------------------------------------------------------------------------------------------
+-- Counter
+counterP:: Parser Counter
+counterP = spaces *> (Counter . pack <$> (manyTill anyChar (comma <|> spaces))) <* spaces
+   
+
+-- !, &&, ||
+booleanP :: Parser (Exp Bool)
+booleanP= undefined
+
+-- >, <, >=, <=, !=, =
+compareP :: Parser (Exp Bool)
+compareP = undefined
+
+------------------------------------------------------------------------------------------------------------------------------
+periodP :: Parser Period
+periodP = spaces *> (time <|> (Count <$> int)) <* spaces
+
+time :: Parser Period
+time = Sec <$> ((*) <$> int <*> quant)
+
+quant :: Parser Int 
+quant = (string "s" *> pure 1) <|> 
+        (string "m" *> pure 60) <|> 
+        (string "h" *> pure 3600) <|> 
+        (string "d" *> pure (3600 * 24)) <|> 
+        (string "w" *> pure (3600 * 24 * 7)) <|>
+        (string "m" *> pure (3600 * 24 * 30)) <|>
+        (string "y" *> pure (3600 * 24 * 365))
+
+------------------------------------------------------------------------------------------------------------------------------
+openQuote :: Parser ()
+openQuote = void $ char '('
+
+closeQuote :: Parser ()
+closeQuote = void $ char ')'
+
+comma :: Parser ()
+comma = void $ char ','
+
+number :: Parser (Either Double Int)
+number = floatingOrInteger . read <$> many1 digit
+
+left :: Either a b -> a
+left (Left a) = a
+left _ = error "must be Double"
+
+right :: Either a b -> b
+right (Right a) = a
+right _ = error "must be Int"
+
+int :: Parser Int
+int = right <$> number
+
+double :: Parser Double
+double = left <$> number
+
+spaces :: Parser ()
+spaces = skipMany space

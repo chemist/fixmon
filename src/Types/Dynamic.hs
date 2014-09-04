@@ -23,6 +23,8 @@ module Types.Dynamic
 , dType
 , timeType
 , Exp(..)
+, Fun(..)
+, Period(..)
 )
 where
 
