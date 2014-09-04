@@ -98,7 +98,7 @@ saveAll st = do
             }
         request = addQueryStr request''
     unless (series == []) $ do
-        !_ <- liftIO $ withManager $ \manager -> do
+        void . liftIO $ withManager $ \manager -> do
             !response <-  request `seq` http request manager
             return $! responseStatus response
         return ()

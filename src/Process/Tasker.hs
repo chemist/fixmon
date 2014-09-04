@@ -42,7 +42,9 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck _ _ Nothing Nothing = return ()
     makeCheck _ _ _ Nothing  = return ()
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
+        say "taskmake"
         dt <- doTask (Pid pid) check
+        say "save"
         saveResult (host, dt)
 --         !_ <- liftIO $! eval Env dt (tresult trigger)
         return ()

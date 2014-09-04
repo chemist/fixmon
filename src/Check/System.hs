@@ -214,7 +214,7 @@ doCpuInfo (Check _ _ "system.cpu.info" _) = do
                      , ("system.cpu.info.fpu_exception", toDyn $ fpuException one)
                      , ("system.cpu.info.cpuid_level", toDyn $ cpuidLevel one)
                      , ("system.cpu.info.wp", toDyn $ wp one)
-                     , ("system.cpu.info.flags", DynList $ map toDyn (filter (/= "") $ flags one))
+                     , ("system.cpu.info.flags", toDyn $ flags one)
                      , ("system.cpu.info.bogomips", toDyn $ bogomips one)
                      , ("system.cpu.info.cl_flush_size", toDyn $ clflushSize one)
                      , ("system.cpu.info.cache_alignment", toDyn $ cacheAlignment one)
@@ -243,7 +243,7 @@ data CpuInf = CpuInf
   , fpuException    :: {-# UNPACK #-} !Bool
   , cpuidLevel      :: {-# UNPACK #-} !Int
   , wp              :: {-# UNPACK #-} !Bool
-  , flags           :: {-# UNPACK #-} ![Text]
+  , flags           :: {-# UNPACK #-} !Text
   , bogomips        :: {-# UNPACK #-} !Double
   , clflushSize     :: {-# UNPACK #-} !Int
   , cacheAlignment  :: {-# UNPACK #-} !Int
@@ -277,7 +277,7 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
                       <*> (string "fpu_exception" *> spaces *> char ':' *> spaces *> parserYesNo <* endOfLine )
                       <*> (string "cpuid level" *> spaces *> char ':' *> spaces *> decimal <* endOfLine )
                       <*> (string "wp" *> spaces *> char ':' *> spaces *> parserYesNo <* endOfLine )
-                      <*> (string "flags" *> spaces *> char ':' *> (flag `sepBy` char ' ') <* endOfLine )
+                      <*> (string "flags" *> spaces *> char ':' *> takeTill isEndOfLine <* endOfLine )
                       <*> (string "bogomips" *> spaces *> char ':' *> spaces *> rational <* endOfLine )
                       <*> (string "clflush size" *> spaces *> char ':' *> spaces *> decimal <* endOfLine )
                       <*> (string "cache_alignment" *> spaces *> char ':' *> spaces *> decimal <* endOfLine )
