@@ -4,7 +4,7 @@ where
 
 import           Types.Dynamic
 import           Data.Text  (Text, pack) 
-import           Control.Applicative hiding ((<|>))
+import           Control.Applicative hiding ((<|>), many)
 import           Data.Either
 -- import           Data.Char            (isSpace)
 import           Data.Scientific      (floatingOrInteger)
@@ -25,56 +25,93 @@ parseTrigger = undefined
 -          | NoDataFun Counter Period
 -}
 -- change, last, avg, prev, min, max, nodata
-funP:: Parser Fun
-funP = lastS <|> change <|> avg <|> prev <|> min <|> max <|> nodata <|> lastF 
+dynP:: Parser (Exp Dyn)
+dynP = try avg <|> try prev <|> try min <|> try max  <|> try lastF <|> try valP <|> try envVal
 
-change :: Parser Fun
-change = ChangeFun <$> (string "change" *> openQuote *> counterP <* closeQuote)
+lastF :: Parser (Exp Dyn) 
+lastF = Last <$> (string "last" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
 
-lastF :: Parser Fun 
-lastF = LastFun <$> (string "last" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+envVal :: Parser (Exp Dyn) 
+envVal = EnvVal <$> counterP 
 
-lastS :: Parser Fun 
-lastS = LastFun <$> counterP <*> pure (Count 0)
+avg :: Parser (Exp Dyn)
+avg = Avg <$> (string "avg" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
 
-avg :: Parser Fun
-avg = AvgFun <$> (string "avg" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+prev :: Parser (Exp Dyn) 
+prev = Prev <$> (string "prev" *> openQuote *> counterP <* closeQuote)
 
-prev :: Parser Fun 
-prev = PrevFun <$> (string "prev" *> openQuote *> counterP <* closeQuote)
+min :: Parser (Exp Dyn)
+min = Min <$> (string "min" *> openQuote *> counterP <* comma ) <*> periodP <* closeQuote
 
-min :: Parser Fun
-min = MinFun <$> (string "min" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+max :: Parser (Exp Dyn)
+max = Max <$> (string "max" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
 
-max :: Parser Fun
-max = MinFun <$> (string "max" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+valP :: Parser (Exp Dyn)
+valP = Val <$> try ( num <|> quotedStr)
 
-nodata :: Parser Fun
-nodata = NoDataFun <$> (string "nodata" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+quotedStr :: Parser Dyn
+quotedStr = do 
+    void $ char '"'
+    x <- many $ chars
+    void $ char '"'
+    return . toDyn . pack $ x
+    where 
+    chars = escaped <|> noneOf "\""
+    escaped = char '\\' >> choice (zipWith escapedChar codes replacements)
+    escapedChar code replacement = char code >> return replacement
+    replacements = ['\b', '\n', '\f', '\r', '\t', '\\', '\"', '/']       --  "
+    codes        = ['b',  'n',  'f',  'r',  't',  '\\', '\"', '/']        --  "
 
-fun :: String -> Either ParseError Fun
-fun = parse funP "fun parse"
+num :: Parser Dyn
+num = do
+    n <- number
+    case n of
+         Left i -> return $ toDyn i
+         Right i -> return $ toDyn i
+
+
+nodata :: Parser (Exp Bool)
+nodata = NoData <$> (string "nodata" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
+
+change :: Parser (Exp Bool)
+change = Change <$> (string "change" *> openQuote *> counterP <* closeQuote)
 
 ------------------------------------------------------------------------------------------------------------------------------
 -- Counter
 counterP:: Parser Counter
-counterP = spaces *> (Counter . pack <$> (manyTill anyChar (comma <|> spaces))) <* spaces
+counterP = spaces *> (Counter . pack <$> (many1 symbols )) <* spaces
    
+symbols :: Parser Char
+symbols = oneOf $ ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-."
 
 -- !, &&, ||
 booleanP :: Parser (Exp Bool)
-booleanP= undefined
+booleanP = undefined
+
+notP :: Parser (Exp Bool)
+notP = do
+    void $ char '!' <* spaces
+    b <- booleanP
+    return $ Not b
+
 
 -- >, <, >=, <=, !=, =
 compareP :: Parser (Exp Bool)
 compareP = undefined
 
 ------------------------------------------------------------------------------------------------------------------------------
+
+period :: String -> Either ParseError Period
+period = parse periodP "parse period"
+
 periodP :: Parser Period
-periodP = spaces *> (time <|> (Count <$> int)) <* spaces
+periodP = spaces *> choice [try time, try (Count <$> int)] <* spaces
 
 time :: Parser Period
-time = Sec <$> ((*) <$> int <*> quant)
+time = do
+    i <- int
+    q <- quant
+    return $ Sec (i * q)
 
 quant :: Parser Int 
 quant = (string "s" *> pure 1) <|> 
@@ -96,7 +133,7 @@ comma :: Parser ()
 comma = void $ char ','
 
 number :: Parser (Either Double Int)
-number = floatingOrInteger . read <$> many1 digit
+number = floatingOrInteger . read <$> (many1 (digit <|> char '.'))
 
 left :: Either a b -> a
 left (Left a) = a
@@ -114,3 +151,6 @@ double = left <$> number
 
 spaces :: Parser ()
 spaces = skipMany space
+
+spaces1 :: Parser ()
+spaces1 = skipMany1 space
