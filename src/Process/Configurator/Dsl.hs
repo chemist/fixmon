@@ -7,7 +7,7 @@ import           Data.Text  (Text, pack)
 import           Control.Applicative hiding ((<|>), many)
 import           Data.Either
 -- import           Data.Char            (isSpace)
-import           Data.Scientific      (floatingOrInteger)
+import           Data.Monoid ((<>))
 import           Text.ParserCombinators.Parsec hiding (spaces)
 import           Control.Monad (void)
 import Prelude hiding (min, max, last)
@@ -15,18 +15,9 @@ import Prelude hiding (min, max, last)
 parseTrigger :: Text -> Either String (Exp Bool)
 parseTrigger = undefined
 
-{-| functions:
-- data Fun = ChangeFun Counter
--          | LastFun Counter Period
--          | AvgFun Counter Period
--          | PrevFun Counter
--          | MinFun Counter Period
--          | MaxFun Counter Period
--          | NoDataFun Counter Period
--}
 -- change, last, avg, prev, min, max, nodata
 dynP:: Parser (Exp Dyn)
-dynP = try avg <|> try prev <|> try min <|> try max  <|> try lastF <|> try valP <|> try envVal
+dynP = try avg <|> try prev <|> try min <|> try max  <|> try lastF <|> try valP <|> envVal
 
 lastF :: Parser (Exp Dyn) 
 lastF = Last <$> (string "last" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
@@ -47,7 +38,7 @@ max :: Parser (Exp Dyn)
 max = Max <$> (string "max" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
 
 valP :: Parser (Exp Dyn)
-valP = Val <$> try ( num <|> quotedStr)
+valP = Val <$> try ( periodDyn <|> num <|> quotedStr)
 
 quotedStr :: Parser Dyn
 quotedStr = do 
@@ -69,6 +60,11 @@ num = do
          Left i -> return $ toDyn i
          Right i -> return $ toDyn i
 
+periodDyn :: Parser Dyn
+periodDyn = do
+    p <- periodP
+    return $ toDyn (un p)
+
 
 nodata :: Parser (Exp Bool)
 nodata = NoData <$> (string "nodata" *> openQuote *> counterP <* comma) <*> periodP <* closeQuote
@@ -86,41 +82,61 @@ symbols = oneOf $ ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "-."
 
 -- !, &&, ||
 booleanP :: Parser (Exp Bool)
-booleanP = undefined
+booleanP = try nodata <|> try change <|> try compareP 
 
-notP :: Parser (Exp Bool)
-notP = do
-    void $ char '!' <* spaces
-    b <- booleanP
-    return $ Not b
+simpleTriggerP :: Parser (Exp Bool)
+simpleTriggerP = booleanP
 
+data Logic = NotToken | AndToken | OrToken | OpenQuote | CloseQuote | Simple (Exp Bool) deriving (Show, Eq)
+
+notToken, andToken, orToken, open, close, simpleToken, tok :: Parser Logic
+notToken = spaces *> char '!' *> spaces *> pure NotToken
+andToken = spaces *> char '&' *> char '&' *> spaces *> pure AndToken
+orToken = spaces *> char '|' *> char '|' *> spaces *> pure OrToken
+open = openQuote *> pure OpenQuote
+close = closeQuote *> pure CloseQuote
+simpleToken = Simple <$> ( spaces *> simpleTriggerP <* spaces)
+tok = try open <|> try close <|> try notToken <|> try andToken <|> try orToken <|> simpleToken
+
+tokenizer :: Parser [Logic]
+tokenizer = many1 tok <* eof
+
+
+etrigger :: [Logic] -> Either String ETrigger
+etrigger xs = undefined
 
 -- >, <, >=, <=, !=, =
 compareP :: Parser (Exp Bool)
-compareP = undefined
+compareP = try moreP <|> try lessP <|> try equalP
+
+moreP :: Parser (Exp Bool)
+moreP = More <$> dynP <* moreP' <*> dynP
+    where
+    moreP' = void $ spaces *> char '>' <* spaces
+
+lessP :: Parser (Exp Bool)
+lessP = Less <$> dynP <* lessP' <*> dynP
+    where
+    lessP' = void $ spaces *> char '<' <* spaces
+
+equalP :: Parser (Exp Bool)
+equalP = Equal <$> dynP <* equalP' <*> dynP
+    where
+    equalP' = void $ spaces *> char '=' <* spaces
 
 ------------------------------------------------------------------------------------------------------------------------------
 
-period :: String -> Either ParseError Period
+period :: String -> Either ParseError (Period Int)
 period = parse periodP "parse period"
 
-periodP :: Parser Period
+periodP :: Parser (Period Int)
 periodP = spaces *> choice [try time, try (Count <$> int)] <* spaces
 
-time :: Parser Period
+time :: Parser (Period Int)
 time = do
     i <- int
     q <- quant
-    return $ Sec (i * q)
-
-quant :: Parser Int 
-quant = (string "s" *> pure 1) <|> 
-        (string "m" *> pure 60) <|> 
-        (string "h" *> pure 3600) <|> 
-        (string "d" *> pure (3600 * 24)) <|> 
-        (string "w" *> pure (3600 * 24 * 7)) <|>
-        (string "m" *> pure (3600 * 24 * 30)) <|>
-        (string "y" *> pure (3600 * 24 * 365))
+    return $ (*i) <$> q
 
 ------------------------------------------------------------------------------------------------------------------------------
 openQuote :: Parser ()
@@ -133,7 +149,32 @@ comma :: Parser ()
 comma = void $ char ','
 
 number :: Parser (Either Double Int)
-number = floatingOrInteger . read <$> (many1 (digit <|> char '.'))
+number = do
+    a <- optionMaybe (many1 digit)
+    p <- optionMaybe (char '.')
+    b <- optionMaybe (many1 digit)
+    case (a, p, b) of
+         (Nothing, Just _ , Just x ) -> return (Left $ read $ "0." <> x)
+         (Just x , Nothing, _      ) -> return (Right (read x))
+         (Just x , Just _ , Nothing) -> return (Left $ read x )
+         (Just x , Just _ , Just y ) -> return (Left $ read $ x <> "." <> y)
+         _ -> fail "bad number"
+
+quant :: Parser (Period Int)
+quant = try (string "mk") *> (pure $ MicroSec 1 )
+    <|> try (string "ms") *> (pure $ MicroSec 1000)
+    <|> try (char 's'   ) *> (pure $ MicroSec 1000000)
+    <|> try (char 'm'   ) *> (pure $ MicroSec ( 60 * 1000000))
+    <|> try (char 'h'   ) *> (pure $ MicroSec ( 60 * 60 * 1000000))
+    <|> try (char 'D'   ) *> (pure $ MicroSec ( 24 * 60 * 60 * 1000000))
+    <|> try (char 'W'   ) *> (pure $ MicroSec ( 7 * 24 * 60 * 60 * 1000000))
+    <|> try (char 'M'   ) *> (pure $ MicroSec ( 30 * 24 * 60 * 60 * 1000000))
+    <|> try (char 'Y'   ) *> (pure $ MicroSec ( 365 * 24 * 60 * 60 * 1000000))
+    <|> try (char 'B'   ) *> (pure $ Byte 1)
+    <|> try (string "KB") *> (pure $ Byte 1024)
+    <|> try (string "MB") *> (pure $ Byte ( 1024 * 1024))
+    <|> try (string "GB") *> (pure $ Byte ( 1024 * 1024 * 1024))
+    <|> try (string "TB") *> (pure $ Byte ( 1024 * 1024 * 1024 * 1024))
 
 left :: Either a b -> a
 left (Left a) = a

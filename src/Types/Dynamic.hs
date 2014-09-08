@@ -6,6 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Types.Dynamic
 ( dynTypeRep
@@ -25,6 +26,8 @@ module Types.Dynamic
 , Exp(..)
 , Fun(..)
 , Period(..)
+, eval
+, evalExp
 )
 where
 
@@ -147,20 +150,23 @@ instance Binary Dyn where
         fun 5 = DynList <$> (get :: Get [Dyn])
         fun _ = error "bad binary"
 
-data Period = Sec Int
-            | Count Int
-            deriving (Show, Eq, Ord, Typeable, Generic)
+data Period a = MicroSec { un :: a }
+              | Byte { un :: a }
+              | Count { un :: a }
+              deriving (Show, Eq, Ord, Typeable, Generic, Functor)
 
-instance Binary Period
+
+
+instance Binary (Period Int)
 
 data Exp a where
   EnvVal :: Counter -> Exp Dyn                 -- наименование параметра, значение берется из окружения
   Val :: Dyn -> Exp Dyn
-  Last   :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la5->last(3) > system.cpu.loadavg.la5#last(2)
-  Avg    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la5#avg(300)
+  Last   :: Counter -> Period Int -> Exp Dyn        -- system.cpu.loadavg.la5->last(3) > system.cpu.loadavg.la5#last(2)
+  Avg    :: Counter -> Period Int -> Exp Dyn        -- system.cpu.loadavg.la5#avg(300)
   Prev   :: Counter -> Exp Dyn              -- предыдущее значение
-  Min    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la1#min(300)
-  Max    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la1#max(300)
+  Min    :: Counter -> Period Int -> Exp Dyn        -- system.cpu.loadavg.la1#min(300)
+  Max    :: Counter -> Period Int -> Exp Dyn        -- system.cpu.loadavg.la1#max(300)
   Not :: Exp Bool -> Exp Bool
   Or :: Exp Bool -> Exp Bool -> Exp Bool
   And :: Exp Bool -> Exp Bool -> Exp Bool
@@ -168,7 +174,7 @@ data Exp a where
   More :: Exp Dyn -> Exp Dyn -> Exp Bool
   Equal :: Exp Dyn -> Exp Dyn -> Exp Bool
   Change :: Counter -> Exp Bool                -- system.hostname#change
-  NoData :: Counter -> Period -> Exp Bool          -- http.simple.status#nodata(300)
+  NoData :: Counter -> Period Int -> Exp Bool          -- http.simple.status#nodata(300)
 
 instance Show (Exp a) where
     show (EnvVal x) = "EnvVal " ++ show x
@@ -252,12 +258,12 @@ instance Binary Table
 instance Binary Complex
 
 data Fun = ChangeFun Counter
-         | LastFun Counter Period
-         | AvgFun Counter Period
+         | LastFun Counter (Period Int)
+         | AvgFun Counter (Period Int)
          | PrevFun Counter
-         | MinFun Counter Period
-         | MaxFun Counter Period
-         | NoDataFun Counter Period
+         | MinFun Counter (Period Int)
+         | MaxFun Counter (Period Int)
+         | NoDataFun Counter (Period Int)
          deriving (Show, Eq, Ord, Typeable, Generic)
 
 instance Binary Fun
