@@ -6,6 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Types.Dynamic
 ( dynTypeRep
@@ -23,6 +24,11 @@ module Types.Dynamic
 , dType
 , timeType
 , Exp(..)
+, DynExp(..)
+, Fun(..)
+, Period(..)
+, eval
+, evalExp
 )
 where
 
@@ -145,94 +151,36 @@ instance Binary Dyn where
         fun 5 = DynList <$> (get :: Get [Dyn])
         fun _ = error "bad binary"
 
-data Period = Sec Int
-            | Count Int
-            deriving (Show, Eq, Ord, Typeable, Generic)
-
-instance Binary Period
-
-data Exp a where
-  EnvVal :: Counter -> Exp Dyn                 -- наименование параметра, значение берется из окружения
-  Val :: Dyn -> Exp Dyn
-  Last   :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la5->last(3) > system.cpu.loadavg.la5#last(2)
-  Avg    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la5#avg(300)
-  Prev   :: Counter -> Exp Dyn              -- предыдущее значение
-  Min    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la1#min(300)
-  Max    :: Counter -> Period -> Exp Dyn        -- system.cpu.loadavg.la1#max(300)
-  Not :: Exp Bool -> Exp Bool
-  Or :: Exp Bool -> Exp Bool -> Exp Bool
-  And :: Exp Bool -> Exp Bool -> Exp Bool
-  Less :: Exp Dyn -> Exp Dyn -> Exp Bool
-  More :: Exp Dyn -> Exp Dyn -> Exp Bool
-  Equal :: Exp Dyn -> Exp Dyn -> Exp Bool
-  Change :: Counter -> Exp Bool                -- system.hostname#change
-  NoData :: Counter -> Period -> Exp Bool          -- http.simple.status#nodata(300)
-
-instance Show (Exp a) where
-    show (EnvVal x) = "EnvVal " ++ show x
-    show (Val x) = "Val " ++ show x
-    show (Last x y) = "Last " ++ show x ++ " " ++ show y
-    show (Avg x y) = "Avg " ++ show x ++ " " ++ show y
-    show (Prev x) = "Prev " ++ show x
-    show (Min x y) = "Min " ++ show x ++ " " ++ show y
-    show (Max x y) = "Max " ++ show x ++ " " ++ show y
-    show (Not x) = "Not " ++ show x
-    show (Or x y) = "Or " ++ show x ++ " " ++ show y
-    show (And x y) = "And " ++ show x ++ " " ++ show y
-    show (Less x y) = "Less " ++ show x ++ " " ++ show y
-    show (More x y) = "More " ++ show x ++ " " ++ show y
-    show (Equal x y) = "Equal " ++ show x ++ " " ++ show y
-    show (Change x) = "Change " ++ show x
-    show (NoData x y) = "NoData " ++ show x ++ " " ++ show y
-
-instance Eq (Exp a) where
-    x == y = show x == show y
+data Period a = MicroSec { un :: a }
+              | Byte { un :: a }
+              | Count { un :: a }
+              deriving (Show, Eq, Ord, Typeable, Generic, Functor)
 
 
-instance Binary (Exp Dyn) where
-    {-# INLINE put #-}
-    put (EnvVal x)   = putWord8 0  >> put x
-    put (Val x)      = putWord8 1  >> put x
-    put (Last x y)   = putWord8 9  >> put x >> put y
-    put (Avg x y)    = putWord8 10 >> put x >> put y
-    put (Prev x)     = putWord8 11 >> put x
-    put (Min x y)    = putWord8 12 >> put x >> put y
-    put (Max x y)    = putWord8 13 >> put x >> put y
-    {-# INLINE get #-}
-    get = getWord8 >>= getExp
-        where
-            getExp 0  = EnvVal <$> get
-            getExp 1  = Val    <$> get
-            getExp 9  = Last   <$> get <*> get
-            getExp 10 = Avg    <$> get <*> get
-            getExp 11 = Prev   <$> get
-            getExp 12 = Min    <$> get <*> get
-            getExp 13 = Max    <$> get <*> get
-            getExp _  = error "bad binary"
 
-instance Binary (Exp Bool) where
-    {-# INLINE put #-}
-    put (Not x)      = putWord8 2  >> put x
-    put (Or x y)     = putWord8 3  >> put x >> put y
-    put (And x y)    = putWord8 4  >> put x >> put y
-    put (Less x y)   = putWord8 5  >> put x >> put y
-    put (More x y)   = putWord8 6  >> put x >> put y
-    put (Equal x y)  = putWord8 7  >> put x >> put y
-    put (Change x)   = putWord8 8  >> put x
-    put (NoData x y) = putWord8 14 >> put x >> put y
-    {-# INLINE get #-}
-    get = getWord8 >>= getExp
-        where
-            getExp 2  = Not    <$> get
-            getExp 3  = Or     <$> get <*> get
-            getExp 4  = And    <$> get <*> get
-            getExp 5  = Less   <$> get <*> get
-            getExp 6  = More   <$> get <*> get
-            getExp 7  = Equal  <$> get <*> get
-            getExp 8  = Change <$> get
-            getExp 14 = NoData <$> get <*> get
-            getExp _  = error "bad binary"
+instance Binary (Period Int)
 
+data Exp = Not Exp 
+         | Or  Exp Exp
+         | And Exp Exp
+         | Less DynExp DynExp
+         | More DynExp DynExp
+         | Equal DynExp DynExp
+         | Change Counter
+         | NoData Counter (Period Int)
+         deriving (Show, Eq, Typeable, Generic)
+
+data DynExp = EnvVal Counter
+            | Val Dyn
+            | Avg Counter (Period Int)
+            | Last Counter (Period Int)
+            | Prev Counter
+            | Min Counter (Period Int)
+            | Max Counter (Period Int)
+            deriving (Show, Eq, Typeable, Generic)
+
+instance Binary DynExp
+instance Binary Exp
 
 newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
 
@@ -250,12 +198,12 @@ instance Binary Table
 instance Binary Complex
 
 data Fun = ChangeFun Counter
-         | LastFun Counter Period
-         | AvgFun Counter Period
+         | LastFun Counter (Period Int)
+         | AvgFun Counter (Period Int)
          | PrevFun Counter
-         | MinFun Counter Period
-         | MaxFun Counter Period
-         | NoDataFun Counter Period
+         | MinFun Counter (Period Int)
+         | MaxFun Counter (Period Int)
+         | NoDataFun Counter (Period Int)
          deriving (Show, Eq, Ord, Typeable, Generic)
 
 instance Binary Fun
@@ -273,10 +221,10 @@ runTrigger e rt = eval e rt
 
 type Eval a = ReaderT Env (ExceptT String IO) a
 
-eval :: Env -> Exp Bool -> IO (Either String Bool)
+eval :: Env -> Exp -> IO (Either String Bool)
 eval env e = runExceptT (runReaderT (evalExp e) env)
 
-evalExp :: Exp Bool -> Eval Bool
+evalExp :: Exp -> Eval Bool
 evalExp (Equal x y) = do
     a <- evalVal x
     b <- evalVal y
@@ -289,22 +237,23 @@ evalExp (Less x y) = do
     a <- evalVal x
     b <- evalVal y
     return $ a < b
+evalExp (Not e) = not <$> evalExp e
+evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
+evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
 evalExp (NoData c i) = do
     getFun <- getValue <$> ask
     r <- liftIO $ getFun (NoDataFun c i)
     case r of
-         DynList [] -> return True
-         _ -> return False
+      DynList [] -> return True
+      _ -> return False
 evalExp (Change c) = do
     last' <- evalVal (Last c (Count 0))
     prev <- evalVal (Prev c)
     return $ last' /= prev
-evalExp (Not e) = not <$> evalExp e
-evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
-evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
 
 
-evalVal :: Exp Dyn -> Eval Dyn
+
+evalVal :: DynExp -> Eval Dyn
 evalVal (Val x) = return x
 evalVal (EnvVal x) = do
     Complex complex <- lastComplex <$> ask
@@ -331,7 +280,7 @@ evalVal (Max c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (MaxFun c i)
 
-type ETrigger = Exp Bool
+type ETrigger = Exp
 
 instance Binary UTCTime where
     put (UTCTime x y) = put (fromEnum x) >> put (fromEnum y)

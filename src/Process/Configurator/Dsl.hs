@@ -1,89 +1,160 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Process.Configurator.Dsl
 where
 
-import           Types
-import           Data.Text            hiding (empty, filter, foldl1, head, map,
-                                       takeWhile)
-import           Control.Applicative  (pure, (*>), (<$>), (<*), (<*>), (<|>))
-import           Data.Attoparsec.Text
-import           Data.Char            (isSpace)
-import           Data.Scientific      (floatingOrInteger)
+import           Control.Applicative                    hiding ((<|>))
+import           Control.Monad
+import           Data.Monoid                            ((<>))
+import           Data.Text                              (Text, pack)
+import           Prelude                                hiding (max, min)
+import           Text.ParserCombinators.Parsec
+import           Text.ParserCombinators.Parsec.Expr
+import           Text.ParserCombinators.Parsec.Language
+import qualified Text.ParserCombinators.Parsec.Token    as Token
+import           Types.Dynamic
 
-import           Prelude              hiding (lookup, takeWhile)
+parseTrigger :: Text -> Either String Exp
+parseTrigger = undefined
 
-top :: Parser (Exp Bool)
-top = logic <$> many1 (eitherP expr spliter)
+languageDef :: LanguageDef st
+languageDef =
+  emptyDef { Token.commentStart = ""
+           , Token.commentEnd   = ""
+           , Token.commentLine  = ""
+           , Token.identStart   = letter
+           , Token.identLetter  = letter <|> char '.'
+           , Token.reservedNames = [ "last"
+                                   , "avg"
+                                   , "min"
+                                   , "max"
+                                   , "nodata"
+                                   , "change"
+                                   , "prev"
+                                   ]
+           , Token.reservedOpNames = [ "&&", "||", "!", "=", ">", "<" ]
+           }
 
-logic :: [Either (Exp Bool) Lo] -> Exp Bool
-logic (Left x:[]) = x
-logic (Left x : Right y : xs) = loToLogic y x (logic xs)
-logic _ = error "bad expression in trigger"
+lexer :: Token.TokenParser st
+lexer = Token.makeTokenParser languageDef
 
-data Lo = A | O
+identifier :: Parser Text
+identifier = pack <$> Token.identifier lexer -- parses an identifier
 
-loToLogic :: Lo -> Exp Bool -> Exp Bool -> Exp Bool
-loToLogic A = And
-loToLogic O = Or
+reserved :: String -> Parser ()
+reserved   = Token.reserved   lexer -- parses a reserved name
 
-aP, oP, spliter :: Parser Lo
-aP = string "and" *> sp *> pure A
-oP = string "or"  *> sp *> pure O
-spliter = aP <|> oP
+reservedOp :: String -> Parser ()
+reservedOp = Token.reservedOp lexer -- parses an operator
 
-expr :: Parser (Exp Bool)
-expr = Not <$> (string "not" *> sp *> simpl) <|> simpl
+parens :: Parser Exp -> Parser Exp
+parens     = Token.parens     lexer -- parses surrounding parenthesis:
 
-simpl :: Parser (Exp Bool)
-simpl = eql 
+semi :: Parser String
+semi       = Token.semi       lexer -- parses a semicolon
 
-eql :: Parser (Exp Bool)
-eql = equalP <|> moreP <|> lessP
-  where
-  equalP = Equal <$> (nameP <* string "equal") <*> (sp *> returnP)
-  moreP = More <$> (nameP <* string "more") <*> (sp *> returnP)
-  lessP = Less <$> (nameP <* string "less") <*> (sp *> returnP)
+integer :: Parser Int
+integer = fromIntegral <$> Token.integer lexer
 
-boolP :: Parser (Exp Dyn)
-boolP = Val . toDyn <$> ((string "true" *> sp *> pure True) <|> (string "True" *> sp *> pure True) <|> (string "False" *> sp *> pure False) <|> (string "false" *> sp *> pure False))
+whiteSpace :: Parser ()
+whiteSpace = Token.whiteSpace lexer -- parses whitespace
 
-nameP :: Parser (Exp Dyn)
-nameP = EnvVal . Counter <$> takeWhile1 (inClass "a-zA-Z0-9.-") <* sp
+stringLiteral :: Parser Text
+stringLiteral = pack <$> Token.stringLiteral lexer
 
-returnP :: Parser (Exp Dyn)
-returnP = boolP <|> num <|> nameP
+expr :: Parser Exp
+expr = whiteSpace >> topLevel
+
+topLevel :: Parser Exp
+topLevel = buildExpressionParser bOperators bTerm
+
+bOperators :: [[Operator Char () Exp]]
+bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "!" >> return Not) ]
+             , [Infix  (try $ whiteSpace >> reservedOp "&&" >> return And) AssocLeft]
+             , [Infix  (try $ whiteSpace >> reservedOp "||" >> return Or) AssocLeft]
+             ]
+
+bTerm :: Parser Exp
+bTerm = parens topLevel <|> 
+               middleLevel <|> 
+               nodata <|>
+               change
+
+middleLevel :: Parser Exp
+middleLevel = do
+  a <- funs
+  f <- relation
+  b <- funs
+  return $ f a b
+
+relation :: Parser (DynExp -> DynExp -> Exp)
+relation = (try $ whiteSpace *> reservedOp "=" *> return Equal)
+       <|> (try $ whiteSpace *> reservedOp ">" *> return More)
+       <|> (try $ whiteSpace *> reservedOp "<" *> return Less)
 
 
-num :: Parser (Exp Dyn)
-num = do
-    c <- scientific <* sp
-    case floatingOrInteger c of
-         Right x -> return $ Val . toDyn $ (x :: Int)
-         Left x -> return $ Val . toDyn $ (x :: Double)
 
-sp :: Parser ()
-sp = takeWhile1 isSpace *> pure () <|> takeWhile isSpace *> endOfInput *> pure ()
+funs :: Parser DynExp
+funs = (fun "min" Min) <|> (fun "max" Max) <|> (fun "last" Last) <|> (fun "avg" Avg) <|> prev <|> envval <|> val
 
-parseTrigger :: Text -> Either String (Exp Bool)
-parseTrigger = parseOnly top
+fun :: String -> (Counter -> Period Int -> DynExp) -> Parser DynExp
+fun i f = f <$> (reserved i *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
 
+prev :: Parser DynExp
+prev = Prev <$> (reserved "prev" *> char '(' *> (Counter <$> identifier) <* char ')')
 
-data Env = Env
+envval :: Parser DynExp
+envval = EnvVal <$> Counter <$> identifier
 
-data ConfigError = ConfigError String
+change :: Parser Exp
+change = Change <$> (reserved "change" *> char '(' *> (Counter <$> identifier) <* char ')')
 
--- | Examples
---
--- >>> let a = Text $ pack "key"
--- >>> let b = Any $ Bool True
--- >>> let c = Equal a b
--- >>> let m = Complex $ Map.fromList [(pack "key", Any (Bool True)), (pack "int", Any (Int 3))]
--- >>> let m1 = Complex $ Map.fromList [(pack "bool", Any (Bool True)), (pack "key", Any (Int 3))]
---
--- >>> eval c m
--- Status {unStatus = True}
--- >>> eval c m1
--- Status {unStatus = *** Exception: TypeError "you try do Int == Bool"
+nodata :: Parser Exp
+nodata = NoData <$> (reserved "nodata" *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
+
+val :: Parser DynExp
+val = Val <$> try (number <|> str)
+
+str :: Parser Dyn
+str = toDyn <$> stringLiteral
+
+number :: Parser Dyn
+number = do
+    a <- try $ optionMaybe (many1 digit)
+    p <- try $ optionMaybe (char '.')
+    b <- try $ optionMaybe (many1 digit)
+    c <- try $ optionMaybe quant
+    case (a, p, b, c) of
+      (Nothing, Just _ , Just x , _       ) -> return (toDyn (read $ "0." <> x :: Double))
+      (Just x , Nothing, _      , Just q  ) -> return (toDyn (un q * (read x :: Int)))
+      (Just x , Nothing, _      , Nothing ) -> return (toDyn (read x :: Int))
+      (Just x , Just _ , Nothing, _       ) -> return (toDyn (read x :: Double))
+      (Just x , Just _ , Just y , _       ) -> return (toDyn (read $ x <> "." <> y :: Double ))
+      _ -> fail "bad number"
+
+periodP :: Parser (Period Int)
+periodP = spaces *> choice [try time, try (Count <$> integer)] <* spaces
+
+time :: Parser (Period Int)
+time = do
+    i <- integer
+    q <- quant
+    return $ (*i) <$> q
+
+quant :: Parser (Period Int)
+quant = try (string "mk") *> (pure $ MicroSec 1 )
+    <|> try (string "ms") *> (pure $ MicroSec 1000)
+    <|> try (char 's'   ) *> (pure $ MicroSec 1000000)
+    <|> try (char 'm'   ) *> (pure $ MicroSec ( 60 * 1000000))
+    <|> try (char 'h'   ) *> (pure $ MicroSec ( 60 * 60 * 1000000))
+    <|> try (char 'D'   ) *> (pure $ MicroSec ( 24 * 60 * 60 * 1000000))
+    <|> try (char 'W'   ) *> (pure $ MicroSec ( 7 * 24 * 60 * 60 * 1000000))
+    <|> try (string "MB") *> (pure $ Byte ( 1024 * 1024))
+    <|> try (char 'M'   ) *> (pure $ MicroSec ( 30 * 24 * 60 * 60 * 1000000))
+    <|> try (char 'Y'   ) *> (pure $ MicroSec ( 365 * 24 * 60 * 60 * 1000000))
+    <|> try (char 'B'   ) *> (pure $ Byte 1)
+    <|> try (string "KB") *> (pure $ Byte 1024)
+    <|> try (string "GB") *> (pure $ Byte ( 1024 * 1024 * 1024))
+    <|> try (string "TB") *> (pure $ Byte ( 1024 * 1024 * 1024 * 1024))
+
