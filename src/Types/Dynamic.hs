@@ -163,11 +163,11 @@ instance Binary (Period Int)
 data Exp = Not Exp 
          | Or  Exp Exp
          | And Exp Exp
-         | Change Counter
-         | NoData Counter (Period Int)
          | Less DynExp DynExp
          | More DynExp DynExp
          | Equal DynExp DynExp
+         | Change Counter
+         | NoData Counter (Period Int)
          deriving (Show, Eq, Typeable, Generic)
 
 data DynExp = EnvVal Counter
@@ -237,19 +237,20 @@ evalExp (Less x y) = do
     a <- evalVal x
     b <- evalVal y
     return $ a < b
+evalExp (Not e) = not <$> evalExp e
+evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
+evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
 evalExp (NoData c i) = do
     getFun <- getValue <$> ask
     r <- liftIO $ getFun (NoDataFun c i)
     case r of
-         DynList [] -> return True
-         _ -> return False
+      DynList [] -> return True
+      _ -> return False
 evalExp (Change c) = do
     last' <- evalVal (Last c (Count 0))
     prev <- evalVal (Prev c)
     return $ last' /= prev
-evalExp (Not e) = not <$> evalExp e
-evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
-evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
+
 
 
 evalVal :: DynExp -> Eval Dyn

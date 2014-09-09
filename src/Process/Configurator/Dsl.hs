@@ -54,6 +54,9 @@ parens     = Token.parens     lexer -- parses surrounding parenthesis:
 semi :: Parser String
 semi       = Token.semi       lexer -- parses a semicolon
 
+integer :: Parser Int
+integer = fromIntegral <$> Token.integer lexer
+
 whiteSpace :: Parser ()
 whiteSpace = Token.whiteSpace lexer -- parses whitespace
 
@@ -73,7 +76,10 @@ bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "!" >> return Not) ]
              ]
 
 bTerm :: Parser Exp
-bTerm = parens topLevel <|> (middleLevel <|> nodata <|> change)
+bTerm = parens topLevel <|> 
+               middleLevel <|> 
+               nodata <|>
+               change
 
 middleLevel :: Parser Exp
 middleLevel = do
@@ -90,7 +96,7 @@ relation = (try $ whiteSpace *> reservedOp "=" *> return Equal)
 
 
 funs :: Parser DynExp
-funs = (fun "min" Min) <|> (fun "max" Max) <|> (fun "last" Last) <|> (fun "avg" Avg) <|> prev <|> envval
+funs = (fun "min" Min) <|> (fun "max" Max) <|> (fun "last" Last) <|> (fun "avg" Avg) <|> prev <|> envval <|> val
 
 fun :: String -> (Counter -> Period Int -> DynExp) -> Parser DynExp
 fun i f = f <$> (reserved i *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
@@ -101,53 +107,38 @@ prev = Prev <$> (reserved "prev" *> char '(' *> (Counter <$> identifier) <* char
 envval :: Parser DynExp
 envval = EnvVal <$> Counter <$> identifier
 
-val :: Parser DynExp
-val = Val <$> (try num <|> try periodDyn <|> str)
-
-str :: Parser Dyn
-str = toDyn <$> stringLiteral
-
-periodDyn ::Parser Dyn
-periodDyn = toDyn . un <$> periodP
-
-num :: Parser Dyn
-num = do
-    n <- number
-    case n of
-      Left i -> return $ toDyn i
-      Right i -> return $ toDyn i
-
-number :: Parser (Either Double Int)
-number = do
-    a <- try $ optionMaybe (many1 digit)
-    p <- try $ optionMaybe (char '.')
-    b <- try $ optionMaybe (many1 digit)
-    case (a, p, b) of
-      (Nothing, Just _ , Just x ) -> return (Left $ read $ "0." <> x)
-      (Just x , Nothing, _      ) -> return (Right (read x))
-      (Just x , Just _ , Nothing) -> return (Left $ read x )
-      (Just x , Just _ , Just y ) -> return (Left $ read $ x <> "." <> y)
-      _ -> fail "bad number"
-
-int :: Parser Int
-int = right <$> number
-
-right :: Either a b -> b
-right (Right a) = a
-right _ = error "must be Int"
-
 change :: Parser Exp
 change = Change <$> (reserved "change" *> char '(' *> (Counter <$> identifier) <* char ')')
 
 nodata :: Parser Exp
 nodata = NoData <$> (reserved "nodata" *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
 
+val :: Parser DynExp
+val = Val <$> try (number <|> str)
+
+str :: Parser Dyn
+str = toDyn <$> stringLiteral
+
+number :: Parser Dyn
+number = do
+    a <- try $ optionMaybe (many1 digit)
+    p <- try $ optionMaybe (char '.')
+    b <- try $ optionMaybe (many1 digit)
+    c <- try $ optionMaybe quant
+    case (a, p, b, c) of
+      (Nothing, Just _ , Just x , _       ) -> return (toDyn (read $ "0." <> x :: Double))
+      (Just x , Nothing, _      , Just q  ) -> return (toDyn (un q * (read x :: Int)))
+      (Just x , Nothing, _      , Nothing ) -> return (toDyn (read x :: Int))
+      (Just x , Just _ , Nothing, _       ) -> return (toDyn (read x :: Double))
+      (Just x , Just _ , Just y , _       ) -> return (toDyn (read $ x <> "." <> y :: Double ))
+      _ -> fail "bad number"
+
 periodP :: Parser (Period Int)
-periodP = spaces *> choice [try time, try (Count <$> int)] <* spaces
+periodP = spaces *> choice [try time, try (Count <$> integer)] <* spaces
 
 time :: Parser (Period Int)
 time = do
-    i <- int
+    i <- integer
     q <- quant
     return $ (*i) <$> q
 
