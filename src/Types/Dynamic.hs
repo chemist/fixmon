@@ -2,22 +2,20 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings          #-}
 module Types.Dynamic
 ( dynTypeRep
 , Dyn(..)
 , Dynamic(..)
 , Env(..)
-, Database(..)
 , runTrigger
 , Counter(..)
 , ETrigger
 , Complex(..)
+, Table(..)
 , iType
 , tType
 , bType
@@ -40,8 +38,7 @@ import           Data.Binary
 import qualified Data.Dynamic         as D
 import           Data.Monoid          (Monoid)
 import           Data.String
-import           Data.Text            (Text)
-import           Data.Text            (pack)
+import           Data.Text            (Text, pack)
 import           Data.Text.Binary     ()
 import           Data.Time
 import           Data.Typeable
@@ -160,7 +157,7 @@ data Period a = MicroSec { un :: a }
 
 instance Binary (Period Int)
 
-data Exp = Not Exp 
+data Exp = Not Exp
          | Or  Exp Exp
          | And Exp Exp
          | Less DynExp DynExp
@@ -213,11 +210,8 @@ data Env = Env
   , getValue    :: Fun -> IO Dyn
   }
 
-class Database db where
-    getData :: db -> Table -> Fun -> IO Dyn
-
 runTrigger :: Env -> ETrigger -> IO (Either String Bool)
-runTrigger e rt = eval e rt
+runTrigger = eval
 
 type Eval a = ReaderT Env (ExceptT String IO) a
 
@@ -261,7 +255,7 @@ evalVal (EnvVal x) = do
          Nothing -> error "bad counter"
          Just r -> return r
 evalVal (Last c i)
-    | i == (Count 0) = do
+    | i == Count 0 = do
         Complex complex <- lastComplex <$> ask
         case lookup c complex of
              Nothing -> error "bad counter"

@@ -24,10 +24,10 @@ module Types
 , Status(..)
 , Monitoring(..)
 -- , Log(..)
-, StartOptions(..)
 , IntId(..)
 , routeCheck'
 , module Types.Dynamic
+, Database(..)
 -- * monads
 -- * error
 -- * for tests
@@ -38,4 +38,10 @@ import           Types.Check
 import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
+
+class Database db where
+    getData :: db -> Table -> Fun -> IO Dyn
+    saveData :: db -> [(Hostname, Complex)] -> IO ()
+    config :: db
+
 

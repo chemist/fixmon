@@ -5,7 +5,6 @@ dist/*
 interrupts
 interrupts_head
 proc
-src/Storage/*
 stat
 static/app/
 static/css/

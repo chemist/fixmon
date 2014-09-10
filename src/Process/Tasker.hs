@@ -8,7 +8,7 @@ module Process.Tasker
 
 
 import           Control.DeepSeq
-import           Control.Monad                                       (void)
+-- import           Control.Monad                                       (void)
 import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..),
                                                                       checkById, hostById, triggerById)
@@ -18,13 +18,8 @@ import           Types
 
 import           Control.Distributed.Process                         hiding
                                                                       (call)
-import           Control.Distributed.Process.Closure                 (mkClosure,
-                                                                      remotable)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
-import           Control.Distributed.Process.Platform.Task           (BlockingQueue, executeTask,
-                                                                      pool,
-                                                                      start)
 import           Control.Distributed.Process.Platform.Time
 import           Data.Set                                            (Set,
                                                                       toList)
@@ -41,7 +36,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     where
     makeCheck _ _ Nothing Nothing = return ()
     makeCheck _ _ _ Nothing  = return ()
-    makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
+    makeCheck (Just host) (Just check) (Just _trigger) (Just pid) = do
         say "taskmake"
         dt <- doTask (Pid pid) check
         say "save"
