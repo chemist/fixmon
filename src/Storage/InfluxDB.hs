@@ -1,14 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 module Storage.InfluxDB where
 
-import           Control.Monad         (unless, void)
+import           Control.Monad         (unless)
 import           Data.Aeson (ToJSON(..), object, (.=), encode)
 import           Data.ByteString.Char8 (pack)
 import           Data.Monoid           ((<>))
 import           Data.Text             (Text)
 import           Network.HTTP.Conduit  hiding (host, port)
-import           Types
+import           Network.HTTP.Types.Status
+import           Types hiding (Status)
+import           Control.Applicative ((<$>))
+import           Control.Exception (throw, catch)
 
 instance Database InfluxDB where
     getData = undefined
@@ -25,7 +29,7 @@ type Port = Int
 type EnableSSL = Bool
 
 data InfluxDB = InfluxDB
-  { db   :: !DB
+  { base :: !DB
   , user :: !User
   , pass :: !Password
   , host :: !Host
@@ -41,7 +45,7 @@ influxUrl conf = let scheme = if ssl conf
                                  then "https://"
                                  else "http://"
                      port' = show . port $ conf
-                 in scheme <> host conf <> ":" <> port' <> "/db/" <> db conf <> "/series"
+                 in scheme <> host conf <> ":" <> port' <> "/db/" <> base conf <> "/series"
 
 data Series = Series
     { seriesName :: !Text
@@ -84,9 +88,12 @@ save db forSave = do
             }
         request = addQueryStr request''
     unless (series == []) $ do
-        void $ withManager $ \manager -> do
-            response <-  request `seq` http request manager
-            return $! responseStatus response
-        return ()
+        response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
+        unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
+    return ()
+    where
+    catchConduit :: HttpException -> IO Status
+    catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
+
 
 

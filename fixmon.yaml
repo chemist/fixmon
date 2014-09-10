@@ -57,4 +57,4 @@ triggers:
     checks:
       - gethost
     description: тупо проверка имени
-    result: system.hostname equal limbo-air
+    result: system.hostname = "limbo-air"

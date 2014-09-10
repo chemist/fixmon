@@ -8,7 +8,7 @@ module Process.Storage
 where
 
 
-import           Control.Distributed.Process                         (Process,
+import           Control.Distributed.Process                         (Process, catch, 
                                                                       liftIO,
                                                                       say, spawnLocal)
 import           Control.Distributed.Process.Platform                (Recipient (..))
@@ -16,6 +16,7 @@ import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 
 import           Types                                 
+import           Storage.InfluxDB ()
 ---------------------------------------------------------------------------------------------------
 -- public
 ---------------------------------------------------------------------------------------------------
@@ -38,23 +39,23 @@ data ST db = ST
   , queue    :: ![(Hostname, Complex)]
   }
 
-initServer :: InitHandler db (ST db)
-initServer conf = do
+initServer :: Database db => InitHandler db (ST db)
+initServer db = do
     say "start storage"
-    return $! InitOk (ST conf []) defDelay
+    return $! InitOk (ST db []) defDelay
 
 server :: Database db => ProcessDefinition (ST db)
 server = defaultProcess
     { apiHandlers = [ saveToQueue ]
     , timeoutHandler = \st _ -> do
-        !_ <- spawnLocal $! liftIO $ saveData (database st) (queue st)
+        _ <- spawnLocal $ (liftIO $ saveData (database st) (queue st)) `catch` (\(e :: DBException) -> say $ show e)
         timeoutAfter_ defDelay (st { queue = [] })
     , infoHandlers = []
     , unhandledMessagePolicy = Log
     }
 
 
-saveToQueue :: Dispatcher (ST db)
+saveToQueue :: Database db => Dispatcher (ST db)
 saveToQueue = handleCast $ \st (message :: (Hostname, Complex)) -> continue $! st { queue = message : queue st }
 
 {--

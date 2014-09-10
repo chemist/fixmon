@@ -6,7 +6,8 @@ import           Process.Storage
 import           Process.Tasker
 import           Process.Watcher
 import           Process.Web
-import           Storage.InfluxDB (defConf)
+import           Storage.InfluxDB (InfluxDB)
+import           Types
 
 import           Control.Distributed.Process
 import           Control.Distributed.Process.Node
@@ -25,7 +26,7 @@ main = do
         let webProcess = do
               say "start web"
               liftIO $ web s
-        cstart <-  mapM toChildStart [webProcess, configurator, storage defConf, tasker, cron, watcher]
+        cstart <-  mapM toChildStart [webProcess, configurator, storage (config ::InfluxDB), tasker, cron, watcher]
         let cspec = zipWith (curry child) cstart ["web", "configurator", "storage", "tasker", "cron", "watcher"]
         superPid <-  super cspec
 --        c <- listChildren superPid
