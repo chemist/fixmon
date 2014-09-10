@@ -41,11 +41,11 @@ defConf :: InfluxDB
 defConf = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
 
 influxUrl :: InfluxDB -> String
-influxUrl conf = let scheme = if ssl conf
+influxUrl db = let scheme = if ssl db
                                  then "https://"
                                  else "http://"
-                     port' = show . port $ conf
-                 in scheme <> host conf <> ":" <> port' <> "/db/" <> base conf <> "/series"
+                     port' = show . port $ db
+                 in scheme <> host db <> ":" <> port' <> "/db/" <> base db <> "/series"
 
 data Series = Series
     { seriesName :: !Text
@@ -95,5 +95,15 @@ save db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
 
+get :: InfluxDB -> Table -> Fun -> IO Dyn
+get _db _t (ChangeFun _c) = undefined
+get _db _t (PrevFun   _c) = undefined
+get _db _t (LastFun   _c _p) = undefined
+get _db _t (AvgFun    _c _p) = undefined
+get _db _t (MinFun    _c _p) = undefined
+get _db _t (MaxFun    _c _p) = undefined
+get _db _t (NoDataFun _c _p) = undefined
+
+-- curl -G 'http://localhost:8086/db/fixmon/series?u=fixmon&p=fixmon' --data-urlencode "q=select status from localhost limit 1"
 
 
