@@ -87,7 +87,7 @@ save db forSave = do
             , requestBody = RequestBodyLBS $ encode series
             }
         request = addQueryStr request''
-    unless null series $ do
+    unless (null series) $ do
         response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
         unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
     return ()
