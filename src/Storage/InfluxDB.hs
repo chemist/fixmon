@@ -44,8 +44,8 @@ influxUrl :: InfluxDB -> String
 influxUrl db = let scheme = if ssl db
                                  then "https://"
                                  else "http://"
-                     port' = show . port $ db
-                 in scheme <> host db <> ":" <> port' <> "/db/" <> base db <> "/series"
+                   port' = show . port $ db
+               in scheme <> host db <> ":" <> port' <> "/db/" <> base db <> "/series"
 
 data Series = Series
     { seriesName :: !Text
@@ -73,7 +73,7 @@ complexToSeriesData (Complex x) = let (c', p') = unzip x
                                   in SeriesData c' [p']
 
 toSeries :: (Hostname, Complex) -> Series
-toSeries ((Hostname n), c) = Series n (complexToSeriesData c)
+toSeries (Hostname n, c) = Series n (complexToSeriesData c)
 
 
 save :: InfluxDB -> [(Hostname, Complex)] -> IO ()
@@ -87,7 +87,7 @@ save db forSave = do
             , requestBody = RequestBodyLBS $ encode series
             }
         request = addQueryStr request''
-    unless (series == []) $ do
+    unless null series $ do
         response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
         unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
     return ()
