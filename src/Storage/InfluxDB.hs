@@ -3,16 +3,27 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 module Storage.InfluxDB where
 
-import           Control.Monad         (unless)
-import           Data.Aeson (ToJSON(..), object, (.=), encode)
-import           Data.ByteString.Char8 (pack)
+import           Control.Monad         (unless, when)
+import           Data.Aeson (ToJSON(..), object, (.=), encode, FromJSON(..), (.:), Value(..), decode)
+import qualified Data.Aeson as A
+import qualified Data.Vector as V
+import           Data.ByteString.Char8 (pack, ByteString)
+import           Data.ByteString.Lazy (fromChunks)
 import           Data.Monoid           ((<>))
 import           Data.Text             (Text)
+import qualified Data.Text as T
+import           Data.Text.Encoding    (encodeUtf8)
 import           Network.HTTP.Conduit  hiding (host, port)
+import           Data.Conduit.List (consume)
+import           Data.Conduit (($$+-))
 import           Network.HTTP.Types.Status
 import           Types hiding (Status)
 import           Control.Applicative ((<$>))
 import           Control.Exception (throw, catch)
+import           Data.Scientific (floatingOrInteger)
+import Data.Maybe
+import Data.Typeable (TypeRep)
+import Debug.Trace
 
 instance Database InfluxDB where
     getData = undefined
@@ -61,6 +72,32 @@ instance ToJSON Series where
      where
         SeriesData {..} = seriesData
 
+instance FromJSON Series where
+    parseJSON (A.Array k) = do 
+      if V.null k 
+         then throw $ EmptyException
+         else do
+             let (Object v) = V.head k
+             n <-  v .: "name"
+             c <-  v .: "columns"
+             p <-  v .: "points"
+             return $ Series n (toSD c p)
+    parseJSON e = error $ show e
+
+toSD :: [Text] -> [[Value]] -> SeriesData
+toSD c p = let col = map Counter c
+               po  = map (map valToDyn) p
+           in SeriesData col po
+
+valToDyn :: Value -> Dyn
+valToDyn (String x) = toDyn x
+valToDyn (Number x) = case floatingOrInteger x of
+                           Left y -> toDyn (y :: Double)
+                           Right y -> toDyn (y :: Int)
+valToDyn (Bool x) = toDyn x
+valToDyn Null = toDyn ("null here" :: Text)
+valToDyn e = error $ "bad val " ++ show e
+
 data SeriesData = SeriesData
     { columns :: ![Column]
     , points  :: ![[Dyn]]
@@ -93,16 +130,80 @@ save db forSave = do
     return ()
     where
     catchConduit :: HttpException -> IO Status
-    catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
+    catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
 get :: InfluxDB -> Table -> Fun -> IO Dyn
 get _db _t (ChangeFun _c) = undefined
-get _db _t (PrevFun   _c) = undefined
-get _db _t (LastFun   _c _p) = undefined
+get _db _t (PrevFun   _c) = rawRequest _db _t (Counter "last") ("select last(" <> unCounter _c <> ") from " <> unTable _t)
+get db t (LastFun   c p) = do
+    xs <- rawRequest db t c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
+    case xs of
+         DynList xss -> return $ last xss
+         y -> return y
 get _db _t (AvgFun    _c _p) = undefined
-get _db _t (MinFun    _c _p) = undefined
-get _db _t (MaxFun    _c _p) = undefined
+get db t (MinFun    c p) = do
+    typeR <- counterType db t c
+    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
+    rawRequest db t (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+get db t (MaxFun    c p) = do
+    typeR <- counterType db t c
+    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
+    rawRequest db t (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get _db _t (NoDataFun _c _p) = undefined
+
+counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
+counterType db t c = do
+    r <- rawRequest db t (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+    return $ dynTypeRep r
+
+-- min  SELECT MIN(status) FROM localhost group by time(24h) where time > now() - 24h
+
+unTable :: Table -> Text
+unTable (Table x) = x
+unCounter :: Counter -> Text
+unCounter (Counter x) = x
+
+pt :: Period Int -> Text
+pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
+
+ptt :: Period Int -> Text
+ptt  = T.pack . show . un 
+
+rawRequest :: InfluxDB -> Table -> Counter -> Text -> IO Dyn
+rawRequest db t c raw = do
+    request' <- parseUrl $ influxUrl db
+    let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
+        request'' = request'
+            { method = "GET"
+            , checkStatus = \_ _ _ -> Nothing
+            }
+        request = addQueryStr request''
+    -- print request
+    response <- catch (withManager $ \manager -> do
+        r <-  http request manager
+        result <- responseBody r $$+- consume
+        return (responseStatus r, result)
+        ) catchConduit
+    unless (fst response  == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
+    let s = (decode . fromChunks . snd $ response :: Maybe Series)
+    -- print s
+    when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
+    return $ seriesToDyn c $ fromJust s
+    where
+    catchConduit :: HttpException -> IO (Status, [ByteString])
+    catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
+
+seriesToDyn :: Counter -> Series -> Dyn
+seriesToDyn c s = let col = columns . seriesData $ s
+                      poi = points . seriesData $ s
+                      mapped = catMaybes $ map (\x -> lookup c (zip col x)) poi
+                  in case mapped of
+                          [] -> throw $ TypeException $ "Influx problem: cant found result for counter " ++ show c
+                          [x] -> x
+                          xs -> DynList xs
+
+                              
+
 
 -- curl -G 'http://localhost:8086/db/fixmon/series?u=fixmon&p=fixmon' --data-urlencode "q=select status from localhost limit 1"
 

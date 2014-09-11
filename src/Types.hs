@@ -50,7 +50,10 @@ class Database db where
     saveData :: db -> [(Hostname, Complex)] -> IO ()
     config :: db
 
-data DBException = DBException String deriving (Show, Typeable)
+data DBException = HTTPException String
+                 | TypeException String
+                 | EmptyException 
+                 | DBException String deriving (Show, Typeable)
 
 instance Exception DBException 
 
