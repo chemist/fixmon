@@ -134,13 +134,16 @@ save db forSave = do
 
 get :: InfluxDB -> Table -> Fun -> IO Dyn
 get _db _t (ChangeFun _c) = undefined
-get _db _t (PrevFun   _c) = rawRequest _db _t (Counter "last") ("select last(" <> unCounter _c <> ") from " <> unTable _t)
+get db t (PrevFun   c) = rawRequest db t (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
 get db t (LastFun   c p) = do
     xs <- rawRequest db t c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
     case xs of
          DynList xss -> return $ last xss
          y -> return y
-get _db _t (AvgFun    _c _p) = undefined
+get db t (AvgFun    c p) = do
+    typeR <- counterType db t c
+    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
+    rawRequest db t (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (MinFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
