@@ -19,7 +19,7 @@ import           Data.Conduit (($$+-))
 import           Network.HTTP.Types.Status
 import           Types hiding (Status)
 import           Control.Applicative ((<$>))
-import           Control.Exception (throw, catch)
+import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
 import Data.Typeable (TypeRep)
@@ -134,29 +134,37 @@ save db forSave = do
 
 get :: InfluxDB -> Table -> Fun -> IO Dyn
 get _db _t (ChangeFun _c) = undefined
-get db t (PrevFun   c) = rawRequest db t (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
 get db t (LastFun   c p) = do
-    xs <- rawRequest db t c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
+    xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
     case xs of
          DynList xss -> return $ last xss
          y -> return y
 get db t (AvgFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
-    rawRequest db t (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+    rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (MinFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
-    rawRequest db t (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+    rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (MaxFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
-    rawRequest db t (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get _db _t (NoDataFun _c _p) = undefined
+    rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+get db t (NoDataFun c p) = do
+    r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
+    case r of
+         Right _ -> return $ toDyn False
+         Left EmptyException -> return $ toDyn True
+         Left e -> throw e
+
+
+
 
 counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
 counterType db t c = do
-    r <- rawRequest db t (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+    r <- rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
     return $ dynTypeRep r
 
 -- min  SELECT MIN(status) FROM localhost group by time(24h) where time > now() - 24h
@@ -172,8 +180,8 @@ pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
 ptt :: Period Int -> Text
 ptt  = T.pack . show . un 
 
-rawRequest :: InfluxDB -> Table -> Counter -> Text -> IO Dyn
-rawRequest db t c raw = do
+rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
+rawRequest db c raw = do
     request' <- parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
         request'' = request'
