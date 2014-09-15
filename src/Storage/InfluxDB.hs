@@ -23,10 +23,10 @@ import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
 import Data.Typeable (TypeRep)
-import Debug.Trace
+-- import Debug.Trace
 
 instance Database InfluxDB where
-    getData = undefined
+    getData = get
     saveData = save
     config = defConf
 
@@ -133,7 +133,11 @@ save db forSave = do
     catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
 get :: InfluxDB -> Table -> Fun -> IO Dyn
-get _db _t (ChangeFun _c) = undefined
+get db t (ChangeFun c) = do
+    r <- rawRequest db c $ "select " <> unCounter c <> " from " <> unTable t <> " limit 2"
+    case r of
+         DynList (x:y:[]) -> return $ toDyn (x /= y)
+         _ -> throw EmptyException
 get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
 get db t (LastFun   c p) = do
     xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
@@ -158,9 +162,6 @@ get db t (NoDataFun c p) = do
          Right _ -> return $ toDyn False
          Left EmptyException -> return $ toDyn True
          Left e -> throw e
-
-
-
 
 counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
 counterType db t c = do
