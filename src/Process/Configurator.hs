@@ -18,8 +18,7 @@ import           Process.Configurator.Yaml
 import           Types
 
 import           Control.Distributed.Process                         (Process,
-                                                                      nsend,
-                                                                      say)
+                                                                      nsend)
 import           Control.Distributed.Process.Platform                (Recipient (..))
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
@@ -96,10 +95,10 @@ instance Binary TriggerMap
 
 initStore :: InitHandler FilePath ST
 initStore f = do
-    say "start configurator"
+    warning "start configurator"
     -- register "configurator" =<< getSelfPid
     m <- liftIO $ parseConfig f
-    either (say . show) (\_ ->  say "success parse config") m
+    either (warning . show) (\_ ->  warning "success parse config") m
     time <- liftIO $ getModificationTime f
     return $ either InitStop (\x -> InitOk (x,time, f) defDelay) m
 
@@ -121,16 +120,16 @@ server = defaultProcess {
     }
 
 cronMap :: Dispatcher ST
-cronMap = handleCall $ \st@(m,_,_) CronMap  -> say "call cronMap" >> reply (_periodMap m) st
+cronMap = handleCall $ \st@(m,_,_) CronMap  -> warning "call cronMap" >> reply (_periodMap m) st
 
 checkMap :: Dispatcher ST
-checkMap = handleCall $ \st@(m,_,_) CheckMap  -> say "call checkMap" >> reply (_checks m) st
+checkMap = handleCall $ \st@(m,_,_) CheckMap  -> warning "call checkMap" >> reply (_checks m) st
 
 hostMap :: Dispatcher ST
-hostMap = handleCall $ \st@(m,_,_) HostMap  -> say "call hostMap" >> reply (_hosts m) st
+hostMap = handleCall $ \st@(m,_,_) HostMap  -> warning "call hostMap" >> reply (_hosts m) st
 
 triggerMap :: Dispatcher ST
-triggerMap = handleCall $ \st@(m,_,_) TriggerMap  -> say "call triggerMap" >> reply (_triggers m) st
+triggerMap = handleCall $ \st@(m,_,_) TriggerMap  -> warning "call triggerMap" >> reply (_triggers m) st
 
 lookupTrigger :: Dispatcher ST
 lookupTrigger = handleCall fun
@@ -154,7 +153,7 @@ lookupCronSet :: Dispatcher ST
 lookupCronSet = handleCall fun
   where
   fun :: ST -> Cron -> Process (ProcessReply (Maybe (Set CheckHost)) ST)
-  fun st@(m,_,_) c = say "call lookupCronSet" >> reply (lookup c (_periodMap m)) st
+  fun st@(m,_,_) c = warning "call lookupCronSet" >> reply (lookup c (_periodMap m)) st
 
 configuratorTimeoutHandler :: TimeoutHandler ST
 configuratorTimeoutHandler (m,t,f) _ = do
@@ -162,17 +161,17 @@ configuratorTimeoutHandler (m,t,f) _ = do
         if t == time
            then timeoutAfter defDelay (m,t,f)
            else do
-               say "file was changed, reload"
+               warning "file was changed, reload"
                nm <- liftIO $ parseConfig "fixmon.yaml"
                either (bad time) (good time) nm
         where
           good time new = do
               nsend "cron" Update
-              say "configurator (CronMap)-> cron  "
+              warning "configurator (CronMap)-> cron  "
               nsend "tasker" Update
-              say "configurator (CheckMap)-> tasker  "
+              warning "configurator (CheckMap)-> tasker  "
               timeoutAfter defDelay (new,time,f)
           bad _ e = do
-              say $ "configurator bad config" ++ show e
+              warning $ "configurator bad config" ++ show e
               timeoutAfter defDelay (m,t,f)
 

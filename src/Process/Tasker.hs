@@ -43,7 +43,7 @@ taskmake (CheckHost (hid, cid, mt)) = do
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)
-    makeCheck _ _ _ _ = say "Upps!!!! check or host not found, bug here"
+    makeCheck _ _ _ _ = warning "Upps!!!! check or host not found, bug here"
 
 ---------------------------------------------------------------------------------------------------
 -- public
@@ -71,7 +71,7 @@ data Tasker = Tasker
 
 initServer :: InitHandler () ()
 initServer _ = do
-    say "start tasker"
+    warning "start tasker"
     -- register "tasker" =<< getSelfPid
     return $! InitOk () Infinity
 

@@ -7,8 +7,7 @@ import           Types
 
 import           Control.Applicative                                 ((<$>))
 import           Control.Distributed.Process                         (Process,
-                                                                      ProcessId,
-                                                                      say)
+                                                                      ProcessId)
 import           Control.Distributed.Process.Internal.Types          (MonitorRef (..), ProcessMonitorNotification (..))
 import           Control.Distributed.Process.Platform
 import           Control.Distributed.Process.Platform.ManagedProcess
@@ -52,7 +51,7 @@ type ST = Bimap Hostname AgentInfo
 
 initServer :: InitHandler () ST
 initServer _ = do
-    say "start watcher"
+    warning "start watcher"
     return $! InitOk empty defDelay
 
 server :: ProcessDefinition ST
@@ -65,7 +64,7 @@ server = defaultProcess
 
 registerNew :: Dispatcher ST
 registerNew = handleCall $ \st (Hostname t, p, c) -> do
-    say $ "register new agent" ++ show t
+    warning $ "register new agent" ++ show t
     m <- monitor p
     maybe (reply False $! st) (\x -> reply True $! (insert (Hostname t) (AgentInfo x p c) st)) m
 
@@ -74,10 +73,10 @@ searchAgent = handleCall $! \st (h :: Hostname) -> reply (getPid <$> (lookup h s
 
 catchDead :: DeferredDispatcher ST
 catchDead = handleInfo $ \st (ProcessMonitorNotification x y whyDead) -> do
-    say "catch dead"
-    say $ show whyDead
+    warning "catch dead"
+    warning $ show whyDead
     let newSt = deleteR (AgentInfo x y (error "catch Dead")) st
-    say $ show newSt
+    warning $ show newSt
     continue $! newSt
 
 
