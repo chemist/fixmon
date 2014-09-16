@@ -7,7 +7,7 @@ where
 import           Control.Applicative                    hiding ((<|>))
 import           Control.Monad
 import           Data.Monoid                            ((<>))
-import           Data.Text                              (Text, pack)
+import           Data.Text                              (Text, pack, unpack)
 import           Prelude                                hiding (max, min)
 import           Text.ParserCombinators.Parsec
 import           Text.ParserCombinators.Parsec.Expr
@@ -16,7 +16,11 @@ import qualified Text.ParserCombinators.Parsec.Token    as Token
 import           Types.Dynamic
 
 parseTrigger :: Text -> Either String Exp
-parseTrigger = undefined
+parseTrigger raw = convE $ parse topLevel "parse triggers" (unpack raw)
+
+convE :: Either ParseError Exp -> Either String Exp
+convE (Left e) = Left (show e)
+convE (Right g) = Right g
 
 languageDef :: LanguageDef st
 languageDef =
@@ -33,7 +37,7 @@ languageDef =
                                    , "change"
                                    , "prev"
                                    ]
-           , Token.reservedOpNames = [ "&&", "||", "!", "=", ">", "<" ]
+           , Token.reservedOpNames = [ "&&", "||", "not", "=", ">", "<" ]
            }
 
 lexer :: Token.TokenParser st
@@ -70,7 +74,7 @@ topLevel :: Parser Exp
 topLevel = buildExpressionParser bOperators bTerm
 
 bOperators :: [[Operator Char () Exp]]
-bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "!" >> return Not) ]
+bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "not" >> return Not) ]
              , [Infix  (try $ whiteSpace >> reservedOp "&&" >> return And) AssocLeft]
              , [Infix  (try $ whiteSpace >> reservedOp "||" >> return Or) AssocLeft]
              ]

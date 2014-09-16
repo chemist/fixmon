@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Types
 ( HostId
 , Hostname(..)
@@ -24,10 +25,11 @@ module Types
 , Status(..)
 , Monitoring(..)
 -- , Log(..)
-, StartOptions(..)
 , IntId(..)
 , routeCheck'
 , module Types.Dynamic
+, Database(..)
+, DBException(..)
 -- * monads
 -- * error
 -- * for tests
@@ -38,4 +40,12 @@ import           Types.Check
 import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
+import           Network.HTTP.Conduit (Request)
+import qualified Network.HTTP.Types.Status as H
+import Data.Typeable
+
+class Database db where
+    getData :: db -> Table -> Fun -> IO Dyn
+    saveData :: db -> [(Hostname, Complex)] -> IO ()
+    config :: db
 

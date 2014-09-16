@@ -7,7 +7,7 @@ module Types.Shared where
 
 import           Control.DeepSeq
 import           Types.Cron
-import           Types.Dynamic
+import           Types.Dynamic 
 
 import           Control.Monad       (mzero)
 import           Data.Map.Strict     (Map)
@@ -106,10 +106,6 @@ newtype TriggerFun = TriggerFun (Complex -> Status)
 
 instance Show TriggerFun where
      show _ = "trigger fun here"
-
-data StartOptions = StartOptions
-  { config :: !FilePath
-  } deriving (Show, Eq)
 
 data Monitoring = Monitoring
  { _periodMap :: !(Map Cron (Set CheckHost))
