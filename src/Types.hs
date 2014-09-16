@@ -27,22 +27,26 @@ module Types
 -- , Log(..)
 , IntId(..)
 , routeCheck'
-, module Types.Dynamic
 , Database(..)
 , DBException(..)
 -- * monads
 -- * error
 -- * for tests
 -- , testHttp
+, module Types.Dynamic
+, module Process.Logger
+, module Control.Distributed.Process.Platform.Service.SystemLog 
 ) where
 
+import Control.Distributed.Process.Platform.Service.SystemLog (LogLevel(..))
+import           Process.Logger
 import           Types.Check
 import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
-import           Network.HTTP.Conduit (Request)
-import qualified Network.HTTP.Types.Status as H
-import Data.Typeable
+-- import           Network.HTTP.Conduit (Request)
+-- import qualified Network.HTTP.Types.Status as H
+-- import Data.Typeable
 
 class Database db where
     getData :: db -> Table -> Fun -> IO Dyn

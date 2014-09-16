@@ -22,10 +22,9 @@ main = do
     Right t <- createTransport "127.0.0.1" "10501" defaultTCPParameters
     node <- newLocalNode t initRemoteTable
     runProcess node $ do
+        p <- logger Warning
         s <-  ask
-        let webProcess = do
-              say "start web"
-              liftIO $ web s
+        let webProcess = liftIO $ web s
         cstart <-  mapM toChildStart [webProcess, configurator, storage (config ::InfluxDB), tasker, cron, watcher]
         let cspec = zipWith (curry child) cstart ["web", "configurator", "storage", "tasker", "cron", "watcher"]
         superPid <-  super cspec
@@ -35,8 +34,9 @@ main = do
 --        cc <- listChildren superPid
 --        say $ show cc
 --        _ <- liftIO getLine :: Process String
-        say "kill super"
+        warning "kill super"
         shutdown (Pid superPid)
+        kill p "stop logger"
         return ()
         -- replLoop
     closeLocalNode node
@@ -47,6 +47,7 @@ super = start restartOne ParallelShutdown
 
 child :: (ChildStart, String) -> ChildSpec
 child (chStart, who) =  ChildSpec who Worker Permanent TerminateImmediately chStart (Just $ LocalName who)
+
 
 {--
 replLoop :: Process ()
