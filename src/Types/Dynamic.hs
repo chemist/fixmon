@@ -27,11 +27,13 @@ module Types.Dynamic
 , Period(..)
 , eval
 , evalExp
+, DBException(..)
 )
 where
 
 import           Control.Applicative  ((<$>), (<*>))
 import           Control.Monad.Except
+import           Control.Exception
 import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Binary
@@ -206,17 +208,16 @@ data Fun = ChangeFun Counter
 instance Binary Fun
 
 data Env = Env
-  { lastComplex :: Complex
-  , getValue    :: Fun -> IO Dyn
+  { getValue    :: Fun -> IO Dyn
   }
 
-runTrigger :: Env -> ETrigger -> IO (Either String Bool)
+runTrigger :: Env -> ETrigger -> IO (Either DBException Bool)
 runTrigger = eval
 
-type Eval a = ReaderT Env (ExceptT String IO) a
+type Eval = ReaderT Env IO 
 
-eval :: Env -> Exp -> IO (Either String Bool)
-eval env e = runExceptT (runReaderT (evalExp e) env)
+eval :: Env -> Exp -> IO (Either DBException Bool)
+eval env e = try (runReaderT (evalExp e) env)
 
 evalExp :: Exp -> Eval Bool
 evalExp (Equal x y) = do
@@ -235,7 +236,7 @@ evalExp (Not e) = not <$> evalExp e
 evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
 evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
 evalExp (NoData c i) = do
-    getFun <- getValue <$> ask
+    getFun <- getValue <$> ask 
     r <- liftIO $ getFun (NoDataFun c i)
     case r of
       DynList [] -> return True
@@ -248,19 +249,9 @@ evalExp (Change c) = do
 
 
 evalVal :: DynExp -> Eval Dyn
-evalVal (Val x) = return x
-evalVal (EnvVal x) = do
-    Complex complex <- lastComplex <$> ask
-    case lookup x complex of
-         Nothing -> error "bad counter"
-         Just r -> return r
-evalVal (Last c i)
-    | i == Count 0 = do
-        Complex complex <- lastComplex <$> ask
-        case lookup c complex of
-             Nothing -> error "bad counter"
-             Just r -> return r
-    | otherwise = do
+evalVal (Val c) = return c
+evalVal (EnvVal c) = evalVal (Last c (Count 0))
+evalVal (Last c i) = do
         getFun <- getValue <$> ask
         liftIO $ getFun (LastFun c i)
 evalVal (Avg c i) = do
@@ -282,3 +273,13 @@ instance Binary UTCTime where
         x <- get
         y <- get
         return $ UTCTime (toEnum x) (toEnum y)
+
+data DBException = HTTPException String
+                 | TypeException String
+                 | EmptyException 
+                 | DBException String deriving (Show, Typeable)
+
+instance Exception DBException 
+
+
+

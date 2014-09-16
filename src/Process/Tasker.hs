@@ -12,7 +12,7 @@ import           Control.DeepSeq
 import           Process.Checker                                     (doTask)
 import           Process.Configurator                                (Update (..),
                                                                       checkById, hostById, triggerById)
-import           Process.Storage                                     (saveResult)
+import           Process.Storage                                     (saveResult, checkTrigger)
 import           Process.Watcher                                     (lookupAgent)
 import           Types
 
@@ -36,13 +36,10 @@ taskmake (CheckHost (hid, cid, mt)) = do
     where
     makeCheck _ _ Nothing Nothing = return ()
     makeCheck _ _ _ Nothing  = return ()
-    makeCheck (Just host) (Just check) (Just _trigger) (Just pid) = do
-        say "taskmake"
+    makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
-        say "save"
         saveResult (host, dt)
---         !_ <- liftIO $! eval Env dt (tresult trigger)
-        return ()
+        checkTrigger (host, trigger)
     makeCheck (Just host) (Just check) Nothing (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)

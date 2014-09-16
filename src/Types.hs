@@ -42,20 +42,10 @@ import           Types.Dynamic
 import           Types.Shared
 import           Network.HTTP.Conduit (Request)
 import qualified Network.HTTP.Types.Status as H
-import Control.Exception
 import Data.Typeable
 
 class Database db where
     getData :: db -> Table -> Fun -> IO Dyn
     saveData :: db -> [(Hostname, Complex)] -> IO ()
     config :: db
-
-data DBException = HTTPException String
-                 | TypeException String
-                 | EmptyException 
-                 | DBException String deriving (Show, Typeable)
-
-instance Exception DBException 
-
-
 

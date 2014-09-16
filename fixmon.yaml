@@ -1,12 +1,12 @@
 hosts:
   - localhost
-
 groups:
   - name: local
     hosts:
       - localhost
     triggers:
       - hostname
+      - stupid
     checks:
       - uptime
       - boottime
@@ -57,4 +57,12 @@ triggers:
     checks:
       - gethost
     description: тупо проверка имени
-    result: system.hostname = "limbo-air"
+    result: not system.hostname = "limbo-air" && system.hostname = "hello"
+  - name: stupid
+    checks:
+      - checkUbank
+    description: проверяю ответ ubank.ru
+    result: status.ee = 200
+
+
+

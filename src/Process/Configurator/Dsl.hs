@@ -37,7 +37,7 @@ languageDef =
                                    , "change"
                                    , "prev"
                                    ]
-           , Token.reservedOpNames = [ "&&", "||", "!", "=", ">", "<" ]
+           , Token.reservedOpNames = [ "&&", "||", "not", "=", ">", "<" ]
            }
 
 lexer :: Token.TokenParser st
@@ -74,7 +74,7 @@ topLevel :: Parser Exp
 topLevel = buildExpressionParser bOperators bTerm
 
 bOperators :: [[Operator Char () Exp]]
-bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "!" >> return Not) ]
+bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "not" >> return Not) ]
              , [Infix  (try $ whiteSpace >> reservedOp "&&" >> return And) AssocLeft]
              , [Infix  (try $ whiteSpace >> reservedOp "||" >> return Or) AssocLeft]
              ]

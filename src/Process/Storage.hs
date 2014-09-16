@@ -1,21 +1,26 @@
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 module Process.Storage
 ( storage
 , saveResult
+, checkTrigger
 )
 where
 
 
 import           Control.Distributed.Process                         (Process, catch, 
                                                                       liftIO,
-                                                                      say, spawnLocal)
-import           Control.Distributed.Process.Platform                (Recipient (..))
+                                                                      say)
+
+import           Control.Distributed.Process.Platform                (Recipient (..), spawnLinkLocal)
 import           Control.Distributed.Process.Platform.ManagedProcess
 import           Control.Distributed.Process.Platform.Time
 
+import           Control.Monad (void)
 import           Types                                 
+import           Data.Text (Text)
 import           Storage.InfluxDB ()
 ---------------------------------------------------------------------------------------------------
 -- public
@@ -23,6 +28,9 @@ import           Storage.InfluxDB ()
 
 saveResult :: (Hostname, Complex) -> Process ()
 saveResult = cast (Registered "storage")
+
+checkTrigger :: (Hostname, Trigger) -> Process ()
+checkTrigger = cast (Registered "storage")
 
 storage :: Database db => db -> Process ()
 storage db = serve db initServer server
@@ -36,27 +44,44 @@ defDelay = Delay $ seconds 1
 
 data ST db = ST
   { database ::  db
-  , queue    :: ![(Hostname, Complex)]
+  , writeQueue    :: ![(Hostname, Complex)]
+  , evalQueue :: ! [(Hostname, Trigger)]
   }
 
 initServer :: Database db => InitHandler db (ST db)
 initServer db = do
     say "start storage"
-    return $! InitOk (ST db []) defDelay
+    return $! InitOk (ST db [] []) defDelay
 
 server :: Database db => ProcessDefinition (ST db)
 server = defaultProcess
-    { apiHandlers = [ saveToQueue ]
+    { apiHandlers = [ saveToQueue, checkTriggerInternal ]
     , timeoutHandler = \st _ -> do
-        _ <- spawnLocal $ (liftIO $ saveData (database st) (queue st)) `catch` (\(e :: DBException) -> say $ show e)
-        timeoutAfter_ defDelay (st { queue = [] })
+        (liftIO $ saveData (database st) (writeQueue st)) `catch` (\(e :: DBException) -> say $ show e)
+        void . spawnLinkLocal $ runTriggersCheck (database st) (evalQueue st)
+        timeoutAfter_ defDelay (st { writeQueue = [], evalQueue = [] })
     , infoHandlers = []
     , unhandledMessagePolicy = Log
     }
 
 
 saveToQueue :: Database db => Dispatcher (ST db)
-saveToQueue = handleCast $ \st (message :: (Hostname, Complex)) -> continue $! st { queue = message : queue st }
+saveToQueue = handleCast $ \st (message :: (Hostname, Complex)) -> continue $! st { writeQueue = message : writeQueue st }
+
+checkTriggerInternal :: Database db => Dispatcher (ST db)
+checkTriggerInternal = handleCast $ \st (message :: (Hostname, Trigger)) -> do
+    -- say $ "have message: " ++ show message
+    continue $! st { evalQueue = message : evalQueue st }
+
+runTriggersCheck :: Database db => db -> [(Hostname, Trigger)] -> Process ()
+runTriggersCheck db queue = mapM_ runQ queue
+  where
+  runQ (Hostname h, tr) = do
+      r <- liftIO $ eval (Env (getData db (Table h))) (tresult tr)
+      res r h tr
+  res :: (Either DBException Bool) -> Text -> Trigger -> Process ()
+  res (Left e) h tr = say $ "error when eval trigger " ++ show e ++ " hostname " ++ show h ++ " trigger name is " ++ show (tname tr)
+  res (Right b) h tr = say $ "eval trigger for hostname: " ++ show h ++  " " ++ show b ++ " trigger name is " ++ show (tname tr)
 
 {--
 c = Complex (fromList [("system.hostname",Any $ Text "limbo-air"), ("system.loadavg", Any $ Int 10)])
