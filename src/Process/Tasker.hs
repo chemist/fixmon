@@ -34,8 +34,10 @@ taskmake (CheckHost (hid, cid, mt)) = do
     mpid <- maybe (return Nothing) lookupAgent mhost
     makeCheck mhost mcheck mtrigger mpid
     where
-    makeCheck _ _ Nothing Nothing = return ()
-    makeCheck _ _ _ Nothing  = return ()
+    makeCheck _ _ Nothing Nothing = critical "not found any triggers" -- TODO Alarm here!!
+    makeCheck (Just host) _ (Just trigger) Nothing  = do
+        checkTrigger (host, trigger)
+        critical "TODO Alarm " 
     makeCheck (Just host) (Just check) (Just trigger) (Just pid) = do
         dt <- doTask (Pid pid) check
         saveResult (host, dt)

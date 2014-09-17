@@ -20,8 +20,9 @@ import           Control.Distributed.Process.Platform.Time
 
 import           Control.Monad (void)
 import           Types                                 
-import           Data.Text (Text)
+import           Data.Text (pack)
 import           Storage.InfluxDB ()
+import           Data.Monoid ((<>))
 ---------------------------------------------------------------------------------------------------
 -- public
 ---------------------------------------------------------------------------------------------------
@@ -57,7 +58,7 @@ server :: Database db => ProcessDefinition (ST db)
 server = defaultProcess
     { apiHandlers = [ saveToQueue, checkTriggerInternal ]
     , timeoutHandler = \st _ -> do
-        (liftIO $ saveData (database st) (writeQueue st)) `catch` (\(e :: DBException) -> warning $ show e)
+        (liftIO $ saveData (database st) (writeQueue st)) `catch` (\(e :: DBException) -> critical $ show e)
         void $ spawnLocal $ runTriggersCheck (database st) (evalQueue st)
         timeoutAfter_ defDelay (st { writeQueue = [], evalQueue = [] })
     , infoHandlers = []
@@ -74,14 +75,47 @@ checkTriggerInternal = handleCast $ \st (message :: (Hostname, Trigger)) -> do
     continue $! st { evalQueue = message : evalQueue st }
 
 runTriggersCheck :: Database db => db -> [(Hostname, Trigger)] -> Process ()
-runTriggersCheck db queue = mapM_ runQ queue
+runTriggersCheck db queue = saveTriggers db =<< sendAlarm =<< mapM runQ queue
   where
-  runQ (Hostname h, tr) = do
-      r <- liftIO $ eval (Env (getData db (Table h))) (tresult tr)
-      res r h tr
-  res :: (Either DBException Bool) -> Text -> Trigger -> Process ()
-  res (Left e) h tr = warning $ "error when eval trigger " ++ show e ++ " hostname " ++ show h ++ " trigger name is " ++ show (tname tr)
-  res (Right b) h tr = warning $ "eval trigger for hostname: " ++ show h ++  " " ++ show b ++ " trigger name is " ++ show (tname tr)
+  runQ :: (Hostname, Trigger) -> Process (Hostname, Complex, Either DBException Bool)
+  runQ (Hostname h, tr) = (\r -> return (Hostname h, triggerToComplex tr r, r)) =<< (liftIO $ eval (Env (getData db (Table h))) (tresult tr))
+
+sendAlarm :: [(Hostname, Complex, Either DBException Bool)] -> Process [(Hostname, Complex)]
+sendAlarm queue = do
+    let onlyFalseAndError (_, _, Right True) = False
+        onlyFalseAndError _ = True
+        problems = cutUnused $ filter onlyFalseAndError queue
+    sendAlarmMessagesAbout problems
+    return $ cutUnused queue
+
+cutUnused :: [(a,b,c)] -> [(a,b)]
+cutUnused = map $ \(x, y, _) -> (x, y)
+
+sendAlarmMessagesAbout :: [(Hostname, Complex)] -> Process ()
+sendAlarmMessagesAbout problems = notice $ show problems
+
+saveTriggers :: Database db => db -> [(Hostname, Complex)] -> Process ()
+saveTriggers db queue = (liftIO $ saveData db queue) `catch` \(e :: DBException) -> critical $ show e
+
+
+data CounterType = State
+                 | Message
+
+triggerToComplex :: Trigger -> Either DBException Bool -> Complex
+triggerToComplex tr (Left e) = Complex [ (toCounter tr State , toDyn False)
+                                       , (toCounter tr Message, toDyn $ pack $ show e)
+                                       ]
+triggerToComplex tr (Right True) = Complex [ (toCounter tr State, toDyn True) ]
+triggerToComplex tr (Right False) = Complex [ (toCounter tr State, toDyn False)
+                                            , (toCounter tr Message, toDyn $ tdescription tr)
+                                            ]
+
+toCounter :: Trigger -> CounterType -> Counter
+toCounter tr State = let TriggerName tn = tname tr
+                     in Counter $ "trigger." <> tn <> ".status"
+toCounter tr Message = let TriggerName tn = tname tr
+                       in Counter $ "trigger." <> tn <> ".message"
+                    
 
 {--
 c = Complex (fromList [("system.hostname",Any $ Text "limbo-air"), ("system.loadavg", Any $ Int 10)])
