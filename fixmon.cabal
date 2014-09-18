@@ -46,6 +46,7 @@ executable fixmon
                      , network
                      , network-transport
                      , network-transport-tcp
+                     , NetSNMP
                      , attoparsec
                      , http-types
                      , http-conduit
@@ -87,6 +88,7 @@ executable memory
                        distributed-process,
                        distributed-process-platform,
                        cron ,
+                       NetSNMP,
                        lens == 4.3.*,
                        wai,
                        warp,
@@ -121,6 +123,7 @@ test-suite tests
                        vector-binary-instances ,
                        yaml , 
                        cron ,
+                       NetSNMP,
                        conduit, 
                        lists,
                        test-framework-quickcheck2,
