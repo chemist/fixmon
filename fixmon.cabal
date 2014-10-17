@@ -46,10 +46,12 @@ executable fixmon
                      , network
                      , network-transport
                      , network-transport-tcp
+                     , snmp
                      , attoparsec
                      , http-types
                      , http-conduit
                      , conduit
+                     , pipes
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
@@ -87,6 +89,7 @@ executable memory
                        distributed-process,
                        distributed-process-platform,
                        cron ,
+                       NetSNMP,
                        lens == 4.3.*,
                        wai,
                        warp,
@@ -121,6 +124,7 @@ test-suite tests
                        vector-binary-instances ,
                        yaml , 
                        cron ,
+                       NetSNMP,
                        conduit, 
                        lists,
                        test-framework-quickcheck2,

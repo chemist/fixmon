@@ -7,10 +7,6 @@ module Process.Logger
 where
 
 import Control.Distributed.Process
-import Control.Distributed.Process.Platform
-import Control.Distributed.Process.Platform.Time
-import Control.Distributed.Process.Platform.Timer
-import Control.Distributed.Process.Platform.ManagedProcess
 import qualified Control.Distributed.Process.Platform.Service.SystemLog as L
 
 logger :: L.LogLevel -> Process ProcessId

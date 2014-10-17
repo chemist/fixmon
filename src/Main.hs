@@ -12,3 +12,4 @@ main = do
          ["server"] -> Server.main
          ["agent"] -> Agent.main
          _ -> print "server agent | server"
+
