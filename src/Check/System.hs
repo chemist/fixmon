@@ -65,13 +65,13 @@ instance Checkable System where
 
 ---------------------------------- linux checks --------------------------------------
 doHostname :: Check -> IO Complex
-doHostname (Check _ _ "system.hostname" _) = do
+doHostname (Check _ _ _ "system.hostname" _) = do
     h <- getHostName
     return $ Complex [ ( "system.hostname", toDyn (pack h)) ]
 doHostname _ = error "system check"
 
 testHostname :: Check
-testHostname = Check (CheckName "hostname") (Cron daily) "system.hostname" []
+testHostname = Check (CheckName "hostname") (Hostname "localhost") (Cron daily) "system.hostname" []
 --------------------------------------------------------------------------------------
 
 -- "3023604.41 11190196.16\n"
@@ -79,7 +79,7 @@ uptimeFile :: String
 uptimeFile = "/proc/uptime"
 
 doUptime :: Check -> IO Complex
-doUptime (Check _ _ "system.uptime" _) = do
+doUptime (Check _ _ _ "system.uptime" _) = do
     Done _ (up, idle') <-  parse parserUptime <$> readFile uptimeFile
     return $ Complex [ ("system.uptime.up", toDyn (timeToPeriod up))
                      , ("system.uptime.idle", toDyn (timeToPeriod idle'))
@@ -100,14 +100,14 @@ parserUptime :: Parser (Double, Double)
 parserUptime = (,) <$> rational <* space <*> rational <* endOfLine
 
 testUptime :: Check
-testUptime = Check (CheckName "uptime") (Cron daily) "system.uptime" []
+testUptime = Check (CheckName "uptime") (Hostname "localhost") (Cron daily) "system.uptime" []
 --------------------------------------------------------------------------------------
 statFile :: String
 statFile = "/proc/stat"
 
 -- | check, read /proc/stat, return boottime as UTCTime
 doBootTime :: Check -> IO Complex
-doBootTime (Check _ _ "system.boottime" _) = do
+doBootTime (Check _ _ _ "system.boottime" _) = do
     Right t <- parseOnly parserBootTime <$> readFile statFile
     let bootTime = posixSecondsToUTCTime t
     return $ Complex [ ("system.boottime", toDyn bootTime )]
@@ -115,7 +115,7 @@ doBootTime _ = error "system check"
 
 -- | test check for doBootTime
 testBootTime :: Check
-testBootTime = Check (CheckName "boottime") (Cron daily) "system.boottime" []
+testBootTime = Check (CheckName "boottime") (Hostname "localhost") (Cron daily) "system.boottime" []
 
 -- | helpers for doBootTime
 parserBootTime :: Parser NominalDiffTime
@@ -124,14 +124,14 @@ parserBootTime = head . catMaybes <$> bootOrEmpty `sepBy` endOfLine
 --------------------------------------------------------------------------------------
 
 testIntr :: Check
-testIntr = Check (CheckName "interrupts") (Cron daily) "system.cpu.intr" []
+testIntr = Check (CheckName "interrupts") (Hostname "localhost") (Cron daily) "system.cpu.intr" []
 
 intrFile :: String
 intrFile = "/proc/interrupts"
 -- intrFile = "interrupts"
 
 doCpuIntr :: Check -> IO Complex
-doCpuIntr (Check _ _ "system.cpu.intr" _) = do
+doCpuIntr (Check _ _ _ "system.cpu.intr" _) = do
     Right c <- parseOnly parserInterrupts <$> readFile intrFile
     return $ Complex $ mkInterrupts c
 doCpuIntr _ = error "system check"
@@ -172,10 +172,10 @@ loadavgFile :: String
 loadavgFile = "/proc/loadavg"
 
 testLoadAvg :: Check
-testLoadAvg = Check (CheckName "loadavg") (Cron daily) "system.cpu.loadavg" []
+testLoadAvg = Check (CheckName "loadavg") (Hostname "localhost") (Cron daily) "system.cpu.loadavg" []
 
 doCpuLoad :: Check -> IO Complex
-doCpuLoad (Check _ _ "system.cpu.loadavg" _) = do
+doCpuLoad (Check _ _ _ "system.cpu.loadavg" _) = do
     Right (x,y,z) <- parseOnly parserLoadavg <$> readFile loadavgFile
     return $ Complex [ ("system.cpu.loadavg.la1", toDyn x)
                      , ("system.cpu.loadavg.la5", toDyn y)
@@ -192,10 +192,10 @@ cpuFile :: String
 cpuFile = "/proc/cpuinfo"
 
 testCpuInfo :: Check
-testCpuInfo = Check (CheckName "cpuinfo") (Cron daily) "system.cpu.info" []
+testCpuInfo = Check (CheckName "cpuinfo") (Hostname "localhost") (Cron daily) "system.cpu.info" []
 
 doCpuInfo :: Check -> IO Complex
-doCpuInfo (Check _ _ "system.cpu.info" _) = do
+doCpuInfo (Check _ _ _ "system.cpu.info" _) = do
     Right cpus <- parseOnly (parserCpuInf `sepBy` char '\n') <$> readFile cpuFile
     let one = head cpus
     return $ Complex [ ("system.cpu.info.num", toDyn $ length cpus)
@@ -286,10 +286,10 @@ parserCpuInf = CpuInf <$> (string "processor" *> spaces *> char ':' *> spaces *>
 --------------------------------------------------------------------------------------
 
 testCpuSwitches :: Check
-testCpuSwitches = Check (CheckName "switches") (Cron daily) "system.cpu.switches" []
+testCpuSwitches = Check (CheckName "switches") (Hostname "localhost") (Cron daily) "system.cpu.switches" []
 
 doCpuSwitches :: Check -> IO Complex
-doCpuSwitches (Check _ _ "system.cpu.switches" _) = do
+doCpuSwitches (Check _ _ _ "system.cpu.switches" _) = do
     Right s <- parseOnly parserCpuSwitches <$> readFile statFile
     return . Complex $ [ ("system.cpu.switches", toDyn s)]
 doCpuSwitches _ = error "system check"
@@ -300,10 +300,10 @@ parserCpuSwitches = head . catMaybes <$> switchesOrEmpty `sepBy` endOfLine
 --------------------------------------------------------------------------------------
 
 testCpuUtil :: Check
-testCpuUtil = Check (CheckName "cpuutil") (Cron daily) "system.cpu.util" []
+testCpuUtil = Check (CheckName "cpuutil") (Hostname "localhost") (Cron daily) "system.cpu.util" []
 
 doCpuUtil :: Check -> IO Complex
-doCpuUtil (Check _ _ "system.cpu.util" _) = do
+doCpuUtil (Check _ _ _ "system.cpu.util" _) = do
   Right c <- parseOnly parserProcStatCpu <$> readFile statFile
   let ifJust (_, Nothing) = Nothing
       ifJust (name, Just i) = Just (name, toDyn i)
@@ -363,7 +363,7 @@ data CpuUtilStat = CpuUtilStat
 --------------------------------------------------------------------------------------
 
 doLocalTime :: Check -> IO Complex
-doLocalTime (Check _ _ "system.localtime" _) = do
+doLocalTime (Check _ _ _ "system.localtime" _) = do
     t <- getCurrentTime
     z <- timeZoneName <$> getCurrentTimeZone
     return . Complex $ [ ("system.localtime.utc", toDyn t)

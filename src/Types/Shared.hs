@@ -75,6 +75,7 @@ instance IsString CheckName where
     fromString x = CheckName . pack $ x
 
 data Check = Check { cname   :: !CheckName
+                   , chost   :: !Hostname
                    , cperiod :: !Cron
                    , ctype   :: !Text
                    , cparams :: ![(Counter, Dyn)]

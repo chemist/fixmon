@@ -123,6 +123,7 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
     makeCheck cr = case M.lookup (ictype ch) checkRoutes of
                        Nothing -> Left $ "unknown check type " ++ unpack (ictype ch)
                        Just f -> f Check { cname = CheckName (icname ch)
+                                        , chost = Hostname ""
                                         , cperiod = Cron cr
                                         , ctype = ictype ch
                                         , cparams = convertCparams $ icparams ch

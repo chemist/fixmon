@@ -29,10 +29,11 @@ routes =
     in all' `seq` unions all'
 
 
-
+{--
 testHttp, testHttp1, testShell, testSnmp  :: Check
 testHttp = Check (CheckName "web") (Cron daily) "http.simple" [ ("url", toDyn ("http://ya.ru" :: Text)) ]
 testHttp1 = Check (CheckName "web") (Cron daily) "http.status" [("url", toDyn ("http://ubank.ru":: Text)), ("redirects", toDyn (2 :: Int))]
 testShell = Check (CheckName "shell") (Cron daily) "cmd.run" [("abc", toDyn ("" :: Text)), ("command", toDyn ("uptime" :: Text))]
 
 testSnmp = Check (CheckName "net") (Cron daily) "snmp.network.interface" [ ("community", toDyn ("helloall" :: Text)), ("host", toDyn ("salt" :: Text)) ]
+--}

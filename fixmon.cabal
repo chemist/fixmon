@@ -52,6 +52,7 @@ executable fixmon
                      , http-conduit
                      , conduit
                      , pipes
+                     , pipes-concurrency
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
