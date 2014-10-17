@@ -90,7 +90,6 @@ executable memory
                        distributed-process,
                        distributed-process-platform,
                        cron ,
-                       NetSNMP,
                        lens == 4.3.*,
                        wai,
                        warp,
