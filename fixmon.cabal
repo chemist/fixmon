@@ -46,11 +46,12 @@ executable fixmon
                      , network
                      , network-transport
                      , network-transport-tcp
-                     , NetSNMP
+                     , snmp
                      , attoparsec
                      , http-types
                      , http-conduit
                      , conduit
+                     , pipes
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
