@@ -124,7 +124,6 @@ test-suite tests
                        vector-binary-instances ,
                        yaml , 
                        cron ,
-                       NetSNMP,
                        conduit, 
                        lists,
                        test-framework-quickcheck2,
