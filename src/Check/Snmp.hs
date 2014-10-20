@@ -6,12 +6,17 @@ import Network.Protocol.Snmp
 import Types
 import Control.Applicative
 import Data.Map.Strict (singleton)
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack, pack)
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeLatin1)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.Text.Encoding (encodeUtf8)
 import Control.Exception
 import System.Cron
 import Data.List
+import Data.Monoid ((<>))
+import Numeric
 
 data Snmp = SnmpInterfaces deriving Show
 
@@ -87,7 +92,7 @@ doSnmpInterface (Check _ h _ _ p) = do
         Just pr = encodeUtf8 . fromDyn <$> lookup "privPass" p
         Just at = toA . fromDyn <$> lookup "authType" p
         Just pt = toP . fromDyn <$> lookup "privType" p
-        Just sl = toSL . fromDyn <$> lookup "privType" p
+        Just sl = toSL . fromDyn <$> lookup "privAuth" p
         Just v = toV . fromDyn <$> lookup "version" p 
         Hostname host = h
         conf = case v of
@@ -106,15 +111,19 @@ doSnmpInterface (Check _ h _ _ p) = do
     r <- bracket (client conf)
                 close
                 (\snmp -> bulkwalk snmp [oidFromBS interfacesOid])
-    mapM_ print $ convert r
+    mapM_ (print . complex) $ convert r
     undefined
     
 testSnmp :: Check
 testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp"
   [ (Counter "sequrityName", toDyn ("aes" :: Text))
+  , (Counter "version", toDyn (3 :: Int))
+  , (Counter "privType", toDyn ("AES" :: Text))
+  , (Counter "privAuth", toDyn ("AuthPriv" :: Text))
+  , (Counter "authType", toDyn ("SHA" :: Text))
   , (Counter "authPass", toDyn ("helloallhello" :: Text))
   , (Counter "privPass", toDyn ("helloallhello" :: Text))
-                                         ]
+  ]
 
 convert :: Suite -> [Interface]
 convert (Suite xs) = map convS $ groupBy fun $ sortBy sortFun xs
@@ -146,6 +155,59 @@ data Interface = Interface
   , ifOutErrors :: Value
   , ifOutQLen :: Value
   } deriving (Show)
+
+instance ToComplex Interface where
+    complex i = Complex
+      [ (iName <> ".index", toDyn $ formatInt (ifIndex i))
+      , (iName <> ".name", toDyn $ formatText (ifDescr i))
+      , (iName <> ".mtu", toDyn $ formatInt (ifMtu i))
+      , (iName <> ".speed", toDyn $ formatInt (ifSpeed i))
+      , (iName <> ".physAddress", toDyn $ formatMac (ifPhysAddress i))
+      , (iName <> ".adminStatus", toDyn $ formatAdminStatus (ifAdminStatus i))
+      , (iName <> ".operStatus", toDyn $ formatOperStatus (ifOperStatus i))
+      , (iName <> ".lastChange", toDyn $ formatTimeTicks (ifLastChange i))
+      ]
+      where iName = "network.interface." <> (Counter $ formatText (ifDescr i)) 
+      
+phy :: ByteString 
+phy = "\224\203NQ\198C"
+
+
+formatText :: Value -> Text
+formatText (String x) = decodeLatin1 x
+formatText _ = throw $ BadValue "toText"
+
+formatMac :: Value -> Text
+formatMac (String "") = ""
+formatMac (String x) = foldl1 (\a b -> a <> ":" <> b) $ T.chunksOf 2 $ pack $ BS.foldl (flip showHex) "" $ BS.reverse x
+formatMac _ = throw $ BadValue "toMac"
+
+
+formatInt :: Value -> Int
+formatInt (Integer x) = fromIntegral x
+formatInt (Gaude32 x) = fromIntegral x
+formatInt _ = throw $ BadValue "toInt"
+
+formatAdminStatus :: Value -> Text
+formatAdminStatus (Integer 1) = "up"
+formatAdminStatus (Integer 2) = "down"
+formatAdminStatus (Integer 3) = "testing"
+formatAdminStatus _ = throw $ BadValue "toBool"
+
+formatOperStatus :: Value -> Text
+formatOperStatus (Integer 1) = "up"
+formatOperStatus (Integer 2) = "down"
+formatOperStatus (Integer 3) = "testing"
+formatOperStatus (Integer 4) = "unknown"
+formatOperStatus (Integer 5) = "dormant"
+formatOperStatus (Integer 6) = "notPresent"
+formatOperStatus (Integer 7) = "lowerLayerDown"
+formatOperStatus _ = throw $ BadValue "formatOperStatus"
+
+formatTimeTicks :: Value -> Int
+formatTimeTicks (TimeTicks x) = fromIntegral x
+formatTimeTicks _ = throw $ BadValue "formatTimeTicks"
+
 
 convS :: [Coupla] -> Interface
 convS xs =

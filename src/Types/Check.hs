@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Types.Check where
 import           Data.Map.Strict          (Map, keys, singleton)
 import           Data.Maybe
@@ -8,6 +9,8 @@ import           Data.Text         (Text)
 import           Data.Yaml.Builder
 import           Prelude           hiding (lookup, putStr)
 import Data.Lists
+import Control.Exception
+import Data.Typeable
 
 import           Types.Shared      (Check (..))
 import           Types.Dynamic     (Complex(..), Dyn(..), Counter(..))
@@ -24,6 +27,10 @@ describeCheck (Check _ _ t _) = do
          Nothing -> return $ string ""
          Just (AC (_, x)) -> return $ example [x]
     --}
+    --
+data CheckException = BadValue Text deriving (Show, Eq, Typeable)
+
+instance Exception CheckException
 
 type Description = Text
 type Name = Text
@@ -37,6 +44,9 @@ class Checkable a where
 
     example :: [a] -> YamlBuilder
     example xs = mapping [("checks", array $ map example' xs)]
+
+class ToComplex a where
+    complex :: a -> Complex
 
 type Problem = String
 

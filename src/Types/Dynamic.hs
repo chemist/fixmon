@@ -40,7 +40,7 @@ import           Data.Binary
 import qualified Data.Dynamic         as D
 import           Data.Monoid          (Monoid)
 import           Data.String
-import           Data.Text            (Text, pack)
+import           Data.Text            (Text)
 import           Data.Text.Binary     ()
 import           Data.Time
 import           Data.Typeable
@@ -181,10 +181,8 @@ data DynExp = EnvVal Counter
 instance Binary DynExp
 instance Binary Exp
 
-newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
+newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
 
-instance IsString Counter where
-    fromString x = Counter $ pack x
 
 instance ToJSON Counter where
    toJSON (Counter x) = toJSON x
