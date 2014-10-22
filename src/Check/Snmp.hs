@@ -111,8 +111,7 @@ doSnmpInterface (Check _ h _ _ p) = do
     r <- bracket (client conf)
                 close
                 (\snmp -> bulkwalk snmp [oidFromBS interfacesOid])
-    mapM_ (print . complex) $ convert r
-    undefined
+    return $ foldl (\x y -> x <> complex y) (Complex []) $ convert r
     
 testSnmp :: Check
 testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp"
@@ -166,6 +165,18 @@ instance ToComplex Interface where
       , (iName <> ".adminStatus", toDyn $ formatAdminStatus (ifAdminStatus i))
       , (iName <> ".operStatus", toDyn $ formatOperStatus (ifOperStatus i))
       , (iName <> ".lastChange", toDyn $ formatTimeTicks (ifLastChange i))
+      , (iName <> ".inOctets", toDyn $ formatInt (ifInOctets i))
+      , (iName <> ".inUcastPkts", toDyn $ formatInt (ifInUcastPkts i))
+      , (iName <> ".inNUcastPkts", toDyn $ formatInt (ifInNUcastPkts i))
+      , (iName <> ".inDiscards", toDyn $ formatInt (ifInDiscards i))
+      , (iName <> ".inErrors", toDyn $ formatInt (ifInErrors i))
+      , (iName <> ".inUnknownProtos", toDyn $ formatInt (ifInUnknownProtos i))
+      , (iName <> ".inOutOctets", toDyn $ formatInt (ifOutOctets i))
+      , (iName <> ".inOutUcastPkts", toDyn $ formatInt (ifOutUcastPkts i))
+      , (iName <> ".inOutNUcastPkts", toDyn $ formatInt (ifOutNUcastPkts i))
+      , (iName <> ".inOutDiscards", toDyn $ formatInt (ifOutDiscards i))
+      , (iName <> ".inOutErrors", toDyn $ formatInt (ifOutErrors i))
+      , (iName <> ".inOutQlen", toDyn $ formatInt (ifOutQLen i))
       ]
       where iName = "network.interface." <> (Counter $ formatText (ifDescr i)) 
       
@@ -186,7 +197,8 @@ formatMac _ = throw $ BadValue "toMac"
 formatInt :: Value -> Int
 formatInt (Integer x) = fromIntegral x
 formatInt (Gaude32 x) = fromIntegral x
-formatInt _ = throw $ BadValue "toInt"
+formatInt (Counter32 x) = fromIntegral x
+formatInt x = throw $ BadValue $ "toInt" <> (pack $ show x)
 
 formatAdminStatus :: Value -> Text
 formatAdminStatus (Integer 1) = "up"

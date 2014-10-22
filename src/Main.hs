@@ -1,11 +1,16 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving   #-}
 module Main where
 
 import Pipes 
 import Pipes.Concurrent
+import Control.Concurrent.Async
 import System.Cron
 import Types
+import Checks
 import Control.Monad.State
-import Data.Map.Strict (Map, elems, filterWithKey)
+import Data.Map.Strict (Map, elems, filterWithKey, lookup)
 import Data.Set (Set, unions)
 import Data.Time.Clock
 import Control.Concurrent (threadDelay, killThread)
@@ -13,7 +18,10 @@ import Process.Configurator.Yaml
 import Control.Applicative
 import Data.Vector ((!?), (!))
 import System.IO 
+import Control.Exception
 import Data.Maybe
+import Data.IORef
+import Prelude hiding (lookup)
 -- import System.Mem (performGC)
 
 
@@ -23,11 +31,13 @@ main = do
     hSetBuffering stdout LineBuffering
     Right m <- parseConfig "fixmon.yaml"
     (taskO, taskI) <- spawn Unbounded
+    (saverO, saverI) <- spawn Unbounded
     p1 <- forkIO $ evalStateT (cronP taskO) m
-    p2 <- forkIO $ runEffect $ fromInput taskI >-> shower1
-    p3 <- forkIO $ runEffect $ fromInput taskI >-> shower2
+    p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
+    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
+    p4 <- forkIO $ runEffect $ fromInput saverI >-> shower
     _ <- getLine :: IO String
-    mapM_ killThread [p1,p2,p3]
+    mapM_ killThread [p1,p2,p3,p4]
 
 seconds :: Int -> Int
 seconds = (* 1000000)
@@ -46,8 +56,7 @@ cronP task = do
 
 cron :: Producer CheckHost FixmonST ()
 cron = do
-    liftIO $ print "new iterate"
-    liftIO $ threadDelay $ seconds 5
+    liftIO $ threadDelay $ seconds 10
     now <- liftIO getCurrentTime
     st <- _periodMap <$> get
     let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
@@ -67,13 +76,64 @@ taskMaker = do
 tasker :: Pipe Task (Hostname, Maybe Trigger, Complex) IO ()
 tasker = do
     (c, mt) <- await
-    -- let ch = lookup (ctype c) routes
-    undefined
+    let ch = lookup (ctype c) routes
+        host = chost c
+    r <- liftIO $ maybe notFound (doCheck' c) ch
+    yield (host, mt, r)
+    tasker
+    where
+       notFound = return $ Complex [("_status_", toDyn False)]
+       doCheck' check doCheck'' = do
+         checkResult <- try $ doCheck'' check
+         case checkResult of
+           Left (_ :: SomeException) -> return $ Complex [("_status_", toDyn False)]
+           Right r -> return r
+
+newtype SaverST a b = SST (StateT (SaveQueue a) IO b) 
+  deriving (Functor, Applicative, Monad, MonadIO, MonadState (SaveQueue a))
+
+data SaveQueue a = SQ
+  { database :: a
+  , queueCheck :: [(Hostname, Complex)]
+  , queueTrigger :: [(Hostname, Trigger)]
+  , locker :: IORef Bool
+  }
 
 
-shower2 :: (Show a, MonadIO m) => Consumer a m ()
-shower2 = await >>= (\x -> liftIO $ print $ "second" ++ show x) >> shower2
 
-shower1 :: (Show a, MonadIO m) => Consumer a m ()
-shower1 = await >>= (\x -> liftIO $ print $ "first" ++ show x) >> shower1
+saver :: Database db => Pipe (Hostname, Maybe Trigger, Complex) (Hostname, Trigger) (SaverST db) ()
+saver = do
+    timer =<< locker <$> get
+    add
+    saveChecks
+    sendTriggers
+    again =<< locker <$> get
+    saver
+    where
+      saveChecks = do
+          ch <- queueCheck <$> get
+          db <- database <$> get 
+          liftIO $ saveData db ch `catch` (\(e :: DBException) -> print e)
+      sendTriggers = do
+          t <- queueTrigger <$> get
+          each t
+      again lock = do
+          liftIO $ atomicWriteIORef lock True
+          db <- database <$> get
+          put $ SQ db [] [] lock
+      timer lock = liftIO $ void $ async $ do
+          threadDelay 1000000
+          atomicWriteIORef lock False
+      add = do
+          (h, mt, c) <- await
+          modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
+          when (isJust mt) $ modify $ \x -> x { queueTrigger = (h,fromJust mt) : queueTrigger x }
+          l <- locker <$> get
+          l' <- liftIO $ readIORef l
+          when l' $ add
+
+
+
+shower :: (Show a, MonadIO m) => Consumer a m ()
+shower = await >>= (\x -> liftIO $ print x) >> shower
 

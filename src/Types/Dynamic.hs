@@ -188,7 +188,7 @@ instance ToJSON Counter where
    toJSON (Counter x) = toJSON x
 
 newtype Table = Table Text deriving (Eq, Show, Ord, Typeable, Generic)
-newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic)
+newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
 
 instance Binary Counter
 instance Binary Table

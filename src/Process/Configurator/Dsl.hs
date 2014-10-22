@@ -28,7 +28,7 @@ languageDef =
            , Token.commentEnd   = ""
            , Token.commentLine  = ""
            , Token.identStart   = letter
-           , Token.identLetter  = letter <|> char '.'
+           , Token.identLetter  = alphaNum <|> char '.' 
            , Token.reservedNames = [ "last"
                                    , "avg"
                                    , "min"
