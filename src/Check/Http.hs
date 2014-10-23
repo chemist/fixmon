@@ -50,7 +50,7 @@ checkUrl' x = let url = fromDyn x
                     then Right x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
-doHttp :: Check -> IO Complex
+doHttp :: Check -> IO [Complex]
 doHttp (Check _ _ _ _ p) = do
     let Just url = fromDyn <$> lookup "url" p
         unpackRedirects :: Dyn -> Int
@@ -65,5 +65,5 @@ doHttp (Check _ _ _ _ p) = do
     resp <-  withManager $ \manager -> do
         response <- http request manager
         return $ responseStatus response
-    return $ Complex [("status", toDyn $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+    return [Complex [("status", toDyn $ statusCode resp)]] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
 

@@ -7,8 +7,6 @@ import Pipes
 import Pipes.Concurrent
 import Control.Concurrent.Async
 import System.Cron
-import Types
-import Checks
 import Control.Monad.State
 import Data.Map.Strict (Map, elems, filterWithKey, lookup)
 import Data.Set (Set, unions)
@@ -24,6 +22,9 @@ import Data.IORef
 import Prelude hiding (lookup)
 -- import System.Mem (performGC)
 
+import Types
+import Checks
+import Storage.InfluxDB (InfluxDB)
 
 
 main :: IO ()
@@ -32,12 +33,16 @@ main = do
     Right m <- parseConfig "fixmon.yaml"
     (taskO, taskI) <- spawn Unbounded
     (saverO, saverI) <- spawn Unbounded
+    (triggerO, triggerI) <- spawn Unbounded
+    lock <- newIORef True
     p1 <- forkIO $ evalStateT (cronP taskO) m
     p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
     p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
-    p4 <- forkIO $ runEffect $ fromInput saverI >-> shower
+    -- p4 <- forkIO $ runEffect $ fromInput saverI >-> shower
+    p4 <- forkIO $ (evalStateT . runSST)  (saverP saverI triggerO) $ SQ (config::InfluxDB) [] [] lock 
+    p5 <- forkIO $ runEffect $ fromInput triggerI >-> shower
     _ <- getLine :: IO String
-    mapM_ killThread [p1,p2,p3,p4]
+    mapM_ killThread [p1,p2,p3,p4,p5]
 
 seconds :: Int -> Int
 seconds = (* 1000000)
@@ -48,6 +53,11 @@ type ST = Map Cron (Set CheckHost)
 
 type FixmonST = StateT Monitoring IO 
 type Task = (Check, Maybe Trigger)
+
+saverP :: Database db => Input (Hostname, Maybe Trigger, [Complex]) -> Output (Hostname, Trigger) -> SaverST db ()
+saverP input output = do
+    runEffect $ fromInput input >-> saver >-> toOutput output
+    liftIO $ performGC
 
 cronP :: Output Task -> FixmonST ()
 cronP task = do
@@ -73,7 +83,7 @@ taskMaker = do
     yield (check { chost = host }, trigger)
     taskMaker
 
-tasker :: Pipe Task (Hostname, Maybe Trigger, Complex) IO ()
+tasker :: Pipe Task (Hostname, Maybe Trigger, [Complex]) IO ()
 tasker = do
     (c, mt) <- await
     let ch = lookup (ctype c) routes
@@ -82,26 +92,26 @@ tasker = do
     yield (host, mt, r)
     tasker
     where
-       notFound = return $ Complex [("_status_", toDyn False)]
+       notFound = return [Complex [("_status_", toDyn False)]]
        doCheck' check doCheck'' = do
          checkResult <- try $ doCheck'' check
          case checkResult of
-           Left (_ :: SomeException) -> return $ Complex [("_status_", toDyn False)]
+           Left (_ :: SomeException) -> return [Complex [("_status_", toDyn False)]]
            Right r -> return r
 
-newtype SaverST a b = SST (StateT (SaveQueue a) IO b) 
+newtype SaverST a b = SST {runSST :: StateT (SaveQueue a) IO b}
   deriving (Functor, Applicative, Monad, MonadIO, MonadState (SaveQueue a))
 
 data SaveQueue a = SQ
   { database :: a
-  , queueCheck :: [(Hostname, Complex)]
+  , queueCheck :: [(Hostname, [Complex])]
   , queueTrigger :: [(Hostname, Trigger)]
   , locker :: IORef Bool
   }
 
 
 
-saver :: Database db => Pipe (Hostname, Maybe Trigger, Complex) (Hostname, Trigger) (SaverST db) ()
+saver :: Database db => Pipe (Hostname, Maybe Trigger, [Complex]) (Hostname, Trigger) (SaverST db) ()
 saver = do
     timer =<< locker <$> get
     add

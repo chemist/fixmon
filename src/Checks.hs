@@ -2,7 +2,6 @@
 module Checks where
 
 import           Check.Http
-import           Check.System
 import           Check.Snmp
 import           Types
 

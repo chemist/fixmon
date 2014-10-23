@@ -15,7 +15,7 @@ import Data.Typeable
 import           Types.Shared      (Check (..))
 import           Types.Dynamic     (Complex(..), Dyn(..), Counter(..))
 
-type Route = Map Text (Check -> IO Complex)
+type Route = Map Text (Check -> IO [Complex])
 
 type RouteCheck = Map Text (Check -> Either String Check)
 

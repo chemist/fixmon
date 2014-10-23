@@ -30,8 +30,8 @@ instance Checkable Snmp where
                               , ( "privType", False, checkPrivType, "priv type for SNMPv3")
                               , ( "securityLevel", False, checkSecLevel, "sequrity level for SNMPv3")
                               ]
-    route SnmpInterfaces = singleton "snmp.network.interface" doSnmpInterface
-    routeCheck SnmpInterfaces = routeCheck' SnmpInterfaces "snmp.network.interface"
+    route SnmpInterfaces = singleton "network.interface" doSnmpInterface
+    routeCheck SnmpInterfaces = routeCheck' SnmpInterfaces "network.interface"
     
 
 checkString :: Dyn -> Either String Dyn
@@ -84,7 +84,7 @@ toSL "AuthNoPriv" = AuthNoPriv
 toSL "AuthPriv" = AuthPriv
 toSL _ = undefined
 
-doSnmpInterface :: Check -> IO Complex
+doSnmpInterface :: Check -> IO [Complex]
 doSnmpInterface (Check _ h _ _ p) = do
     let Just s = encodeUtf8 . fromDyn <$> lookup "sequrityName" p 
         Just a = encodeUtf8 . fromDyn <$> lookup "authPass" p
@@ -111,7 +111,7 @@ doSnmpInterface (Check _ h _ _ p) = do
     r <- bracket (client conf)
                 close
                 (\snmp -> bulkwalk snmp [oidFromBS interfacesOid])
-    return $ foldl (\x y -> x <> complex y) (Complex []) $ convert r
+    return $ map complex $ convert r
     
 testSnmp :: Check
 testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp"
@@ -178,7 +178,8 @@ instance ToComplex Interface where
       , (iName <> ".inOutErrors", toDyn $ formatInt (ifOutErrors i))
       , (iName <> ".inOutQlen", toDyn $ formatInt (ifOutQLen i))
       ]
-      where iName = "network.interface." <> (Counter $ formatText (ifDescr i)) 
+      where 
+      iName = "network.interface" 
       
 phy :: ByteString 
 phy = "\224\203NQ\198C"

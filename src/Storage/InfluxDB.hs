@@ -23,6 +23,8 @@ import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
 import Data.Typeable (TypeRep)
+import qualified Prelude as Prelude
+import Prelude
 -- import Debug.Trace
 
 instance Database InfluxDB where
@@ -109,21 +111,21 @@ complexToSeriesData :: Complex -> SeriesData
 complexToSeriesData (Complex x) = let (c', p') = unzip x
                                   in SeriesData c' [p']
 
-toSeries :: (Hostname, Complex) -> Series
-toSeries (Hostname n, c) = Series n (complexToSeriesData c)
+toSeries :: (Hostname, [Complex]) -> [Series]
+toSeries (Hostname n, c) = map (\x -> Series n (complexToSeriesData x)) c
 
-
-save :: InfluxDB -> [(Hostname, Complex)] -> IO ()
+save :: InfluxDB -> [(Hostname, [Complex])] -> IO ()
 save db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
-        series = map toSeries forSave
+        series = concatMap toSeries forSave
         request'' = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
         request = addQueryStr request''
+    -- print $ encode series
     unless (null series) $ do
         response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
         unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
@@ -132,31 +134,34 @@ save db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
-get :: InfluxDB -> Table -> Fun -> IO Dyn
-get db t (ChangeFun c) = do
+toWhere :: Where -> Text
+toWhere = Prelude.foldl (\t (c,d) -> t <> unCounter c <> " = " <> T.pack (Prelude.show  d)) " where "  
+
+get :: InfluxDB -> Table -> Where -> Fun -> IO Dyn
+get db t w (ChangeFun c) = do
     r <- rawRequest db c $ "select " <> unCounter c <> " from " <> unTable t <> " limit 2"
     case r of
          DynList (x:y:[]) -> return $ toDyn (x /= y)
          _ -> throw EmptyException
-get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
-get db t (LastFun   c p) = do
+get db t w (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+get db t w (LastFun   c p) = do
     xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
     case xs of
          DynList xss -> return $ last xss
          y -> return y
-get db t (AvgFun    c p) = do
+get db t w (AvgFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
     rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (MinFun    c p) = do
+get db t w (MinFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
     rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (MaxFun    c p) = do
+get db t w (MaxFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
     rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (NoDataFun c p) = do
+get db t w (NoDataFun c p) = do
     r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
     case r of
          Right _ -> return $ toDyn False

@@ -40,6 +40,7 @@ data ITrigger = ITrigger
   { itname        :: !Text
   , itdescription :: !Text
   , itcheck       :: ![Text]
+  , iwhere        :: ![(Text, Value)]
   , itresult      :: !Text
   } deriving Show
 
@@ -86,7 +87,9 @@ instance FromJSON ITrigger where
                        (Just x, Nothing) -> [x]
                        (Nothing, Just xs) -> xs
                        (Nothing, Nothing) -> mzero
-        return $ ITrigger n d ch' r
+        return $ ITrigger n d ch' (clean $ toList v) r
+        where
+        clean = Prelude.filter (\(x,_) -> x /= "name" && x /= "checks" && x /= "checks" && x /= "description" && x /= "result")
         {--
         ITrigger <$>
                            v .: "name" <*>
@@ -146,7 +149,7 @@ transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in tr
   makeTrigger :: ETrigger -> Either String Trigger
   makeTrigger tr' = do
       ch <- checks''
-      return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch tr'
+      return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch (convertCparams $ iwhere tr) tr'
   checks'' :: Either String [CheckId]
   checks'' = let l = concat . lefts . checks' . itcheck $ tr
                  r = rights . checks' . itcheck $ tr

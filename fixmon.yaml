@@ -19,14 +19,15 @@ checks:
     authType: SHA
     authPass: helloallhello
     privPass: helloallhello
-    type: snmp.network.interface
+    type: network.interface
 
 triggers:
   - name: networkt
     checks:
       - network
     description: тупо проверка имени
-    result: not snmp.network.interface.eth0.name = "limbo-air" 
+    network.interface.name: "eth0"
+    result: not network.interface.name = "eth0" 
 
 
 
