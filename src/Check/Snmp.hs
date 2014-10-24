@@ -158,6 +158,7 @@ data Interface = Interface
 instance ToComplex Interface where
     complex i = Complex
       [ (iName <> ".index", toDyn $ formatInt (ifIndex i))
+      , (iName <> ".id", toDyn $ formatText (ifDescr i))
       , (iName <> ".name", toDyn $ formatText (ifDescr i))
       , (iName <> ".mtu", toDyn $ formatInt (ifMtu i))
       , (iName <> ".speed", toDyn $ formatInt (ifSpeed i))

@@ -40,21 +40,6 @@ import           Data.Typeable
 import           GHC.Generics
 
 
-{--
-data Dyn = Dyn     !D.Dynamic
-         | DynList ![Dyn] deriving (Typeable)
-dynTypeRep :: Dyn -> TypeRep
-dynTypeRep (Dyn x) = D.dynTypeRep x
-dynTypeRep (DynList x) = typeOf x
-
-iType, tType, bType, dType, timeType :: TypeRep
-iType = typeOf (error "" :: Int)
-tType = typeOf (error "":: Text)
-bType = typeOf (error "" :: Bool)
-dType = typeOf (error "" :: Double)
-timeType = typeOf (error "" :: UTCTime)
---}
-
 data Dyn = Int Int
          | Double Double
          | Bool Bool
@@ -185,13 +170,13 @@ evalExp (NoData c i) = do
       DynList [] -> return True
       _ -> return False
 evalExp (Change c) = do
-    last' <- evalVal (Last c (Count 0))
+    last' <- evalVal (Last c (Count 1))
     prev <- evalVal (Prev c)
     return $ last' /= prev
 
 evalVal :: DynExp -> Eval Dyn
 evalVal (Val c) = return c
-evalVal (EnvVal c) = evalVal (Last c (Count 0))
+evalVal (EnvVal c) = evalVal (Last c (Count 1))
 evalVal (Last c i) = do
         getFun <- getValue <$> ask
         liftIO $ getFun (LastFun c i)

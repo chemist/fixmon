@@ -22,7 +22,6 @@ import           Control.Applicative ((<$>))
 import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
-import Data.Typeable (TypeRep)
 -- import Debug.Trace
 
 instance Database InfluxDB where
@@ -134,34 +133,37 @@ save db forSave = do
 
 get :: InfluxDB -> Table -> Fun -> IO Dyn
 get db t (ChangeFun c) = do
-    r <- rawRequest db c $ "select " <> unCounter c <> " from " <> unTable t <> " limit 2"
+    let (pole, addition) = unCounter c
+    r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
     case r of
          DynList (x:y:[]) -> return $ toDyn (x /= y)
          _ -> throw EmptyException
-get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+get db t (PrevFun   c) = do
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "last") $ "select last(" <> pole <> ") from " <> unTable t <> addition
 get db t (LastFun   c p) = do
-    xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
+    let (pole, addition) = unCounter c
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit " <> ptt p
     case xs of
          DynList xss -> return $ last xss
          y -> return y
 get db t (AvgFun    c p) = do
-    -- typeR <- counterType db t c
-    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
-    rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "mean") $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 get db t (MinFun    c p) = do
-    -- typeR <- counterType db t c
-    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
-    rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "min") $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 get db t (MaxFun    c p) = do
---     typeR <- counterType db t c
-    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
-    rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "max") $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 get db t (NoDataFun c p) = do
-    r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
+    let (pole, addition) = unCounter c
+    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1" 
     case r of
          Right _ -> return $ toDyn False
          Left EmptyException -> return $ toDyn True
          Left e -> throw e
+
 
 {--
 counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
@@ -173,8 +175,16 @@ counterType db t c = do
 
 unTable :: Table -> Text
 unTable (Table x) = x
-unCounter :: Counter -> Text
-unCounter (Counter x) = x
+
+withAnd :: Text -> Text
+withAnd "" = ""
+withAnd x = " and " <> T.drop 6 x
+
+unCounter :: Counter -> (Text, Text)
+unCounter (Counter x) = case T.splitOn ":" x of
+                             [a] -> (a, T.empty)
+                             [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
+                             _ -> throw $ DBException "bad counter"
 
 pt :: Period Int -> Text
 pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
@@ -191,7 +201,7 @@ rawRequest db c raw = do
             , checkStatus = \_ _ _ -> Nothing
             }
         request = addQueryStr request''
-    -- print request
+    print request
     response <- catch (withManager $ \manager -> do
         r <-  http request manager
         result <- responseBody r $$+- consume
@@ -201,7 +211,7 @@ rawRequest db c raw = do
     let s = (decode . fromChunks . snd $ response :: Maybe Series)
     -- print s
     when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
-    return $ seriesToDyn c $ fromJust s
+    return $ seriesToDyn (Counter . fst . unCounter $ c) (fromJust s)
     where
     catchConduit :: HttpException -> IO (Status, [ByteString])
     catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
