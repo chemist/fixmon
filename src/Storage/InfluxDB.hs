@@ -23,8 +23,6 @@ import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
 import Data.Typeable (TypeRep)
-import qualified Prelude as Prelude
-import Prelude
 -- import Debug.Trace
 
 instance Database InfluxDB where
@@ -134,34 +132,31 @@ save db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
-toWhere :: Where -> Text
-toWhere = Prelude.foldl (\t (c,d) -> t <> unCounter c <> " = " <> T.pack (Prelude.show  d)) " where "  
-
-get :: InfluxDB -> Table -> Where -> Fun -> IO Dyn
-get db t w (ChangeFun c) = do
+get :: InfluxDB -> Table -> Fun -> IO Dyn
+get db t (ChangeFun c) = do
     r <- rawRequest db c $ "select " <> unCounter c <> " from " <> unTable t <> " limit 2"
     case r of
          DynList (x:y:[]) -> return $ toDyn (x /= y)
          _ -> throw EmptyException
-get db t w (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
-get db t w (LastFun   c p) = do
+get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
+get db t (LastFun   c p) = do
     xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
     case xs of
          DynList xss -> return $ last xss
          y -> return y
-get db t w (AvgFun    c p) = do
+get db t (AvgFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
     rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t w (MinFun    c p) = do
+get db t (MinFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
     rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t w (MaxFun    c p) = do
+get db t (MaxFun    c p) = do
     typeR <- counterType db t c
     when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
     rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t w (NoDataFun c p) = do
+get db t (NoDataFun c p) = do
     r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
     case r of
          Right _ -> return $ toDyn False

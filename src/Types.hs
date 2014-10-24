@@ -30,7 +30,6 @@ module Types
 , IntId(..)
 , routeCheck'
 , Database(..)
-, Where
 , DBException(..)
 -- * monads
 -- * error
@@ -48,10 +47,8 @@ import           Types.Shared
 -- import Data.Typeable
 --
 
-type Where = [(Counter, Dyn)]
-
 class Database db where
-    getData :: db -> Table -> Where -> Fun -> IO Dyn
+    getData :: db -> Table -> Fun -> IO Dyn
     saveData :: db -> [(Hostname, [Complex])] -> IO ()
     config :: db
 

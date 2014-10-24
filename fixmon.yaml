@@ -26,8 +26,7 @@ triggers:
     checks:
       - network
     description: тупо проверка имени
-    network.interface.name: "eth0"
-    result: not network.interface.name = "eth0" 
+    result: not eth0:network.interface.name = "eth0" 
 
 
 

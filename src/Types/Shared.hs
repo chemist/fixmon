@@ -93,7 +93,6 @@ data Trigger = Trigger
   { tname        :: !TriggerName
   , tdescription :: !Text
   , tcheck       :: ![CheckId]
-  , twhere       :: ![(Counter, Dyn)]
   , tresult      :: !ETrigger
   } deriving (Show, Eq, Typeable, Generic)
 
