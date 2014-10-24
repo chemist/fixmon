@@ -30,8 +30,8 @@ executable fixmon
                      , parsec
                      , yaml
                      , text
-                     , distributed-process
-                     , distributed-process-platform
+--                     , distributed-process
+--                     , distributed-process-platform
                      , text-binary
                      , mtl
                      , aeson
@@ -45,8 +45,8 @@ executable fixmon
                      , scientific
                      , unordered-containers
                      , network
-                     , network-transport
-                     , network-transport-tcp
+--                     , network-transport
+--                     , network-transport-tcp
                      , snmp
                      , attoparsec
                      , http-types
@@ -56,51 +56,9 @@ executable fixmon
                      , pipes-concurrency
   hs-source-dirs:      src
   default-language:    Haskell2010
-  ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
+--  ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
+  ghc-options:   -Wall -threaded -O2
 
-executable memory
-  main-is:             Memory.hs            
-  other-extensions:    OverloadedStrings, GeneralizedNewtypeDeriving, GADTs, ExistentialQuantification, FlexibleInstances, DeriveGeneric, DeriveDataTypeable, RankNTypes, ScopedTypeVariables, MultiParamTypeClasses, FlexibleContexts, QuasiQuotes, StandaloneDeriving
-  build-depends:       base >=4.6 && <5, 
-                       containers , 
-                       aeson , 
-                       bimap , 
-                       old-locale , 
-                       text , 
-                       lists , 
-                       text-binary,
-                       mtl , 
-                       vector , 
-                       vector-binary-instances ,
-                       network , 
-                       network-conduit , 
-                       yaml , 
-                       bytestring , 
-                       conduit , 
-                       http-conduit,
-                       transformers , 
-                       binary , 
-                       cereal , 
-                       attoparsec , 
-                       time ,
-                       directory , 
-                       http-types , 
-                       unordered-containers , 
-                       network-transport,
-                       network-transport-tcp,
-                       distributed-process,
-                       distributed-process-platform,
-                       cron ,
-                       lens == 4.3.*,
-                       wai,
-                       warp,
-                       wai-extra,
-                       scientific,
-                       deepseq,
-                       wai-middleware-static
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
 
 
 test-suite tests

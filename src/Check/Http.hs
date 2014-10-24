@@ -30,19 +30,16 @@ instance Checkable Http where
     routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
 
 checkAgent :: Dyn -> Either String Dyn
-checkAgent x
-    | dynTypeRep x == tType = Right x
-    | otherwise = Left "bad agent type, must be text"
+checkAgent (Text x) = Right (Text  x)
+checkAgent _ = Left "bad agent type, must be text"
 
 checkRedirects :: Dyn -> Either String Dyn
-checkRedirects x
-    | dynTypeRep x == iType = Right x
-    | otherwise = Left "bad redirects type, must be int"
+checkRedirects (Int x) = Right (Int x)
+checkRedirects _ = Left "bad redirects type, must be int"
 
 checkUrl :: Dyn -> Either String Dyn
-checkUrl x
-    | dynTypeRep x == tType = checkUrl' x
-    | otherwise = Left "bad url type, must be text"
+checkUrl (Text x) = Right (Text x)
+checkUrl _ = Left "bad url type, must be text"
 
 checkUrl' :: Dyn -> Either String Dyn
 checkUrl' x = let url = fromDyn x

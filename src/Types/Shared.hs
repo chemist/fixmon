@@ -81,7 +81,6 @@ data Check = Check { cname   :: !CheckName
                    , cparams :: ![(Counter, Dyn)]
                    } deriving (Show, Typeable, Generic, Eq, Ord)
 
-instance Binary Check
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
 newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary, Typeable)
@@ -98,8 +97,6 @@ data Trigger = Trigger
 
 instance Ord Trigger where
     compare x y = compare (tname x) (tname y)
-
-instance Binary Trigger
 
 newtype Status = Status { unStatus :: Bool } deriving (Show, Eq, Ord, Binary)
 

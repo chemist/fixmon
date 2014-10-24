@@ -17,13 +17,22 @@ import Control.Applicative
 import Data.Vector ((!?), (!))
 import System.IO 
 import Control.Exception
+import Data.Monoid ((<>))
 import Data.Maybe
+import Data.Text (pack)
 import Data.IORef
 import Prelude hiding (lookup)
 -- import System.Mem (performGC)
 
-import Types
-import Checks
+import Types ( 
+               DBException, saveData, Trigger
+             , Hostname(..), Complex(..), toDyn, Counter(..) 
+             , TriggerName(..), tname, Database, chost, ctype
+             , getData, Env(..), Monitoring(..), CheckHost(..)
+             , config, Cron(..), Check(..), Table(..)
+             , tdescription, tresult, unId, eval
+             )
+import Checks (routes)
 import Storage.InfluxDB (InfluxDB)
 
 
@@ -35,12 +44,17 @@ main = do
     (saverO, saverI) <- spawn Unbounded
     (triggerO, triggerI) <- spawn Unbounded
     lock <- newIORef True
-    p1 <- forkIO $ evalStateT (cronP taskO) m
+    p1 <- forkIO $ (evalStateT . runEffect)  
+                  (cron >-> taskMaker >-> toOutput taskO) 
+                  m
     p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
     p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
-    -- p4 <- forkIO $ runEffect $ fromInput saverI >-> shower
-    p4 <- forkIO $ (evalStateT . runSST)  (saverP saverI triggerO) $ SQ (config::InfluxDB) [] [] lock 
-    p5 <- forkIO $ runEffect $ fromInput triggerI >-> shower
+    p4 <- forkIO $ (evalStateT . runSST . runEffect ) 
+                  (fromInput saverI >-> saver >-> toOutput triggerO) 
+                  $ SQ (config::InfluxDB) [] [] lock 
+    p5 <- forkIO $ (evalStateT . runEffect)
+                  (fromInput triggerI >-> checkTrigger (config :: InfluxDB) >-> shower)
+                  m
     _ <- getLine :: IO String
     mapM_ killThread [p1,p2,p3,p4,p5]
 
@@ -54,43 +68,58 @@ type ST = Map Cron (Set CheckHost)
 type FixmonST = StateT Monitoring IO 
 type Task = (Check, Maybe Trigger)
 
-saverP :: Database db => Input (Hostname, Maybe Trigger, [Complex]) -> Output (Hostname, Trigger) -> SaverST db ()
-saverP input output = do
-    runEffect $ fromInput input >-> saver >-> toOutput output
-    liftIO $ performGC
-
-cronP :: Output Task -> FixmonST ()
-cronP task = do
-    runEffect $ cron >-> taskMaker >-> toOutput task
-    liftIO $ performGC
-
 cron :: Producer CheckHost FixmonST ()
-cron = do
+cron = forever $ do
     liftIO $ threadDelay $ seconds 10
     now <- liftIO getCurrentTime
     st <- _periodMap <$> get
     let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
     each tasks 
-    cron
 
 taskMaker :: Pipe CheckHost Task FixmonST ()
-taskMaker = do
+taskMaker = forever $ do
     Monitoring _ hosts _ triggers checks _ <- get
     CheckHost (h, c, mt) <- await
     let check = checks ! unId c
         host = hosts ! unId h
         trigger = maybe Nothing (\x -> triggers !? unId x) mt
     yield (check { chost = host }, trigger)
-    taskMaker
+
+checkTrigger :: Database db => db -> Pipe (Hostname, Trigger) (Hostname, Complex) FixmonST ()
+checkTrigger db = forever $ do
+    (Hostname h,t) <- await
+    r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
+    saveTriggers db [(Hostname h, [triggerToComplex t r])]
+    yield (Hostname h, triggerToComplex t r)
+    where
+      saveTriggers db queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
+
+data CounterType = State
+                 | Message
+
+triggerToComplex :: Trigger -> Either DBException Bool -> Complex
+triggerToComplex tr (Left e) = Complex [ (toCounter tr State , toDyn False)
+                                       , (toCounter tr Message, toDyn $ pack $ show e)
+                                       ]
+triggerToComplex tr (Right True) = Complex [ (toCounter tr State, toDyn True) ]
+triggerToComplex tr (Right False) = Complex [ (toCounter tr State, toDyn False)
+                                            , (toCounter tr Message, toDyn $ tdescription tr)
+                                            ]
+
+toCounter :: Trigger -> CounterType -> Counter
+toCounter tr State = let TriggerName tn = tname tr
+                     in Counter $ "trigger." <> tn <> ".status"
+toCounter tr Message = let TriggerName tn = tname tr
+                       in Counter $ "trigger." <> tn <> ".message"
+ 
 
 tasker :: Pipe Task (Hostname, Maybe Trigger, [Complex]) IO ()
-tasker = do
+tasker = forever $ do
     (c, mt) <- await
     let ch = lookup (ctype c) routes
         host = chost c
     r <- liftIO $ maybe notFound (doCheck' c) ch
     yield (host, mt, r)
-    tasker
     where
        notFound = return [Complex [("_status_", toDyn False)]]
        doCheck' check doCheck'' = do
@@ -112,13 +141,12 @@ data SaveQueue a = SQ
 
 
 saver :: Database db => Pipe (Hostname, Maybe Trigger, [Complex]) (Hostname, Trigger) (SaverST db) ()
-saver = do
+saver = forever $ do
     timer =<< locker <$> get
     add
     saveChecks
     sendTriggers
     again =<< locker <$> get
-    saver
     where
       saveChecks = do
           ch <- queueCheck <$> get
@@ -145,5 +173,5 @@ saver = do
 
 
 shower :: (Show a, MonadIO m) => Consumer a m ()
-shower = await >>= (\x -> liftIO $ print x) >> shower
+shower = forever $ await >>= (\x -> liftIO $ print x)
 

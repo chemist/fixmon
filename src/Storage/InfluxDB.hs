@@ -94,7 +94,7 @@ valToDyn (String x) = toDyn x
 valToDyn (Number x) = case floatingOrInteger x of
                            Left y -> toDyn (y :: Double)
                            Right y -> toDyn (y :: Int)
-valToDyn (Bool x) = toDyn x
+valToDyn (A.Bool x) = toDyn x
 valToDyn Null = toDyn ("null here" :: Text)
 valToDyn e = error $ "bad val " ++ show e
 
@@ -145,16 +145,16 @@ get db t (LastFun   c p) = do
          DynList xss -> return $ last xss
          y -> return y
 get db t (AvgFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
+    -- typeR <- counterType db t c
+    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
     rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (MinFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
+    -- typeR <- counterType db t c
+    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
     rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (MaxFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
+--     typeR <- counterType db t c
+    -- when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
     rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
 get db t (NoDataFun c p) = do
     r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
@@ -163,11 +163,12 @@ get db t (NoDataFun c p) = do
          Left EmptyException -> return $ toDyn True
          Left e -> throw e
 
+{--
 counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
 counterType db t c = do
     r <- rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
     return $ dynTypeRep r
-
+--}
 -- min  SELECT MIN(status) FROM localhost group by time(24h) where time > now() - 24h
 
 unTable :: Table -> Text
