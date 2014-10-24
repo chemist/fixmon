@@ -1,11 +1,13 @@
 hosts:
   - salt
+
 groups:
   - name: salt
     hosts:
       - salt
     triggers:
       - networkt
+      - other
     checks:
       - network
 
@@ -27,6 +29,12 @@ triggers:
       - network
     description: тупо проверка имени
     result: eth0:network.interface.name = "eth0" 
+  - name: other
+    checks:
+      - network
+    description: last here
+    result: last(br0:network.interface.name,2) = "eth0"
+
 
 
 
