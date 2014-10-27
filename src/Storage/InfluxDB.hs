@@ -17,18 +17,13 @@ import           Network.HTTP.Conduit  hiding (host, port)
 import           Data.Conduit.List (consume)
 import           Data.Conduit (($$+-))
 import           Network.HTTP.Types.Status
-import           Types hiding (Status)
 import           Control.Applicative ((<$>))
 import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
+import Types.Shared hiding (Status)
+import Types.Dynamic
 -- import Debug.Trace
-
-instance Database InfluxDB where
-    getData = get
-    saveData = save
-    config = defConf
-
 
 
 type DB = String
@@ -47,8 +42,8 @@ data InfluxDB = InfluxDB
   , ssl  :: !EnableSSL
   } deriving Show
 
-defConf :: InfluxDB
-defConf = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
+config :: InfluxDB
+config = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
 
 influxUrl :: InfluxDB -> String
 influxUrl db = let scheme = if ssl db
@@ -111,8 +106,8 @@ complexToSeriesData (Complex x) = let (c', p') = unzip x
 toSeries :: (Hostname, [Complex]) -> [Series]
 toSeries (Hostname n, c) = map (\x -> Series n (complexToSeriesData x)) c
 
-save :: InfluxDB -> [(Hostname, [Complex])] -> IO ()
-save db forSave = do
+saveData :: InfluxDB -> [(Hostname, [Complex])] -> IO ()
+saveData db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
         series = concatMap toSeries forSave
@@ -131,32 +126,32 @@ save db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
-get :: InfluxDB -> Table -> Fun -> IO Dyn
-get db t (ChangeFun c) = do
+getData :: InfluxDB -> Table -> Fun -> IO Dyn
+getData db t (ChangeFun c) = do
     let (pole, addition) = unCounter c
     r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
     case r of
          DynList (x:y:[]) -> return $ toDyn (x /= y)
          _ -> throw EmptyException
-get db t (PrevFun   c) = do
+getData db t (PrevFun   c) = do
     let (pole, addition) = unCounter c
     rawRequest db (Counter "last") $ "select last(" <> pole <> ") from " <> unTable t <> addition
-get db t (LastFun   c p) = do
+getData db t (LastFun   c p) = do
     let (pole, addition) = unCounter c
     xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit " <> ptt p
     case xs of
          DynList xss -> return $ last xss
          y -> return y
-get db t (AvgFun    c p) = do
+getData db t (AvgFun    c p) = do
     let (pole, addition) = unCounter c
     rawRequest db (Counter "mean") $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-get db t (MinFun    c p) = do
+getData db t (MinFun    c p) = do
     let (pole, addition) = unCounter c
     rawRequest db (Counter "min") $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-get db t (MaxFun    c p) = do
+getData db t (MaxFun    c p) = do
     let (pole, addition) = unCounter c
     rawRequest db (Counter "max") $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-get db t (NoDataFun c p) = do
+getData db t (NoDataFun c p) = do
     let (pole, addition) = unCounter c
     r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1" 
     case r of
@@ -201,7 +196,7 @@ rawRequest db c raw = do
             , checkStatus = \_ _ _ -> Nothing
             }
         request = addQueryStr request''
-    print request
+    -- print request
     response <- catch (withManager $ \manager -> do
         r <-  http request manager
         result <- responseBody r $$+- consume

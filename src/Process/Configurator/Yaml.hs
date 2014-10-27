@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Process.Configurator.Yaml
 (parseConfig) where
@@ -14,11 +15,12 @@ import           Data.Monoid              ((<>))
 import           Data.Scientific
 import qualified Data.Set                 as S
 import           Data.Text                (Text, concat, unpack)
+import           Data.Text.Encoding (encodeUtf8)
 import           Data.Vector              (Vector, elemIndex, findIndex, foldl,
                                            foldl', foldl1, map, mapM, (!))
 import           Data.Vector.Binary       ()
 import           Data.Yaml                (FromJSON (..), Value (..),
-                                           decodeFileEither, (.:), (.:?))
+                                           decodeFileEither, (.:), (.:?), (.!=))
 import           System.Cron.Parser       (cronSchedule)
 
 import           Checks
@@ -35,6 +37,9 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
                                            Trigger (..), TriggerHost (..),
                                            TriggerId, TriggerName (..), ETrigger)
 import           Types.Cron               (Cron (..))
+import qualified Network.Protocol.Snmp as Snmp
+import qualified Network.Snmp.Client as Snmp
+import Storage.InfluxDB (InfluxDB(..))
 
 data ITrigger = ITrigger
   { itname        :: !Text
@@ -47,6 +52,7 @@ data ICheck = ICheck
   { icname   :: !Text
   , icperiod :: !Text
   , ictype   :: !Text
+  , icsnmp   :: Maybe Snmp.Config
   , icparams :: ![(Text, Value)]
   } deriving Show
 
@@ -57,11 +63,17 @@ data IGroup = IGroup
   , igchecks   :: !(Maybe [Text])
   } deriving Show
 
+data ISystem = ISystem
+  { isnmp :: Snmp.Config
+  , idb   :: InfluxDB
+  } deriving Show
+
 data Config = Config
   { chosts    :: !(Vector Hostname)
   , cgroups   :: !(Vector IGroup)
   , cchecks   :: !(Vector ICheck)
   , ctriggers :: !(Vector ITrigger)
+  , csystem   :: !ISystem
   } deriving Show
 
 instance FromJSON Config where
@@ -69,8 +81,81 @@ instance FromJSON Config where
                            v .: "hosts"  <*>
                            v .: "groups" <*>
                            v .: "checks" <*>
-                           v .: "triggers"
+                           v .: "triggers" <*>
+                           v .: "system" 
     parseJSON _ = mzero
+
+instance FromJSON ISystem where
+    parseJSON (Object v) = do
+        s <- v .: "snmp"
+        d <-  v .: "database"
+        return $ ISystem s d 
+    parseJSON _ = mzero
+
+instance FromJSON InfluxDB where
+    parseJSON (Object v) = do
+        b <- v .:? "database" .!= "fixmon"
+        u <- v .:? "user" .!= "fixmon"
+        p <- v .:? "password" .!= "fixmon"
+        h <- v .:? "host"  .!= "fixmon"
+        port' <- v .:? "port"  .!= 8086
+        s <- v .:? "ssl" .!= False
+        return $ InfluxDB b u p h port' s
+    parseJSON _ = mzero
+
+instance FromJSON Snmp.Config where
+    parseJSON (Object v) = do
+        ver <- v .:? "version" .!= (3 :: Int)
+        case ver of
+             3 -> parseVersion3 
+             2 -> parseVersion2 
+             _ -> error "bad snmp version"
+        where
+            parseVersion3 = do
+                (sn :: Text) <- v .: "sequrityName"
+                pt <- v .:? "privType" .!= "DES"
+                pa <- v .:? "privAuth" .!= "AuthPriv"
+                at <- v .:? "authType" .!= "MD5"
+                p <-  v .:? "port"     .!= "161"
+                t <-  v .:? "timeout"  .!= (5 :: Int)
+                ap <- v .: "authPass"
+                pp <- v .:? "privPass" .!= ap
+                return $ Snmp.ConfigV3 "" 
+                                       p 
+                                       t 
+                                       (encodeUtf8 sn) 
+                                       (encodeUtf8 ap)
+                                       (encodeUtf8 pp) 
+                                       (encodePrivAuth pa) 
+                                       "" 
+                                       (encodeAuthType at) 
+                                       (encodePrivType pt)
+            parseVersion2 = do
+                (sn :: Text) <- v .: "community" .!= "public"
+                p <-  v .:? "port"     .!= "161"
+                t <-  v .:? "timeout"  .!= (5 :: Int)
+                return $ Snmp.ConfigV2 "" p t (Snmp.Community $ encodeUtf8 sn)
+
+    parseJSON _ = mzero
+
+
+encodePrivType :: Text -> Snmp.PrivType
+encodePrivType "AES" = Snmp.AES
+encodePrivType "DES" = Snmp.DES
+encodePrivType _ = error "bad priv type"
+
+encodeAuthType :: Text -> Snmp.AuthType
+encodeAuthType "MD" = Snmp.MD5
+encodeAuthType "MD5" = Snmp.MD5
+encodeAuthType "SHA" = Snmp.SHA
+encodeAuthType _ = error "bad priv type"
+
+encodePrivAuth :: Text -> Snmp.PrivAuth
+encodePrivAuth "NoAuthNoPriv" = Snmp.NoAuthNoPriv
+encodePrivAuth "AuthNoPriv" = Snmp.AuthNoPriv
+encodePrivAuth "AuthPriv" = Snmp.AuthPriv
+encodePrivAuth _ = error "bad priv auth"
+
 
 
 
@@ -87,13 +172,6 @@ instance FromJSON ITrigger where
                        (Nothing, Just xs) -> xs
                        (Nothing, Nothing) -> mzero
         return $ ITrigger n d ch' r
-        {--
-        ITrigger <$>
-                           v .: "name" <*>
-                           v .: "description" <*>
-                           (v .: "check" <|> v .: "checks") <*>
-                           v .: "result"
-                           --}
     parseJSON _ = mzero
 
 instance FromJSON ICheck where
@@ -101,9 +179,10 @@ instance FromJSON ICheck where
         n <-  v .: "name"
         p <-  v .: "period"
         t <-  v .: "type"
-        return $ ICheck n p t (clean $ toList v)
+        c <-  v .:? "snmp"
+        return $ ICheck n p t c (clean $ toList v)
         where
-        clean = Prelude.filter (\(x,_) -> x /= "name" && x /= "period" && x /= "type")
+        clean = Prelude.filter (\(x,_) -> x /= "name" && x /= "period" && x /= "type" && x /= "snmp")
     parseJSON _ = mzero
 
 instance FromJSON IGroup where
@@ -126,6 +205,7 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
                                         , chost = Hostname ""
                                         , cperiod = Cron cr
                                         , ctype = ictype ch
+                                        , csnmp = icsnmp ch
                                         , cparams = convertCparams $ icparams ch
                                         }
 
@@ -138,7 +218,7 @@ convertCparams = Prelude.map convertValueToDyn
     case floatingOrInteger x of
          Left y -> (Counter c, toDyn (y :: Double))
          Right y -> (Counter c, toDyn (y :: Int))
-  convertValueToDyn _ = error "convertValueToDyn, bad type"
+  convertValueToDyn c = error $ "convertValueToDyn, bad type" ++ show c
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
 transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))
@@ -244,7 +324,7 @@ configToMonitoring x = do
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
     let crch = cronChecks ch tr gg
     let ths = triggerHosts gg
-    return $ Monitoring crch (chosts x) gg tr ch ths
+    return $ Monitoring crch (chosts x) gg tr ch ths (isnmp $ csystem x) (idb $ csystem x)
 
 parseConfig :: FilePath -> IO (Either String Monitoring)
 parseConfig file = do

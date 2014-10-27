@@ -29,11 +29,10 @@ import Types (
              , Hostname(..), Complex(..), toDyn, Counter(..) 
              , TriggerName(..), tname, Database, chost, ctype
              , getData, Env(..), Monitoring(..), CheckHost(..)
-             , config, Cron(..), Check(..), Table(..)
+             , Cron(..), Check(..), Table(..)
              , tdescription, tresult, unId, eval
              )
 import Checks (routes)
-import Storage.InfluxDB (InfluxDB)
 
 
 main :: IO ()
@@ -51,9 +50,9 @@ main = do
     p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
     p4 <- forkIO $ (evalStateT . runSST . runEffect ) 
                   (fromInput saverI >-> saver >-> toOutput triggerO) 
-                  $ SQ (config::InfluxDB) [] [] lock 
+                  $ SQ (storage m) [] [] lock 
     p5 <- forkIO $ (evalStateT . runEffect)
-                  (fromInput triggerI >-> checkTrigger (config :: InfluxDB) >-> shower)
+                  (fromInput triggerI >-> checkTrigger (storage m) >-> shower)
                   m
     _ <- getLine :: IO String
     mapM_ killThread [p1,p2,p3,p4,p5]
@@ -72,27 +71,27 @@ cron :: Producer CheckHost FixmonST ()
 cron = forever $ do
     liftIO $ threadDelay $ seconds 10
     now <- liftIO getCurrentTime
-    st <- _periodMap <$> get
+    st <- periodMap <$> get
     let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
     each tasks 
 
 taskMaker :: Pipe CheckHost Task FixmonST ()
 taskMaker = forever $ do
-    Monitoring _ hosts _ triggers checks _ <- get
+    Monitoring _ hosts' _ triggers' checks' _ snmp' _ <- get
     CheckHost (h, c, mt) <- await
-    let check = checks ! unId c
-        host = hosts ! unId h
-        trigger = maybe Nothing (\x -> triggers !? unId x) mt
-    yield (check { chost = host }, trigger)
+    let check = checks' ! unId c
+        host = hosts' ! unId h
+        trigger = maybe Nothing (\x -> triggers' !? unId x) mt
+    yield (check { chost = host, csnmp = Just $ fromMaybe snmp' (csnmp check)}, trigger)
 
 checkTrigger :: Database db => db -> Pipe (Hostname, Trigger) (Hostname, Complex) FixmonST ()
 checkTrigger db = forever $ do
     (Hostname h,t) <- await
     r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
-    saveTriggers db [(Hostname h, [triggerToComplex t r])]
+    saveTriggers [(Hostname h, [triggerToComplex t r])]
     yield (Hostname h, triggerToComplex t r)
     where
-      saveTriggers db queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
+      saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
 
 data CounterType = State
                  | Message

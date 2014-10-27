@@ -1,3 +1,19 @@
+system:
+  snmp:
+    version: 3
+    sequrityName: aes
+    privType: AES
+    privAuth: AuthPriv
+    authType: SHA
+    authPass: helloallhello
+    privPass: helloallhello
+  database:
+    user: fixmon
+    password: fixmon
+    database: fixmon
+    host: localhost
+    port: 8086
+
 hosts:
   - salt
 
@@ -14,13 +30,14 @@ groups:
 checks:
   - name: network
     period: '* * * * *'
-    version: 3
-    sequrityName: aes
-    privType: AES
-    privAuth: AuthPriv
-    authType: SHA
-    authPass: helloallhello
-    privPass: helloallhello
+    snmp:
+      version: 3
+      sequrityName: aes
+      privType: AES
+      privAuth: AuthPriv
+      authType: SHA
+      authPass: helloallhello
+      privPass: helloallhello
     type: network.interface
 
 triggers:

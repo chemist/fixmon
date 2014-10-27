@@ -42,6 +42,15 @@ import           Types.Check
 import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
+import Data.Map (Map)
+import qualified Data.Map as M
+import qualified Data.Vector as V
+import Data.Set (Set)
+import Data.Vector (Vector)
+import Network.Snmp.Client (Config)
+import Network.Protocol.Snmp (initial, Version(..))
+import Storage.InfluxDB (InfluxDB)
+import qualified Storage.InfluxDB as InfluxDB
 -- import           Network.HTTP.Conduit (Request)
 -- import qualified Network.HTTP.Types.Status as H
 -- import Data.Typeable
@@ -51,4 +60,26 @@ class Database db where
     getData :: db -> Table -> Fun -> IO Dyn
     saveData :: db -> [(Hostname, [Complex])] -> IO ()
     config :: db
+
+data Monitoring = Monitoring
+ { periodMap :: !(Map Cron (Set CheckHost))
+ , hosts     :: !(Vector Hostname)
+ , groups    :: !(Vector Group)
+ , triggers  :: !(Vector Trigger)
+ , checks    :: !(Vector Check)
+ , status    :: !(Map TriggerHost Status)
+ , snmp      :: !Config
+ , storage   :: !InfluxDB
+ } deriving Show
+
+
+emptyMonitoring :: Monitoring
+emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty (initial Version3) (config :: InfluxDB)
+
+instance Database InfluxDB where
+    getData = InfluxDB.getData
+    saveData = InfluxDB.saveData
+    config = InfluxDB.config
+
+
 

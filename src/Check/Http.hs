@@ -48,7 +48,7 @@ checkUrl' x = let url = fromDyn x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
 doHttp :: Check -> IO [Complex]
-doHttp (Check _ _ _ _ p) = do
+doHttp (Check _ _ _ _ _ p) = do
     let Just url = fromDyn <$> lookup "url" p
         unpackRedirects :: Dyn -> Int
         unpackRedirects x = fromDyn x

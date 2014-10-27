@@ -25,6 +25,8 @@ import qualified Data.Vector         as V
 import           Data.Vector.Binary  ()
 import           GHC.Generics        (Generic)
 import Data.Typeable
+import Network.Snmp.Client (Config, Version(..))
+import Network.Protocol.Snmp (initial)
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)
@@ -78,8 +80,12 @@ data Check = Check { cname   :: !CheckName
                    , chost   :: !Hostname
                    , cperiod :: !Cron
                    , ctype   :: !Text
+                   , csnmp   :: Maybe Config
                    , cparams :: ![(Counter, Dyn)]
                    } deriving (Show, Typeable, Generic, Eq, Ord)
+
+instance Ord Config where
+    compare _ _ = EQ
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
@@ -105,15 +111,6 @@ newtype TriggerFun = TriggerFun (Complex -> Status)
 instance Show TriggerFun where
      show _ = "trigger fun here"
 
-data Monitoring = Monitoring
- { _periodMap :: !(Map Cron (Set CheckHost))
- , _hosts     :: !(Vector Hostname)
- , _groups    :: !(Vector Group)
- , _triggers  :: !(Vector Trigger)
- , _checks    :: !(Vector Check)
- , _status    :: !(Map TriggerHost Status)
- } deriving Show
-
 instance FromJSON Hostname where
     parseJSON (String x) = pure $ Hostname x
     parseJSON _ = mzero
@@ -121,7 +118,4 @@ instance FromJSON Hostname where
 ----------------------------------------------------------------------------------------------------
 -- helpers
 ----------------------------------------------------------------------------------------------------
-
-emptyMonitoring :: Monitoring
-emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty
 
