@@ -276,7 +276,8 @@ transformGroup ch hs tr gr = do
 --------------------------------------------------------------------------------------------------
 checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
 checkHosts vtrigger vgroup = foldl1 S.union $
-    map checkHostsFromGroup vgroup <> map (checkHostsFromTrigger vtrigger) vgroup
+    -- bad magic here, with trigger must be first!!! see Eq and Ord instance for CheckHost
+    map (checkHostsFromTrigger vtrigger) vgroup <> map checkHostsFromGroup vgroup 
 
 checkHostsFromGroup :: Group -> S.Set CheckHost
 checkHostsFromGroup gr = S.fromList [ CheckHost (h, c, Nothing)
