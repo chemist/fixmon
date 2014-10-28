@@ -1,32 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Checks where
 
-import           Check.Http
 import           Check.Snmp
 import           Types
 
 import           Data.Map.Strict (unions)
-import           Data.Text       (Text)
-import           System.Cron
 
 
 checkRoutes :: RouteCheck
 checkRoutes =
     let -- http   = map routeCheck [ HttpSimple ]
 --        shell  = map routeCheck [ Shell ]
-        system' = map routeCheck [ SnmpInterfaces ]
+        system' = map routeCheck [ SnmpInterfaces, SnmpDisk ]
     --    snmp = map routeCheck [SnmpInterfaces]
         all' = system' -- ++ http -- ++ snmp -- ++ shell
-    in all' `seq` unions all'
+    in unions all'
 
 routes :: Route
 routes =
     let -- system' = map route [HostName, Uptime, Boottime, CpuIntr, CpuLoad, CpuInfo, CpuSwitches, CpuUtil, LocalTime]
         -- http = map route  [HttpSimple]
-        snmp = map route [SnmpInterfaces ]
+        snmp' = map route [SnmpInterfaces, SnmpDisk ]
  --       shell = map route [Shell]
-        all' = snmp -- system' ++ http --  ++ snmp --  ++ shell
-    in all' `seq` unions all'
+        all' = snmp' -- system' ++ http --  ++ snmp --  ++ shell
+    in unions all'
 
 
 {--

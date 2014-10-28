@@ -4,49 +4,50 @@ module Check.Snmp where
 import Network.Snmp.Client
 import Network.Protocol.Snmp
 import Types
-import Control.Applicative
 import Data.Map.Strict (singleton)
-import Data.Text (Text, unpack, pack)
-import qualified Data.Text as T
-import Data.Text.Encoding (decodeLatin1)
+import Data.Text (unpack)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import Data.Text.Encoding (encodeUtf8)
 import Control.Exception
 import System.Cron
 import Data.List
 import Data.Monoid ((<>))
-import Numeric
 
-data Snmp = SnmpInterfaces deriving Show
+data Snmp = SnmpInterfaces 
+          | SnmpDisk
+          deriving Show
 
 instance Checkable Snmp where
     describe SnmpInterfaces = []
-    route SnmpInterfaces = singleton "network.interface" doSnmpInterface
+    describe SnmpDisk = []
+    route SnmpInterfaces = singleton "network.interface" (doSnmp SnmpInterfaces interfacesOid)
+    route SnmpDisk = singleton "system.disk" (doSnmp SnmpDisk diskOid)
     routeCheck SnmpInterfaces = routeCheck' SnmpInterfaces "network.interface"
+    routeCheck SnmpDisk = routeCheck' SnmpDisk "system.disk"
     
 
 interfacesOid :: ByteString
 interfacesOid = "1.3.6.1.2.1.2.2.1"
 
-doSnmpInterface :: Check -> IO [Complex]
-doSnmpInterface (Check _ h _ _ conf _) = do
-    let Hostname host = h
-        Just c = conf
-    r <- bracket (client (c { hostname = unpack host }))
-                close
-                (flip bulkwalk [oidFromBS interfacesOid])
-    return $ map complex $ convert r
-    
-testSnmp :: Check
-testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" Nothing []
+diskOid :: ByteString 
+diskOid = "1.3.6.1.2.1.25.2.3.1"
 
-convert :: Suite -> [Interface]
-convert (Suite xs) = map convS $ groupBy fun $ sortBy sortFun xs
-  where fun :: Coupla -> Coupla -> Bool
-        fun x y = fm x == fm y
-        sortFun x y = compare (fm x) (fm y)
-        fm = last  . oid
+doSnmp :: Snmp -> ByteString -> Check -> IO [Complex]
+doSnmp s oi (Check _ (Hostname host) _ _ (Just conf) _) = do
+    print $ "doSnmp start " <> oi
+    r <- bracket (client (conf { hostname = unpack host }))
+                close
+                (flip bulkwalk [oidFromBS oi])
+    print $ "doSnmp end " <> oi
+    return $ case s of
+                  SnmpInterfaces -> map complex (convert r :: [Interface])
+                  SnmpDisk       -> map complex (convert r :: [Disk])
+doSnmp _ _ (Check _ _ _ _ _ _) = error "oops"
+
+testSnmp :: Check
+testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf) []
+
+testConf :: Config
+testConf = ConfigV3 {hostname = "", port = "161", timeout = 5000000, sequrityName = "aes", authPass = "helloallhello", privPass = "helloallhello", sequrityLevel = AuthPriv, context = "", authType = SHA, privType = AES}
 
 data Interface = Interface
   { ifIndex :: Value
@@ -72,80 +73,70 @@ data Interface = Interface
   , ifOutQLen :: Value
   } deriving (Show)
 
+data Disk = Disk
+  { storageIndex :: Value
+  , storageType  :: Value
+  , storageDescr :: Value
+  , storageAllocationUnits :: Value
+  , storageSize  :: Value
+  , storageUsed  :: Value
+  } deriving (Show)
+
+instance ToComplex Disk where
+    complex i = Complex
+      [ (dName <> ".index", toDynR (storageIndex i) AsInt)
+      , (dName <> ".type", toDynR (storageType i) AsText)
+      , (dName <> ".descr", toDynR (storageDescr i) AsText)
+      , (dName <> ".allocationUnits", toDynR (storageAllocationUnits i) AsInt)
+      , (dName <> ".size", toDynR (storageSize i) AsInt)
+      , (dName <> ".used", toDynR (storageUsed i) AsInt)
+      ]
+      where dName = "system.disk"
+    convert xs = map convD (groupCoupla xs)
+
 instance ToComplex Interface where
     complex i = Complex
-      [ (iName <> ".index", toDyn $ formatInt (ifIndex i))
-      , (iName <> ".id", toDyn $ formatText (ifDescr i))
-      , (iName <> ".name", toDyn $ formatText (ifDescr i))
-      , (iName <> ".mtu", toDyn $ formatInt (ifMtu i))
-      , (iName <> ".speed", toDyn $ formatInt (ifSpeed i))
-      , (iName <> ".physAddress", toDyn $ formatMac (ifPhysAddress i))
-      , (iName <> ".adminStatus", toDyn $ formatAdminStatus (ifAdminStatus i))
-      , (iName <> ".operStatus", toDyn $ formatOperStatus (ifOperStatus i))
-      , (iName <> ".lastChange", toDyn $ formatTimeTicks (ifLastChange i))
-      , (iName <> ".inOctets", toDyn $ formatInt (ifInOctets i))
-      , (iName <> ".inUcastPkts", toDyn $ formatInt (ifInUcastPkts i))
-      , (iName <> ".inNUcastPkts", toDyn $ formatInt (ifInNUcastPkts i))
-      , (iName <> ".inDiscards", toDyn $ formatInt (ifInDiscards i))
-      , (iName <> ".inErrors", toDyn $ formatInt (ifInErrors i))
-      , (iName <> ".inUnknownProtos", toDyn $ formatInt (ifInUnknownProtos i))
-      , (iName <> ".inOutOctets", toDyn $ formatInt (ifOutOctets i))
-      , (iName <> ".inOutUcastPkts", toDyn $ formatInt (ifOutUcastPkts i))
-      , (iName <> ".inOutNUcastPkts", toDyn $ formatInt (ifOutNUcastPkts i))
-      , (iName <> ".inOutDiscards", toDyn $ formatInt (ifOutDiscards i))
-      , (iName <> ".inOutErrors", toDyn $ formatInt (ifOutErrors i))
-      , (iName <> ".inOutQlen", toDyn $ formatInt (ifOutQLen i))
+      [ (iName <> ".index", toDynR (ifIndex i) AsInt)
+      , (iName <> ".id", toDynR (ifDescr i) AsLatinText)
+      , (iName <> ".name", toDynR (ifDescr i) AsLatinText)
+      , (iName <> ".mtu", toDynR (ifMtu i) AsInt)
+      , (iName <> ".speed", toDynR (ifSpeed i) AsInt)
+      , (iName <> ".physAddress", toDynR (ifPhysAddress i) AsMac)
+      , (iName <> ".adminStatus", toDynR (ifAdminStatus i) AsStatus)
+      , (iName <> ".operStatus", toDynR (ifOperStatus i) AsStatus)
+      , (iName <> ".lastChange", toDynR (ifLastChange i) AsInt)
+      , (iName <> ".inOctets", toDynR (ifInOctets i) AsInt)
+      , (iName <> ".inUcastPkts", toDynR (ifInUcastPkts i) AsInt)
+      , (iName <> ".inNUcastPkts", toDynR (ifInNUcastPkts i) AsInt)
+      , (iName <> ".inDiscards", toDynR (ifInDiscards i) AsInt)
+      , (iName <> ".inErrors", toDynR (ifInErrors i) AsInt)
+      , (iName <> ".inUnknownProtos", toDynR (ifInUnknownProtos i) AsInt)
+      , (iName <> ".inOutOctets", toDynR (ifOutOctets i) AsInt)
+      , (iName <> ".inOutUcastPkts", toDynR (ifOutUcastPkts i) AsInt)
+      , (iName <> ".inOutNUcastPkts", toDynR (ifOutNUcastPkts i) AsInt)
+      , (iName <> ".inOutDiscards", toDynR (ifOutDiscards i) AsInt)
+      , (iName <> ".inOutErrors", toDynR (ifOutErrors i) AsInt)
+      , (iName <> ".inOutQlen", toDynR (ifOutQLen i) AsInt)
       ]
       where 
       iName = "network.interface" 
-      
+    convert xs = map convS (groupCoupla xs)
+    
+groupCoupla :: Suite -> [[Coupla]]
+groupCoupla (Suite xs) = groupBy fun $ sortBy sortFun xs
+      where fun :: Coupla -> Coupla -> Bool
+            fun x y = fm x == fm y
+            sortFun x y = compare (fm x) (fm y)
+            fm = last  . oid
+
+     
 phy :: ByteString 
 phy = "\224\203NQ\198C"
 
-
-formatText :: Value -> Text
-formatText (String x) = decodeLatin1 x
-formatText _ = throw $ BadValue "toText"
-{-# INLINE formatText #-}
-
-
-formatMac :: Value -> Text
-formatMac (String "") = ""
-formatMac (String x) = foldl1 (\a b -> a <> ":" <> b) $ T.chunksOf 2 $ pack $ BS.foldl (flip showHex) "" $ BS.reverse x
-formatMac _ = throw $ BadValue "toMac"
-{-# INLINE formatMac #-}
-
-
-formatInt :: Value -> Int
-formatInt (Integer x) = fromIntegral x
-formatInt (Gaude32 x) = fromIntegral x
-formatInt (Counter32 x) = fromIntegral x
-formatInt x = throw $ BadValue $ "toInt" <> (pack $ show x)
-{-# INLINE formatInt #-}
-
-formatAdminStatus :: Value -> Text
-formatAdminStatus (Integer 1) = "up"
-formatAdminStatus (Integer 2) = "down"
-formatAdminStatus (Integer 3) = "testing"
-formatAdminStatus _ = throw $ BadValue "toBool"
-{-# INLINE formatAdminStatus #-}
-
-formatOperStatus :: Value -> Text
-formatOperStatus (Integer 1) = "up"
-formatOperStatus (Integer 2) = "down"
-formatOperStatus (Integer 3) = "testing"
-formatOperStatus (Integer 4) = "unknown"
-formatOperStatus (Integer 5) = "dormant"
-formatOperStatus (Integer 6) = "notPresent"
-formatOperStatus (Integer 7) = "lowerLayerDown"
-formatOperStatus _ = throw $ BadValue "formatOperStatus"
-{-# INLINE formatOperStatus #-}
-
-formatTimeTicks :: Value -> Int
-formatTimeTicks (TimeTicks x) = fromIntegral x
-formatTimeTicks _ = throw $ BadValue "formatTimeTicks"
-{-# INLINE formatTimeTicks #-}
-
+convD :: [Coupla] -> Disk
+convD xs =
+    let (a1:a2:a3:a4:a5:a6:_) = map value xs
+    in Disk a1 a2 a3 a4 a5 a6
 
 convS :: [Coupla] -> Interface
 convS xs =

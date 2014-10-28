@@ -22,6 +22,8 @@ module Types.Dynamic
 , eval
 , evalExp
 , DBException(..)
+, Rule(..)
+, ToDyn(..)
 )
 where
 
@@ -31,13 +33,17 @@ import           Control.Exception
 import           Control.Monad.Reader
 import           Data.Aeson hiding (Bool)
 import           Data.Binary
-import           Data.Monoid          (Monoid)
+import           Data.Monoid          (Monoid, (<>))
 import           Data.String
-import           Data.Text            (Text)
+import           Data.Text            (Text, chunksOf, pack)
+import           Data.Text.Encoding   (decodeUtf8, decodeLatin1)
+import qualified Data.ByteString as BS
 import           Data.Text.Binary     ()
 import           Data.Time
 import           Data.Typeable
 import           GHC.Generics
+import qualified Network.Protocol.Snmp as S
+import           Numeric (showHex)
 
 
 data Dyn = Int Int
@@ -60,30 +66,62 @@ class (Typeable a, Show a, Eq a, Ord a) => Dynamic a where
     toDyn :: a -> Dyn
     fromDyn :: Dyn -> a
 
+data Rule = AsInt
+          | AsLatinText
+          | AsText
+          | AsMac
+          | AsStatus
+          deriving Show
+
+class (Show a, Eq a) => ToDyn a where
+    toDynR :: a -> Rule -> Dyn
+
+instance ToDyn S.Value where
+    toDynR (S.Integer x) AsInt = Int . fromIntegral $ x
+    toDynR (S.Integer 1) AsStatus = Text "up"
+    toDynR (S.Integer 2) AsStatus = Text "down"
+    toDynR (S.Integer 3) AsStatus = Text "testing"
+    toDynR (S.Integer 4) AsStatus = Text "unknown"
+    toDynR (S.Integer 5) AsStatus = Text "dormant"
+    toDynR (S.Integer 6) AsStatus = Text "notPresent"
+    toDynR (S.Integer 7) AsStatus = Text "lowerLayerDown"
+    toDynR (S.Counter32 x) AsInt = Int . fromIntegral $ x
+    toDynR (S.Gaude32 x) AsInt = Int . fromIntegral $ x
+    toDynR (S.TimeTicks x) AsInt = Int . fromIntegral $ x
+    toDynR (S.String x) AsText = Text . decodeUtf8 $ x
+    toDynR (S.String x) AsLatinText = Text . decodeLatin1 $ x
+    toDynR (S.String "") AsMac = Text ""
+    toDynR (S.String x) AsMac = Text . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
+    toDynR (S.OI x) AsText = Text . pack . foldr (\a b -> show a <> "." <> b) "" $ x
+    toDynR (S.Opaque x) AsText = Text . decodeUtf8 $ x
+    toDynR (S.Opaque x) AsLatinText = Text . decodeLatin1 $ x
+    toDynR (S.Counter64 x) AsInt = Int . fromIntegral $ x
+    toDynR x y = error $ show x ++ show y
+
 instance Dynamic Int where
     toDyn x = Int x
     fromDyn (Int x) = x
-    fromDyn _ = undefined
+    fromDyn _ = error "fromDyn int"
 
 instance Dynamic Double  where
     toDyn x = Double  x
     fromDyn (Double  x) = x
-    fromDyn _ = undefined
+    fromDyn _ = error "fromDyn double"
 
 instance Dynamic Bool  where
     toDyn x = Bool  x
     fromDyn (Bool  x) = x
-    fromDyn _ = undefined
+    fromDyn _ = error "fromDyn bool"
 
 instance Dynamic Text  where
     toDyn x = Text  x
     fromDyn (Text  x) = x
-    fromDyn _ = undefined
+    fromDyn _ = error "formDyn text"
 
 instance Dynamic UTCTime  where
     toDyn x = Time  x
     fromDyn (Time  x) = x
-    fromDyn _ = undefined
+    fromDyn _ = error "fromDyn time"
 
 data Period a = MicroSec { un :: a }
               | Byte { un :: a }

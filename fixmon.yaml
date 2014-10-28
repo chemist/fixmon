@@ -26,6 +26,7 @@ groups:
       - other
     checks:
       - network
+      - disk
 
 checks:
   - name: network
@@ -39,6 +40,9 @@ checks:
       authPass: helloallhello
       privPass: helloallhello
     type: network.interface
+  - name: disk
+    period: '* * * * *'
+    type: system.disk
 
 triggers:
   - name: networkt

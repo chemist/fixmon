@@ -47,7 +47,7 @@ main = do
                   (cron >-> taskMaker >-> toOutput taskO) 
                   m
     p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
-    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
+--    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
     p4 <- forkIO $ (evalStateT . runSST . runEffect ) 
                   (fromInput saverI >-> saver >-> toOutput triggerO) 
                   $ SQ (storage m) [] [] lock 
@@ -55,7 +55,7 @@ main = do
                   (fromInput triggerI >-> checkTrigger (storage m) >-> shower)
                   m
     _ <- getLine :: IO String
-    mapM_ killThread [p1,p2,p3,p4,p5]
+    mapM_ killThread [p1,p2,p4,p5]
 
 seconds :: Int -> Int
 seconds = (* 1000000)

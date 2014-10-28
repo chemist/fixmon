@@ -11,6 +11,7 @@ import           Prelude           hiding (lookup, putStr)
 import Data.Lists
 import Control.Exception
 import Data.Typeable
+import Network.Protocol.Snmp (Suite)
 
 import           Types.Shared      (Check (..))
 import           Types.Dynamic     (Complex(..), Dyn(..), Counter(..))
@@ -47,6 +48,7 @@ class Checkable a where
 
 class ToComplex a where
     complex :: a -> Complex
+    convert :: Suite -> [a]
 
 type Problem = String
 
@@ -69,7 +71,7 @@ routeCheck' x checkT = singleton checkT $! fun (describe x)
           result :: [Maybe Problem] -> Either String Check
           result r = case catMaybes r of
                           [] -> Right check
-                          xs -> Left $ foldl1 (\z y -> z ++ " " ++ y) xs
+                          xs -> Left $ foldr1 (\z y -> z ++ " " ++ y) xs
       in result checking
 
 example' :: Checkable a => a -> YamlBuilder
