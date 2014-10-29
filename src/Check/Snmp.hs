@@ -5,12 +5,15 @@ import Network.Snmp.Client
 import Network.Protocol.Snmp
 import Types
 import Data.Map.Strict (singleton)
-import Data.Text (unpack)
+import Data.Text (unpack, stripPrefix)
+import Data.Text.Encoding (encodeUtf8)
 import Data.ByteString (ByteString)
 import Control.Exception
 import System.Cron
-import Data.List
+import Data.List hiding (stripPrefix)
 import Data.Monoid ((<>))
+import Data.Maybe (mapMaybe)
+-- import Debug.Trace
 
 data Snmp = SnmpInterfaces 
           | SnmpDisk
@@ -32,16 +35,28 @@ diskOid :: ByteString
 diskOid = "1.3.6.1.2.1.25.2.3.1"
 
 doSnmp :: Snmp -> ByteString -> Check -> IO [Complex]
-doSnmp s oi (Check _ (Hostname host) _ _ (Just conf) _) = do
-    print $ "doSnmp start " <> oi
+doSnmp s oi (Check _ (Hostname host) _ _ (Just conf) p) = do
+    -- print $ "doSnmp start " <> oi
     r <- bracket (client (conf { hostname = unpack host }))
                 close
                 (flip bulkwalk [oidFromBS oi])
-    print $ "doSnmp end " <> oi
+    -- print $ "doSnmp end " <> oi
     return $ case s of
                   SnmpInterfaces -> map complex (convert r :: [Interface])
-                  SnmpDisk       -> map complex (convert r :: [Disk])
+                  SnmpDisk       -> map (complex . addAliases p) (convert r :: [Disk])
 doSnmp _ _ (Check _ _ _ _ _ _) = error "oops"
+
+addAliases :: [(Counter, Dyn)] -> Disk -> Disk
+addAliases p d = 
+    let aliasesOnly = mapMaybe getAlias p
+        getAlias (Counter a, Text b) = case stripPrefix "alias." a of
+                                       Nothing -> Nothing
+                                       Just x -> Just (String $ encodeUtf8 b,String $ encodeUtf8 x)
+        getAlias _ = error "bad type in addAliases"
+    in case lookup (storageId d) aliasesOnly of
+            Nothing -> d
+            Just x -> d { storageId = x }
+
 
 testSnmp :: Check
 testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf) []
@@ -75,21 +90,22 @@ data Interface = Interface
 
 data Disk = Disk
   { storageIndex :: Value
-  , storageType  :: Value
+  , storageId    :: Value
   , storageDescr :: Value
-  , storageAllocationUnits :: Value
   , storageSize  :: Value
   , storageUsed  :: Value
+  , storageFree  :: Value
   } deriving (Show)
 
 instance ToComplex Disk where
     complex i = Complex
       [ (dName <> ".index", toDynR (storageIndex i) AsInt)
-      , (dName <> ".type", toDynR (storageType i) AsText)
+      , (dName <> ".id", toDynR (storageId i) AsText)
       , (dName <> ".descr", toDynR (storageDescr i) AsText)
-      , (dName <> ".allocationUnits", toDynR (storageAllocationUnits i) AsInt)
       , (dName <> ".size", toDynR (storageSize i) AsInt)
       , (dName <> ".used", toDynR (storageUsed i) AsInt)
+      , (dName <> ".free", toDynR (storageFree i) AsInt)
+      , (dName <> "._status_", toDyn True)
       ]
       where dName = "system.disk"
     convert xs = map convD (groupCoupla xs)
@@ -117,6 +133,7 @@ instance ToComplex Interface where
       , (iName <> ".inOutDiscards", toDynR (ifOutDiscards i) AsInt)
       , (iName <> ".inOutErrors", toDynR (ifOutErrors i) AsInt)
       , (iName <> ".inOutQlen", toDynR (ifOutQLen i) AsInt)
+      , (iName <> "._status_", toDyn True)
       ]
       where 
       iName = "network.interface" 
@@ -135,13 +152,23 @@ phy = "\224\203NQ\198C"
 
 convD :: [Coupla] -> Disk
 convD xs =
-    let (a1:a2:a3:a4:a5:a6:_) = map value xs
-    in Disk a1 a2 a3 a4 a5 a6
+    let (a1:_:a3:a4:a5:a6:_) = map value xs
+        size = a5 *** a4
+        used = a6 *** a4
+        free = size `minus` used
+    in Disk a1 a3 a3 size used free
+
+(***) :: Value -> Value -> Value
+(Integer x) *** (Integer y) = Counter64 $ fromIntegral x * fromIntegral y
+(***) _ _ = error "must be Integer here"
+minus :: Value -> Value -> Value
+(Counter64 x) `minus` (Counter64 y) = Counter64 $ fromIntegral x - fromIntegral y
+minus _ _ = error "must be Integer here"
 
 convS :: [Coupla] -> Interface
 convS xs =
-    let (a1:a2:a3:a4:a5:a6:a7:a8:a9:a10:a11:a12:a13:a14:a15:a16:a17:a18:a19:a20:a21:_) = map value xs
-    in Interface a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21
+    let (a1:a2:a3:a4:a5:a6:a7:a8:a9:(Counter32 a10):a11:a12:a13:a14:a15:(Counter32 a16):a17:a18:a19:a20:a21:_) = map value xs
+    in Interface a1 a2 a3 a4 a5 a6 a7 a8 a9 (Counter64 $ 8 * fromIntegral a10) a11 a12 a13 a14 a15 (Counter64 $ 8 * fromIntegral a16) a17 a18 a19 a20 a21
 {-# INLINE convS #-}
 
 

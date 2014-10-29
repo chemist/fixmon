@@ -117,7 +117,7 @@ instance FromJSON Snmp.Config where
                 pa <- v .:? "privAuth" .!= "AuthPriv"
                 at <- v .:? "authType" .!= "MD5"
                 p <-  v .:? "port"     .!= "161"
-                t <-  v .:? "timeout"  .!= (5000000 :: Int)
+                t <-  v .:? "timeout"  .!= (5 :: Int)
                 ap <- v .: "authPass"
                 pp <- v .:? "privPass" .!= ap
                 return $ Snmp.ConfigV3 "" 
@@ -133,7 +133,7 @@ instance FromJSON Snmp.Config where
             parseVersion2 = do
                 (sn :: Text) <- v .: "community" .!= "public"
                 p <-  v .:? "port"     .!= "161"
-                t <-  v .:? "timeout"  .!= (5000000 :: Int)
+                t <-  v .:? "timeout"  .!= (5 :: Int)
                 return $ Snmp.ConfigV2 "" p (t * 1000000) (Snmp.Community $ encodeUtf8 sn)
 
     parseJSON _ = mzero

@@ -5,7 +5,6 @@ module Main where
 
 import Pipes 
 import Pipes.Concurrent
-import Control.Concurrent.Async
 import System.Cron
 import Control.Monad.State
 import Data.Map.Strict (Map, elems, filterWithKey, lookup)
@@ -13,6 +12,7 @@ import Data.Set (Set, unions)
 import Data.Time.Clock
 import Control.Concurrent (threadDelay, killThread)
 import Process.Configurator.Yaml
+import Process.Web
 import Control.Applicative
 import Data.Vector ((!?), (!))
 import System.IO 
@@ -20,7 +20,7 @@ import Control.Exception
 import Data.Monoid ((<>))
 import Data.Maybe
 import Data.Text (pack)
-import Data.IORef
+import Network.Protocol.Snmp (ClientException(..))
 import Prelude hiding (lookup)
 -- import System.Mem (performGC)
 
@@ -42,20 +42,21 @@ main = do
     (taskO, taskI) <- spawn Unbounded
     (saverO, saverI) <- spawn Unbounded
     (triggerO, triggerI) <- spawn Unbounded
-    lock <- newIORef True
+    p0 <- forkIO $ web
     p1 <- forkIO $ (evalStateT . runEffect)  
                   (cron >-> taskMaker >-> toOutput taskO) 
                   m
     p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
 --    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
+    p3 <- forkIO $ runEffect $ dumpMessages >-> toOutput saverO
     p4 <- forkIO $ (evalStateT . runSST . runEffect ) 
                   (fromInput saverI >-> saver >-> toOutput triggerO) 
-                  $ SQ (storage m) [] [] lock 
+                  $ SQ (storage m) [] [] 
     p5 <- forkIO $ (evalStateT . runEffect)
                   (fromInput triggerI >-> checkTrigger (storage m) >-> shower)
                   m
     _ <- getLine :: IO String
-    mapM_ killThread [p1,p2,p4,p5]
+    mapM_ killThread [p0,p1,p2,p3,p4,p5]
 
 seconds :: Int -> Int
 seconds = (* 1000000)
@@ -74,6 +75,11 @@ cron = forever $ do
     st <- periodMap <$> get
     let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
     each tasks 
+
+dumpMessages :: Producer Triples IO ()
+dumpMessages = forever $ do
+    liftIO $ threadDelay $ seconds 1
+    yield Dump
 
 taskMaker :: Pipe CheckHost Task FixmonST ()
 taskMaker = forever $ do
@@ -112,19 +118,25 @@ toCounter tr Message = let TriggerName tn = tname tr
                        in Counter $ "trigger." <> tn <> ".message"
  
 
-tasker :: Pipe Task (Hostname, Maybe Trigger, [Complex]) IO ()
+tasker :: Pipe Task Triples IO ()
 tasker = forever $ do
     (c, mt) <- await
+    liftIO $ print c
     let ch = lookup (ctype c) routes
         host = chost c
-    r <- liftIO $ maybe notFound (doCheck' c) ch
-    yield (host, mt, r)
+    r <- liftIO $ maybe (notFound c) (doCheck' c) ch
+    yield $ Triples host mt r
     where
-       notFound = return [Complex [("_status_", toDyn False)]]
+       notFound check = return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
        doCheck' check doCheck'' = do
          checkResult <- try $ doCheck'' check
          case checkResult of
-           Left (_ :: SomeException) -> return [Complex [("_status_", toDyn False)]]
+           Left (h :: SomeException) -> do
+               print h
+               return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
+--           Left (h :: ClientException) -> do
+--               print h
+--               return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
            Right r -> return r
 
 newtype SaverST a b = SST {runSST :: StateT (SaveQueue a) IO b}
@@ -134,18 +146,20 @@ data SaveQueue a = SQ
   { database :: a
   , queueCheck :: [(Hostname, [Complex])]
   , queueTrigger :: [(Hostname, Trigger)]
-  , locker :: IORef Bool
   }
 
+data Triples = Triples Hostname (Maybe Trigger) [Complex]
+             | Dump
+             deriving (Show)
 
 
-saver :: Database db => Pipe (Hostname, Maybe Trigger, [Complex]) (Hostname, Trigger) (SaverST db) ()
+
+saver :: Database db => Pipe Triples (Hostname, Trigger) (SaverST db) ()
 saver = forever $ do
-    timer =<< locker <$> get
     add
     saveChecks
     sendTriggers
-    again =<< locker <$> get
+    again 
     where
       saveChecks = do
           ch <- queueCheck <$> get
@@ -154,20 +168,17 @@ saver = forever $ do
       sendTriggers = do
           t <- queueTrigger <$> get
           each t
-      again lock = do
-          liftIO $ atomicWriteIORef lock True
+      again = do
           db <- database <$> get
-          put $ SQ db [] [] lock
-      timer lock = liftIO $ void $ async $ do
-          threadDelay 1000000
-          atomicWriteIORef lock False
+          put $ SQ db [] [] 
       add = do
-          (h, mt, c) <- await
-          modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
-          when (isJust mt) $ modify $ \x -> x { queueTrigger = (h,fromJust mt) : queueTrigger x }
-          l <- locker <$> get
-          l' <- liftIO $ readIORef l
-          when l' $ add
+          triples <- await
+          case triples of
+               Triples h mt c -> do
+                   modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
+                   when (isJust mt) $ modify $ \x -> x { queueTrigger = (h,fromJust mt) : queueTrigger x }
+                   add 
+               Dump -> return ()
 
 
 

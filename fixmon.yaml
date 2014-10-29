@@ -22,8 +22,8 @@ groups:
     hosts:
       - salt
     triggers:
+      - disk
       - networkt
-      - other
     checks:
       - network
       - disk
@@ -43,8 +43,16 @@ checks:
   - name: disk
     period: '* * * * *'
     type: system.disk
+    alias.root: '/'
+    alias.swap: 'Swap space'
+    alias.virtual: 'Virtual memory'
 
 triggers:
+  - name: disk
+    checks:
+      - disk
+    description: dist size here
+    result: root:system.disk.free > 35GB
   - name: networkt
     checks:
       - network

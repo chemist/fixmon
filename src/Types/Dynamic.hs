@@ -221,7 +221,7 @@ evalVal (Last c i) = do
 evalVal (Avg c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (AvgFun c i)
-evalVal (Prev c) = evalVal (Last c (Count 1))
+evalVal (Prev c) = evalVal (Last c (Count 2))
 evalVal (Min c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (MinFun c i)
