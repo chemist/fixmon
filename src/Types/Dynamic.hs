@@ -28,7 +28,7 @@ module Types.Dynamic
 where
 
 import           Control.Applicative  ((<$>), (<*>))
-import           Control.Monad.Except
+-- import           Control.Monad.Except
 import           Control.Exception
 import           Control.Monad.Reader
 import           Data.Aeson hiding (Bool)

@@ -20,7 +20,6 @@ import Control.Exception
 import Data.Monoid ((<>))
 import Data.Maybe
 import Data.Text (pack)
-import Network.Protocol.Snmp (ClientException(..))
 import Prelude hiding (lookup)
 -- import System.Mem (performGC)
 

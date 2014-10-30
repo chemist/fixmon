@@ -10,8 +10,6 @@ import           Types.Cron
 import           Types.Dynamic 
 
 import           Control.Monad       (mzero)
-import           Data.Map.Strict     (Map)
-import qualified Data.Map.Strict     as M
 import           Data.Set            (Set)
 import           Data.String         (IsString, fromString)
 import           Data.Text           (Text, pack)
@@ -20,13 +18,9 @@ import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 import           Control.Applicative (pure)
 import           Data.Binary         (Binary)
 import           Data.Text.Binary    ()
-import           Data.Vector         (Vector)
-import qualified Data.Vector         as V
-import           Data.Vector.Binary  ()
 import           GHC.Generics        (Generic)
 import Data.Typeable
-import Network.Snmp.Client (Config, Version(..))
-import Network.Protocol.Snmp (initial)
+import Network.Snmp.Client (Config)
 import Data.Monoid ((<>))
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
