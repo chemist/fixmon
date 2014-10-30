@@ -57,7 +57,6 @@ addAliases p d =
             Nothing -> d
             Just x -> d { storageId = x }
 
-
 testSnmp :: Check
 testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf) []
 
@@ -105,7 +104,6 @@ instance ToComplex Disk where
       , (dName <> ".size", toDynR (storageSize i) AsInt)
       , (dName <> ".used", toDynR (storageUsed i) AsInt)
       , (dName <> ".free", toDynR (storageFree i) AsInt)
-      , (dName <> "._status_", toDyn True)
       ]
       where dName = "system.disk"
     convert xs = map convD (groupCoupla xs)
@@ -133,7 +131,6 @@ instance ToComplex Interface where
       , (iName <> ".inOutDiscards", toDynR (ifOutDiscards i) AsInt)
       , (iName <> ".inOutErrors", toDynR (ifOutErrors i) AsInt)
       , (iName <> ".inOutQlen", toDynR (ifOutQLen i) AsInt)
-      , (iName <> "._status_", toDyn True)
       ]
       where 
       iName = "network.interface" 

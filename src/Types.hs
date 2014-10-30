@@ -8,6 +8,7 @@ module Types
 , TriggerName(..)
 , Trigger(..)
 , TriggerHost(..)
+, TriggerHostChecks(..)
 -- * Проверки
 , Check(..)
 , CheckId
@@ -43,12 +44,9 @@ import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
 import Data.Map (Map)
-import qualified Data.Map as M
-import qualified Data.Vector as V
 import Data.Set (Set)
 import Data.Vector (Vector)
 import Network.Snmp.Client (Config)
-import Network.Protocol.Snmp (initial, Version(..))
 import Storage.InfluxDB (InfluxDB)
 import qualified Storage.InfluxDB as InfluxDB
 -- import           Network.HTTP.Conduit (Request)
@@ -68,13 +66,14 @@ data Monitoring = Monitoring
  , triggers  :: !(Vector Trigger)
  , checks    :: !(Vector Check)
  , status    :: !(Map TriggerHost Status)
+ , thc       :: !(Set TriggerHostChecks)
  , snmp      :: !Config
  , storage   :: !InfluxDB
  } deriving Show
 
 
-emptyMonitoring :: Monitoring
-emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty (initial Version3) (config :: InfluxDB)
+-- emptyMonitoring :: Monitoring
+-- emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty (initial Version3) (config :: InfluxDB)
 
 instance Database InfluxDB where
     getData = InfluxDB.getData

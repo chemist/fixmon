@@ -33,7 +33,7 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
                                            CheckName (..), Group (..),
                                            GroupName (..), HostId, Dyn(..), toDyn,
                                            Hostname (..), IntId (..), Counter(..),
-                                           Monitoring (..), Status (..),
+                                           Monitoring (..), Status (..), TriggerHostChecks(..),
                                            Trigger (..), TriggerHost (..),
                                            TriggerId, TriggerName (..), ETrigger)
 import           Types.Cron               (Cron (..))
@@ -280,14 +280,14 @@ checkHosts vtrigger vgroup = foldl1 S.union $
     map (checkHostsFromTrigger vtrigger) vgroup <> map checkHostsFromGroup vgroup 
 
 checkHostsFromGroup :: Group -> S.Set CheckHost
-checkHostsFromGroup gr = S.fromList [ CheckHost (h, c, Nothing)
+checkHostsFromGroup gr = S.fromList [ CheckHost (h, c)
                                     | h <- S.toList $ ghosts gr
                                     , c <- S.toList $ gchecks gr
                                     ]
 
 checkHostsFromTrigger :: Vector Trigger -> Group -> S.Set CheckHost
 checkHostsFromTrigger vt vg =
-    S.fromList [ CheckHost (h, c, Just t)
+    S.fromList [ CheckHost (h, c)
                | h <- S.toList $ ghosts vg
                , t <- S.toList $ gtriggers vg
                , c <- tcheck $ vt ! unId t
@@ -304,9 +304,23 @@ cronChecks vc vt vg = M.fromSet fun cronSet
         fun :: Cron -> S.Set CheckHost
         fun c = S.filter (filterFun c) checkHosts'
         filterFun :: Cron -> CheckHost -> Bool
-        filterFun c (CheckHost (_, i, _)) = c == cperiod (vc ! unId i)
+        filterFun c (CheckHost (_, i)) = c == cperiod (vc ! unId i)
         cronSet :: S.Set Cron
         cronSet = foldl (\sc c -> S.insert (cperiod c) sc) S.empty vc
+
+--------------------------------------------------------------------------------------------------
+    -- _thc
+--------------------------------------------------------------------------------------------------
+
+getCheckFromTrigger :: Vector Trigger -> TriggerId -> [CheckId]
+getCheckFromTrigger vt ti = tcheck $ vt ! (unId ti)
+
+triggerHostChecks :: Vector Group -> Vector Trigger -> S.Set TriggerHostChecks
+triggerHostChecks vg vt =
+    let sth :: S.Set TriggerHost
+        sth = M.keysSet . triggerHosts $ vg
+        fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, (getCheckFromTrigger vt t))
+    in S.map fun sth
 
 --------------------------------------------------------------------------------------------------
     -- _status
@@ -325,7 +339,8 @@ configToMonitoring x = do
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
     let crch = cronChecks ch tr gg
     let ths = triggerHosts gg
-    return $ Monitoring crch (chosts x) gg tr ch ths (isnmp $ csystem x) (idb $ csystem x)
+    let trhcs = triggerHostChecks gg tr
+    return $ Monitoring crch (chosts x) gg tr ch ths trhcs (isnmp $ csystem x) (idb $ csystem x)
 
 parseConfig :: FilePath -> IO (Either String Monitoring)
 parseConfig file = do

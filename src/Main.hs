@@ -14,13 +14,14 @@ import Control.Concurrent (threadDelay, killThread)
 import Process.Configurator.Yaml
 import Process.Web
 import Control.Applicative
-import Data.Vector ((!?), (!))
+import Data.Vector ((!))
 import System.IO 
 import Control.Exception
 import Data.Monoid ((<>))
 import Data.Maybe
 import Data.Text (pack)
 import Prelude hiding (lookup)
+import Debug.Trace
 -- import System.Mem (performGC)
 
 import Types ( 
@@ -28,7 +29,7 @@ import Types (
              , Hostname(..), Complex(..), toDyn, Counter(..) 
              , TriggerName(..), tname, Database, chost, ctype
              , getData, Env(..), Monitoring(..), CheckHost(..)
-             , Cron(..), Check(..), Table(..)
+             , Cron(..), Check(..), Table(..), Status(..)
              , tdescription, tresult, unId, eval
              )
 import Checks (routes)
@@ -50,9 +51,9 @@ main = do
     p3 <- forkIO $ runEffect $ dumpMessages >-> toOutput saverO
     p4 <- forkIO $ (evalStateT . runSST . runEffect ) 
                   (fromInput saverI >-> saver >-> toOutput triggerO) 
-                  $ SQ (storage m) [] [] 
+                  $ SQ (storage m) [] 
     p5 <- forkIO $ (evalStateT . runEffect)
-                  (fromInput triggerI >-> checkTrigger (storage m) >-> shower)
+                  (fromInput triggerI >-> checkTrigger >-> shower)
                   m
     _ <- getLine :: IO String
     mapM_ killThread [p0,p1,p2,p3,p4,p5]
@@ -65,7 +66,8 @@ data Command = Reload ST
 type ST = Map Cron (Set CheckHost)
 
 type FixmonST = StateT Monitoring IO 
-type Task = (Check, Maybe Trigger)
+
+data Task = Task Check CheckHost
 
 cron :: Producer CheckHost FixmonST ()
 cron = forever $ do
@@ -82,21 +84,23 @@ dumpMessages = forever $ do
 
 taskMaker :: Pipe CheckHost Task FixmonST ()
 taskMaker = forever $ do
-    Monitoring _ hosts' _ triggers' checks' _ snmp' _ <- get
-    CheckHost (h, c, mt) <- await
+    Monitoring _ hosts' _ _ checks' _ _ snmp' _ <- get
+    CheckHost (h, c) <- await
     let check = checks' ! unId c
         host = hosts' ! unId h
-        trigger = maybe Nothing (\x -> triggers' !? unId x) mt
-    yield (check { chost = host, csnmp = Just $ fromMaybe snmp' (csnmp check)}, trigger)
+    yield $ Task (check { chost = host, csnmp = Just $ fromMaybe snmp' (csnmp check)}) (CheckHost (h,c))
 
-checkTrigger :: Database db => db -> Pipe (Hostname, Trigger) (Hostname, Complex) FixmonST ()
-checkTrigger db = forever $ do
-    (Hostname h,t) <- await
-    r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
-    saveTriggers [(Hostname h, [triggerToComplex t r])]
-    yield (Hostname h, triggerToComplex t r)
-    where
-      saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
+checkTrigger :: Pipe Triples (Hostname, Complex) FixmonST ()
+checkTrigger = forever $ do
+    _db <- storage <$> get
+    Triples (Hostname h) c i <- await
+    -- r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
+    -- saveTriggers [(Hostname h, [triggerToComplex t r])]
+    -- yield (Hostname h, triggerToComplex t r)
+    liftIO $ print $ show h <> " " <>  show c <> " " <> show i
+    yield (Hostname h, Complex [])
+    -- where
+      -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
 
 data CounterType = State
                  | Message
@@ -119,24 +123,20 @@ toCounter tr Message = let TriggerName tn = tname tr
 
 tasker :: Pipe Task Triples IO ()
 tasker = forever $ do
-    (c, mt) <- await
-    liftIO $ print c
+    Task c i <- await
+    -- liftIO $ print c
     let ch = lookup (ctype c) routes
         host = chost c
-    r <- liftIO $ maybe (notFound c) (doCheck' c) ch
-    yield $ Triples host mt r
+    yield =<< (liftIO $ maybe (notFound i) (doCheck' host c i) ch)
     where
-       notFound check = return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
-       doCheck' check doCheck'' = do
+       notFound i = return $ CheckFail i
+       doCheck' host check i doCheck'' = do
          checkResult <- try $ doCheck'' check
          case checkResult of
            Left (h :: SomeException) -> do
                print h
-               return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
---           Left (h :: ClientException) -> do
---               print h
---               return [Complex [(Counter $ (ctype check) <> "._status_", toDyn False)]]
-           Right r -> return r
+               return $ CheckFail i
+           Right r -> return $ Triples host r i
 
 newtype SaverST a b = SST {runSST :: StateT (SaveQueue a) IO b}
   deriving (Functor, Applicative, Monad, MonadIO, MonadState (SaveQueue a))
@@ -144,43 +144,45 @@ newtype SaverST a b = SST {runSST :: StateT (SaveQueue a) IO b}
 data SaveQueue a = SQ
   { database :: a
   , queueCheck :: [(Hostname, [Complex])]
-  , queueTrigger :: [(Hostname, Trigger)]
   }
 
-data Triples = Triples Hostname (Maybe Trigger) [Complex]
+data Triples = Triples Hostname [Complex] CheckHost
+             | CheckFail CheckHost
              | Dump
              deriving (Show)
 
 
 
-saver :: Database db => Pipe Triples (Hostname, Trigger) (SaverST db) ()
+saver :: Database db => Pipe Triples Triples (SaverST db) ()
 saver = forever $ do
     add
     saveChecks
-    sendTriggers
     again 
     where
       saveChecks = do
           ch <- queueCheck <$> get
           db <- database <$> get 
           liftIO $ saveData db ch `catch` (\(e :: DBException) -> print e)
-      sendTriggers = do
-          t <- queueTrigger <$> get
-          each t
       again = do
           db <- database <$> get
-          put $ SQ db [] [] 
+          put $ SQ db [] 
       add = do
           triples <- await
           case triples of
-               Triples h mt c -> do
+               Triples h c _ -> do
                    modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
-                   when (isJust mt) $ modify $ \x -> x { queueTrigger = (h,fromJust mt) : queueTrigger x }
+                   yield triples
                    add 
+               CheckFail _ -> yield triples
                Dump -> return ()
 
 
 
 shower :: (Show a, MonadIO m) => Consumer a m ()
 shower = forever $ await >>= (\x -> liftIO $ print x)
+
+
+type SwitchFunc state event = state -> event -> state
+
+newtype FSM state a = FSM ( state -> (state, a) )
 

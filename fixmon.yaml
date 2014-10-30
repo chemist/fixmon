@@ -24,6 +24,7 @@ groups:
     triggers:
       - disk
       - networkt
+      - other
     checks:
       - network
       - disk
@@ -61,6 +62,7 @@ triggers:
   - name: other
     checks:
       - network
+      - disk
     description: last here
     result: last(br0:network.interface.name,2) = "eth0"
 

@@ -21,7 +21,6 @@ import           Data.Text.Binary    ()
 import           GHC.Generics        (Generic)
 import Data.Typeable
 import Network.Snmp.Client (Config)
-import Data.Monoid ((<>))
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)
@@ -62,13 +61,7 @@ instance IntId GroupId where
     pId = GroupId
 
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
-newtype CheckHost = CheckHost (HostId, CheckId, Maybe TriggerId) deriving (Show, Binary, Typeable, NFData)
-
-instance Eq CheckHost where
-    CheckHost (a,b,_) == CheckHost (a1,b1,_) = a == a1 && b == b1
-
-instance Ord CheckHost where
-    compare (CheckHost (a,b,_)) (CheckHost (a1,b1,_)) = compare a a1 <> compare b b1
+newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Binary, Typeable, NFData, Eq, Ord)
 
 newtype CheckName = CheckName Text deriving (Eq, Ord, Binary, Typeable)
 
@@ -91,6 +84,7 @@ instance Ord Config where
 
 newtype TriggerId = TriggerId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype TriggerHost = TriggerHost (HostId, TriggerId) deriving (Show, Eq, Ord)
+newtype TriggerHostChecks = TriggerHostChecks (HostId, TriggerId, [CheckId]) deriving (Show, Eq, Ord)
 newtype TriggerName = TriggerName Text deriving (Eq, Show, Ord, Binary, Typeable)
 
 instance IsString TriggerName where
