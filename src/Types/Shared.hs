@@ -94,7 +94,7 @@ data Trigger = Trigger
   { tname        :: !TriggerName
   , tdescription :: !Text
   , tcheck       :: ![CheckId]
-  , tresult      :: !ETrigger
+  , tresult      :: !Exp
   } deriving (Show, Eq, Typeable, Generic)
 
 instance Ord Trigger where

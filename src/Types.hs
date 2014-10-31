@@ -66,7 +66,7 @@ data Monitoring = Monitoring
  , triggers  :: !(Vector Trigger)
  , checks    :: !(Vector Check)
  , status    :: !(Map TriggerHost Status)
- , thc       :: !(Set TriggerHostChecks)
+ , triggerMap:: !(Map CheckHost (Set TriggerId))
  , snmp      :: !Config
  , storage   :: !InfluxDB
  } deriving Show

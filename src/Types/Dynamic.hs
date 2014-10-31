@@ -10,9 +10,7 @@ module Types.Dynamic
 ( Dyn(..)
 , Dynamic(..)
 , Env(..)
-, runTrigger
 , Counter(..)
-, ETrigger
 , Complex(..)
 , Table(..)
 , Exp(..)
@@ -24,6 +22,7 @@ module Types.Dynamic
 , DBException(..)
 , Rule(..)
 , ToDyn(..)
+, countersFromExp
 )
 where
 
@@ -177,9 +176,6 @@ data Env = Env
   { getValue    :: Fun -> IO Dyn
   }
 
-runTrigger :: Env -> ETrigger -> IO (Either DBException Bool)
-runTrigger = eval
-
 type Eval = ReaderT Env IO 
 
 eval :: Env -> Exp -> IO (Either DBException Bool)
@@ -229,7 +225,20 @@ evalVal (Max c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (MaxFun c i)
 
-type ETrigger = Exp
+countersFromExp :: Exp -> [Counter]
+countersFromExp (Change _) = []
+countersFromExp (NoData _ _) = []
+countersFromExp (Not x) = countersFromExp x
+countersFromExp (Or x y) = countersFromExp x <> countersFromExp y
+countersFromExp (And x y) = countersFromExp x <> countersFromExp y
+countersFromExp (More x y) = countersFromDyn x <> countersFromDyn y 
+countersFromExp (Less x y) = countersFromDyn x <> countersFromDyn y 
+countersFromExp (Equal x y) = countersFromDyn x <> countersFromDyn y 
+
+countersFromDyn :: DynExp -> [Counter]
+countersFromDyn (EnvVal x) = [x]
+countersFromDyn _ = []
+
 
 instance Binary UTCTime where
     put (UTCTime x y) = put (fromEnum x) >> put (fromEnum y)

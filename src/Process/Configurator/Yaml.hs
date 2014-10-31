@@ -34,8 +34,8 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
                                            GroupName (..), HostId, Dyn(..), toDyn,
                                            Hostname (..), IntId (..), Counter(..),
                                            Monitoring (..), Status (..), TriggerHostChecks(..),
-                                           Trigger (..), TriggerHost (..),
-                                           TriggerId, TriggerName (..), ETrigger)
+                                           Trigger (..), TriggerHost (..),Exp,
+                                           TriggerId, TriggerName (..))
 import           Types.Cron               (Cron (..))
 import qualified Network.Protocol.Snmp as Snmp
 import qualified Network.Snmp.Client as Snmp
@@ -223,7 +223,7 @@ convertCparams = Prelude.map convertValueToDyn
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
 transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in trigger: " <> itname tr) (parseTrigger (itresult tr))
   where
-  makeTrigger :: ETrigger -> Either String Trigger
+  makeTrigger :: Exp -> Either String Trigger
   makeTrigger tr' = do
       ch <- checks''
       return $ Trigger (TriggerName (itname tr)) (itdescription tr) ch tr'
@@ -322,6 +322,17 @@ triggerHostChecks vg vt =
         fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, (getCheckFromTrigger vt t))
     in S.map fun sth
 
+thcTohcM :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId)
+thcTohcM (TriggerHostChecks (h, th, chs)) = M.fromList $ Prelude.map (\x -> (CheckHost (h, x), S.singleton th)) chs
+
+triggersMap :: Vector Group -> Vector Trigger -> M.Map CheckHost (S.Set TriggerId)
+triggersMap vg vt =
+    let s = triggerHostChecks vg vt
+        fun :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId) -> M.Map CheckHost (S.Set TriggerId)
+        fun x y = M.unionWith S.union (thcTohcM x) y 
+    in S.fold fun M.empty s
+
+
 --------------------------------------------------------------------------------------------------
     -- _status
 --------------------------------------------------------------------------------------------------
@@ -339,7 +350,7 @@ configToMonitoring x = do
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
     let crch = cronChecks ch tr gg
     let ths = triggerHosts gg
-    let trhcs = triggerHostChecks gg tr
+    let trhcs = triggersMap gg tr
     return $ Monitoring crch (chosts x) gg tr ch ths trhcs (isnmp $ csystem x) (idb $ csystem x)
 
 parseConfig :: FilePath -> IO (Either String Monitoring)

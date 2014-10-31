@@ -22,9 +22,7 @@ groups:
     hosts:
       - salt
     triggers:
-      - disk
       - networkt
-      - other
     checks:
       - network
       - disk
@@ -57,8 +55,9 @@ triggers:
   - name: networkt
     checks:
       - network
+      - disk
     description: тупо проверка имени
-    result: eth0:network.interface.name = "eth0" 
+    result: eth0:network.interface.name = "eth0" || lo:network.interface.name = "lo" || root:system.disk.free > 35GB
   - name: other
     checks:
       - network

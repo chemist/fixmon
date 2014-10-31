@@ -8,7 +8,9 @@ import Pipes.Concurrent
 import System.Cron
 import Control.Monad.State
 import Data.Map.Strict (Map, elems, filterWithKey, lookup)
+import qualified Data.Map.Strict as M
 import Data.Set (Set, unions)
+import qualified Data.Set as S
 import Data.Time.Clock
 import Control.Concurrent (threadDelay, killThread)
 import Process.Configurator.Yaml
@@ -20,12 +22,13 @@ import Control.Exception
 import Data.Monoid ((<>))
 import Data.Maybe
 import Data.Text (pack)
+import qualified Data.Text as T
 import Prelude hiding (lookup)
 import Debug.Trace
 -- import System.Mem (performGC)
 
 import Types ( 
-               DBException, saveData, Trigger
+               DBException, saveData, Trigger, TriggerId, countersFromExp, Dyn
              , Hostname(..), Complex(..), toDyn, Counter(..) 
              , TriggerName(..), tname, Database, chost, ctype
              , getData, Env(..), Monitoring(..), CheckHost(..)
@@ -90,37 +93,6 @@ taskMaker = forever $ do
         host = hosts' ! unId h
     yield $ Task (check { chost = host, csnmp = Just $ fromMaybe snmp' (csnmp check)}) (CheckHost (h,c))
 
-checkTrigger :: Pipe Triples (Hostname, Complex) FixmonST ()
-checkTrigger = forever $ do
-    _db <- storage <$> get
-    Triples (Hostname h) c i <- await
-    -- r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
-    -- saveTriggers [(Hostname h, [triggerToComplex t r])]
-    -- yield (Hostname h, triggerToComplex t r)
-    liftIO $ print $ show h <> " " <>  show c <> " " <> show i
-    yield (Hostname h, Complex [])
-    -- where
-      -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
-
-data CounterType = State
-                 | Message
-
-triggerToComplex :: Trigger -> Either DBException Bool -> Complex
-triggerToComplex tr (Left e) = Complex [ (toCounter tr State , toDyn False)
-                                       , (toCounter tr Message, toDyn $ pack $ show e)
-                                       ]
-triggerToComplex tr (Right True) = Complex [ (toCounter tr State, toDyn True) ]
-triggerToComplex tr (Right False) = Complex [ (toCounter tr State, toDyn False)
-                                            , (toCounter tr Message, toDyn $ tdescription tr)
-                                            ]
-
-toCounter :: Trigger -> CounterType -> Counter
-toCounter tr State = let TriggerName tn = tname tr
-                     in Counter $ "trigger." <> tn <> ".status"
-toCounter tr Message = let TriggerName tn = tname tr
-                       in Counter $ "trigger." <> tn <> ".message"
- 
-
 tasker :: Pipe Task Triples IO ()
 tasker = forever $ do
     Task c i <- await
@@ -147,6 +119,7 @@ data SaveQueue a = SQ
   }
 
 data Triples = Triples Hostname [Complex] CheckHost
+             | STriples Hostname Complex CheckHost
              | CheckFail CheckHost
              | Dump
              deriving (Show)
@@ -169,11 +142,12 @@ saver = forever $ do
       add = do
           triples <- await
           case triples of
-               Triples h c _ -> do
+               Triples h c ch -> do
                    modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
-                   yield triples
+                   each $ map (\x -> STriples h x ch) c
                    add 
-               CheckFail _ -> yield triples
+               STriples _ _ _ -> yield triples >> add
+               CheckFail _ -> yield triples >> add
                Dump -> return ()
 
 
@@ -181,8 +155,75 @@ saver = forever $ do
 shower :: (Show a, MonadIO m) => Consumer a m ()
 shower = forever $ await >>= (\x -> liftIO $ print x)
 
+checkTrigger :: Pipe Triples (Hostname, Complex) FixmonST ()
+checkTrigger = forever $ do
+    _db <- storage <$> get
+    work =<< await
+    -- r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
+    -- saveTriggers [(Hostname h, [triggerToComplex t r])]
+    -- yield (Hostname h, triggerToComplex t r)
+    -- liftIO $ print $ show h <> " " <>  show c <> " " <> show i
+    -- where
+      -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
+work :: Triples -> Pipe Triples (Hostname, Complex) FixmonST ()
+work (STriples (Hostname h) c i) = do
+    tm <- triggerMap <$> get
+    tv <- triggers <$> get
+    let trs = fromJust $ lookup i tm
+        keys = S.fold fun S.empty $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
+        fun x y = S.unions (y : Prelude.map (fst . unSplitCounter) x)
+        ikeys = mapMaybe unSplitId $ Prelude.concat $ S.toList $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
+    when (isRightComplex c ikeys) $ do
+        liftIO $ print ikeys
+        yield (Hostname h, removeUnusedFromComplex keys c)
+    checkTrigger
+--     mapM_ work' triggersToDo
+work _ = undefined
 
-type SwitchFunc state event = state -> event -> state
+isRightComplex :: Complex -> [(Counter, Dyn)] -> Bool
+isRightComplex (Complex xs) ikeys = or $ map (flip elem xs) ikeys
 
-newtype FSM state a = FSM ( state -> (state, a) )
+unSplitId :: Counter -> Maybe (Counter, Dyn)
+unSplitId (Counter x) =
+    case T.splitOn ":" x of
+         [_] -> Nothing
+         [d,b] -> Just $ (Counter $ T.dropWhileEnd (/= '.') b <> "id", toDyn d)
+         _ -> error "some thing wrong"
+
+unSplitCounter :: Counter -> (S.Set Counter, Maybe Dyn)
+unSplitCounter (Counter x) = 
+    case T.splitOn ":" x of
+       [a] -> (S.singleton $ Counter a, Nothing)
+       [d,b] -> (S.fromList [Counter b, Counter $ T.dropWhileEnd (/= '.') b <> "id"], Just $ toDyn d)
+       _ -> error "something wrong"
+
+removeUnusedFromComplex :: S.Set Counter -> Complex -> Complex
+removeUnusedFromComplex keys (Complex xs) = Complex $ filter (\(x,_) -> S.member x keys) xs
+
+{--
+unCounter :: Counter -> (Text, Text)
+unCounter (Counter x) = case T.splitOn ":" x of
+                             [a] -> (a, T.empty)
+                             [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
+                             --}
+
+
+data CounterType = State
+                 | Message
+
+triggerToComplex :: Trigger -> Either DBException Bool -> Complex
+triggerToComplex tr (Left e) = Complex [ (toCounter tr State , toDyn False)
+                                       , (toCounter tr Message, toDyn $ pack $ show e)
+                                       ]
+triggerToComplex tr (Right True) = Complex [ (toCounter tr State, toDyn True) ]
+triggerToComplex tr (Right False) = Complex [ (toCounter tr State, toDyn False)
+                                            , (toCounter tr Message, toDyn $ tdescription tr)
+                                            ]
+
+toCounter :: Trigger -> CounterType -> Counter
+toCounter tr State = let TriggerName tn = tname tr
+                     in Counter $ "trigger." <> tn <> ".status"
+toCounter tr Message = let TriggerName tn = tname tr
+                       in Counter $ "trigger." <> tn <> ".message"
+ 
 
