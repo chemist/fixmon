@@ -212,9 +212,9 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
 convertCparams :: [(Text, Value)] -> [(Counter, Dyn)]
 convertCparams = Prelude.map convertValueToDyn
   where
-  convertValueToDyn (c, (String x)) = (Counter c, toDyn x)
-  convertValueToDyn (c, (Data.Yaml.Bool x)) = (Counter c, toDyn x)
-  convertValueToDyn (c, (Number x)) =
+  convertValueToDyn (c, String x) = (Counter c, toDyn x)
+  convertValueToDyn (c, Data.Yaml.Bool x) = (Counter c, toDyn x)
+  convertValueToDyn (c, Number x) =
     case floatingOrInteger x of
          Left y -> (Counter c, toDyn (y :: Double))
          Right y -> (Counter c, toDyn (y :: Int))
@@ -313,13 +313,13 @@ cronChecks vc vt vg = M.fromSet fun cronSet
 --------------------------------------------------------------------------------------------------
 
 getCheckFromTrigger :: Vector Trigger -> TriggerId -> [CheckId]
-getCheckFromTrigger vt ti = tcheck $ vt ! (unId ti)
+getCheckFromTrigger vt ti = tcheck $ vt ! unId ti
 
 triggerHostChecks :: Vector Group -> Vector Trigger -> S.Set TriggerHostChecks
 triggerHostChecks vg vt =
     let sth :: S.Set TriggerHost
         sth = M.keysSet . triggerHosts $ vg
-        fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, (getCheckFromTrigger vt t))
+        fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, getCheckFromTrigger vt t)
     in S.map fun sth
 
 thcTohcM :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId)
@@ -329,7 +329,7 @@ triggersMap :: Vector Group -> Vector Trigger -> M.Map CheckHost (S.Set TriggerI
 triggersMap vg vt =
     let s = triggerHostChecks vg vt
         fun :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId) -> M.Map CheckHost (S.Set TriggerId)
-        fun x y = M.unionWith S.union (thcTohcM x) y 
+        fun x = M.unionWith S.union (thcTohcM x) 
     in S.fold fun M.empty s
 
 
