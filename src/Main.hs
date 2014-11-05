@@ -37,6 +37,9 @@ import Types (
              )
 import Checks (routes)
 
+-- PEN assigned for fixmon
+-- Prefix: iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
+-- PEN: 44729
 
 main :: IO ()
 main = do
