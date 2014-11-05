@@ -22,9 +22,8 @@ groups:
     hosts:
       - salt
     triggers:
-      - networkt
+      - disk
     checks:
-      - network
       - disk
 
 checks:
@@ -51,7 +50,7 @@ triggers:
     checks:
       - disk
     description: dist size here
-    result: root:system.disk.free > 35GB
+    result: root:system.disk.free > 35GB && root:system.disk.used > 10GB && swap:system.disk.used > 1GB
   - name: networkt
     checks:
       - network
@@ -61,7 +60,6 @@ triggers:
   - name: other
     checks:
       - network
-      - disk
     description: last here
     result: last(br0:network.interface.name,2) = "eth0"
 

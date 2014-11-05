@@ -11,7 +11,6 @@ import Data.ByteString (ByteString)
 import Control.Exception
 import System.Cron
 import Data.List hiding (stripPrefix)
-import Data.Monoid ((<>))
 import Data.Maybe (mapMaybe)
 -- import Debug.Trace
 
@@ -98,42 +97,39 @@ data Disk = Disk
 
 instance ToComplex Disk where
     complex i = Complex
-      [ (dName <> ".index", toDynR (storageIndex i) AsInt)
-      , (dName <> ".id", toDynR (storageId i) AsText)
-      , (dName <> ".descr", toDynR (storageDescr i) AsText)
-      , (dName <> ".size", toDynR (storageSize i) AsInt)
-      , (dName <> ".used", toDynR (storageUsed i) AsInt)
-      , (dName <> ".free", toDynR (storageFree i) AsInt)
+      [ ("index", toDynR (storageIndex i) AsInt)
+      , ("id", toDynR (storageId i) AsText)
+      , ("descr", toDynR (storageDescr i) AsText)
+      , ("size", toDynR (storageSize i) AsInt)
+      , ("used", toDynR (storageUsed i) AsInt)
+      , ("free", toDynR (storageFree i) AsInt)
       ]
-      where dName = "system.disk"
     convert xs = map convD (groupCoupla xs)
 
 instance ToComplex Interface where
     complex i = Complex
-      [ (iName <> ".index", toDynR (ifIndex i) AsInt)
-      , (iName <> ".id", toDynR (ifDescr i) AsLatinText)
-      , (iName <> ".name", toDynR (ifDescr i) AsLatinText)
-      , (iName <> ".mtu", toDynR (ifMtu i) AsInt)
-      , (iName <> ".speed", toDynR (ifSpeed i) AsInt)
-      , (iName <> ".physAddress", toDynR (ifPhysAddress i) AsMac)
-      , (iName <> ".adminStatus", toDynR (ifAdminStatus i) AsStatus)
-      , (iName <> ".operStatus", toDynR (ifOperStatus i) AsStatus)
-      , (iName <> ".lastChange", toDynR (ifLastChange i) AsInt)
-      , (iName <> ".inOctets", toDynR (ifInOctets i) AsInt)
-      , (iName <> ".inUcastPkts", toDynR (ifInUcastPkts i) AsInt)
-      , (iName <> ".inNUcastPkts", toDynR (ifInNUcastPkts i) AsInt)
-      , (iName <> ".inDiscards", toDynR (ifInDiscards i) AsInt)
-      , (iName <> ".inErrors", toDynR (ifInErrors i) AsInt)
-      , (iName <> ".inUnknownProtos", toDynR (ifInUnknownProtos i) AsInt)
-      , (iName <> ".inOutOctets", toDynR (ifOutOctets i) AsInt)
-      , (iName <> ".inOutUcastPkts", toDynR (ifOutUcastPkts i) AsInt)
-      , (iName <> ".inOutNUcastPkts", toDynR (ifOutNUcastPkts i) AsInt)
-      , (iName <> ".inOutDiscards", toDynR (ifOutDiscards i) AsInt)
-      , (iName <> ".inOutErrors", toDynR (ifOutErrors i) AsInt)
-      , (iName <> ".inOutQlen", toDynR (ifOutQLen i) AsInt)
+      [ ("index", toDynR (ifIndex i) AsInt)
+      , ("id", toDynR (ifDescr i) AsLatinText)
+      , ("name", toDynR (ifDescr i) AsLatinText)
+      , ("mtu", toDynR (ifMtu i) AsInt)
+      , ("speed", toDynR (ifSpeed i) AsInt)
+      , ("physAddress", toDynR (ifPhysAddress i) AsMac)
+      , ("adminStatus", toDynR (ifAdminStatus i) AsStatus)
+      , ("operStatus", toDynR (ifOperStatus i) AsStatus)
+      , ("lastChange", toDynR (ifLastChange i) AsInt)
+      , ("inOctets", toDynR (ifInOctets i) AsInt)
+      , ("inUcastPkts", toDynR (ifInUcastPkts i) AsInt)
+      , ("inNUcastPkts", toDynR (ifInNUcastPkts i) AsInt)
+      , ("inDiscards", toDynR (ifInDiscards i) AsInt)
+      , ("inErrors", toDynR (ifInErrors i) AsInt)
+      , ("inUnknownProtos", toDynR (ifInUnknownProtos i) AsInt)
+      , ("inOutOctets", toDynR (ifOutOctets i) AsInt)
+      , ("inOutUcastPkts", toDynR (ifOutUcastPkts i) AsInt)
+      , ("inOutNUcastPkts", toDynR (ifOutNUcastPkts i) AsInt)
+      , ("inOutDiscards", toDynR (ifOutDiscards i) AsInt)
+      , ("inOutErrors", toDynR (ifOutErrors i) AsInt)
+      , ("inOutQlen", toDynR (ifOutQLen i) AsInt)
       ]
-      where 
-      iName = "network.interface" 
     convert xs = map convS (groupCoupla xs)
     
 groupCoupla :: Suite -> [[Coupla]]

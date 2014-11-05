@@ -24,12 +24,13 @@ import Data.Maybe
 import Data.Text (pack)
 import qualified Data.Text as T
 import Prelude hiding (lookup)
+import qualified Prelude 
 import Debug.Trace
 -- import System.Mem (performGC)
 
 import Types ( 
-               DBException, saveData, Trigger, TriggerId, countersFromExp, Dyn
-             , Hostname(..), Complex(..), toDyn, Counter(..) 
+               DBException, saveData, Trigger, TriggerId, countersFromExp, Dyn, Period(..)
+             , Hostname(..), Complex(..), toDyn, Counter(..), Fun(..)
              , TriggerName(..), tname, Database, chost, ctype
              , getData, Env(..), Monitoring(..), CheckHost(..)
              , Cron(..), Check(..), Table(..), Status(..)
@@ -111,18 +112,18 @@ tasker = forever $ do
            Left (h :: SomeException) -> do
                print h
                return $ CheckFail i
-           Right r -> return $ Triples host r i
+           Right r -> return $ Triples host (Counter $ ctype check) r i
 
 newtype SaverST a b = SST {runSST :: StateT (SaveQueue a) IO b}
   deriving (Functor, Applicative, Monad, MonadIO, MonadState (SaveQueue a))
 
 data SaveQueue a = SQ
   { database :: a
-  , queueCheck :: [(Hostname, [Complex])]
+  , queueCheck :: [(Hostname, Counter, [Complex])]
   }
 
-data Triples = Triples Hostname [Complex] CheckHost
-             | STriples Hostname Complex CheckHost
+data Triples = Triples Hostname Counter [Complex] CheckHost
+             | STriples Hostname Counter Complex CheckHost
              | CheckFail CheckHost
              | Dump
              deriving (Show)
@@ -145,9 +146,9 @@ saver = forever $ do
       add = do
           triples <- await
           case triples of
-               Triples h c ch -> do
-                   modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
-                   each $ map (\x -> STriples h x ch) c
+               Triples h prefixCounter c ch -> do
+                   modify $ \x -> x { queueCheck = (h, prefixCounter, c) : queueCheck x }
+                   each $ map (\x -> STriples h prefixCounter x ch) c
                    add 
                STriples{} -> yield triples >> add
                CheckFail{} -> yield triples >> add
@@ -169,28 +170,49 @@ checkTrigger = forever $ do
     -- where
       -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
 work :: Triples -> Pipe Triples (Hostname, Complex) FixmonST ()
-work (STriples (Hostname h) c i) = do
+work (STriples (Hostname h) prefixCounter c i) = do
     tm <- triggerMap <$> get
     tv <- triggers <$> get
-    let trs = fromJust $ lookup i tm
-        keys = S.fold fun S.empty $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
-        fun x y = S.unions (y : Prelude.map (fst . unSplitCounter) x)
-        ikeys = mapMaybe unSplitId $ Prelude.concat $ S.toList $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
-    when (isRightComplex c ikeys) $ do
-        liftIO $ print ikeys
-        yield (Hostname h, removeUnusedFromComplex keys c)
-    checkTrigger
+    let trsm = lookup i tm
+    when (isJust trsm) $ do  -- if not in triggerMap skip, and wait next
+        let trs = fromJust trsm
+            -- TODO: can be evaluated when application start
+            keys = S.fold fun S.empty $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
+            fun x y = S.unions (y : Prelude.map (fst . unSplitCounter) x)
+            ikeys = mapMaybe unSplitId $ Prelude.concat $ S.toList $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
+        when (isRightComplex c ikeys) $ do
+            liftIO $ print prefixCounter
+            liftIO $ print $ S.map (\x -> countersFromExp $ tresult $ tv ! unId x) trs
+            liftIO $ print c
+            -- liftIO $ print $ removeUnusedFromComplex keys c
+            yield (Hostname h, removeUnusedFromComplex keys c)
 --     mapM_ work' triggersToDo
 work _ = undefined
 
-isRightComplex :: Complex -> [(Counter, Dyn)] -> Bool
-isRightComplex (Complex xs) = any (`elem` xs)
+type Cash = Map (Hostname, Counter) Dyn
 
-unSplitId :: Counter -> Maybe (Counter, Dyn)
+createEnv :: Database db => db -> Table -> Cash -> Env
+createEnv db t cash = Env (createEnv' db t cash)
+  where
+  createEnv' db' (Table hostname) cash' (EnvValFun c) = 
+    let v = M.lookup (Hostname hostname, c) cash'
+    in case v of
+            Nothing -> createEnv' db' (Table hostname) cash' (LastFun c (Count 1))
+            Just r -> return r
+  createEnv' db' t' _ f' = getData db' t' f'
+
+isRightComplex :: Complex -> [Dyn] -> Bool
+isRightComplex (Complex xs) ids =
+    let id' = Prelude.lookup "id" xs
+    in case id' of
+            Nothing -> False
+            Just id'' -> elem id'' ids
+
+unSplitId :: Counter -> Maybe Dyn
 unSplitId (Counter x) =
     case T.splitOn ":" x of
          [_] -> Nothing
-         [d,b] -> Just (Counter $ T.dropWhileEnd (/= '.') b <> "id", toDyn d)
+         [d,_] -> Just (toDyn d)
          _ -> error "some thing wrong"
 
 unSplitCounter :: Counter -> (S.Set Counter, Maybe Dyn)

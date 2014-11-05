@@ -168,6 +168,7 @@ data Fun = ChangeFun Counter
          | MinFun Counter (Period Int)
          | MaxFun Counter (Period Int)
          | NoDataFun Counter (Period Int)
+         | EnvValFun Counter
          deriving (Show, Eq, Ord, Typeable, Generic)
 
 instance Binary Fun
@@ -204,13 +205,15 @@ evalExp (NoData c i) = do
       DynList [] -> return True
       _ -> return False
 evalExp (Change c) = do
-    last' <- evalVal (Last c (Count 1))
+    last' <- evalVal (EnvVal c)
     prev <- evalVal (Prev c)
     return $ last' /= prev
 
 evalVal :: DynExp -> Eval Dyn
 evalVal (Val c) = return c
-evalVal (EnvVal c) = evalVal (Last c (Count 1))
+evalVal (EnvVal c) = do
+    getFun <- getValue <$> ask
+    liftIO $ getFun (EnvValFun c)
 evalVal (Last c i) = do
         getFun <- getValue <$> ask
         liftIO $ getFun (LastFun c i)
@@ -237,6 +240,11 @@ countersFromExp (Equal x y) = countersFromDyn x <> countersFromDyn y
 
 countersFromDyn :: DynExp -> [Counter]
 countersFromDyn (EnvVal x) = [x]
+countersFromDyn (Last x _) = [x]
+countersFromDyn (Avg x _) = [x]
+countersFromDyn (Prev x) = [x]
+countersFromDyn (Min x _) = [x]
+countersFromDyn (Max x _) = [x]
 countersFromDyn _ = []
 
 

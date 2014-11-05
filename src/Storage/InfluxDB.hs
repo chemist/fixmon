@@ -99,14 +99,17 @@ data SeriesData = SeriesData
 
 type Column = Counter
 
-complexToSeriesData :: Complex -> SeriesData
-complexToSeriesData (Complex x) = let (c', p') = unzip x
-                                  in SeriesData c' [p']
+complexToSeriesData :: Counter -> Complex -> SeriesData
+complexToSeriesData prefixCounter (Complex x) = 
+    let (c', p') = unzip x
+        prefixCounter' = prefixCounter <> "."
+        columns' = map (\y -> prefixCounter' <> y) c'
+    in SeriesData columns' [p']
 
-toSeries :: (Hostname, [Complex]) -> [Series]
-toSeries (Hostname n, c) = map (\x -> Series n (complexToSeriesData x)) c
+toSeries :: (Hostname, Counter, [Complex]) -> [Series]
+toSeries (Hostname n, prefixCounter, c) = map (\x -> Series n (complexToSeriesData prefixCounter x)) c
 
-saveData :: InfluxDB -> [(Hostname, [Complex])] -> IO ()
+saveData :: InfluxDB -> [(Hostname, Counter, [Complex])] -> IO ()
 saveData db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
@@ -142,6 +145,12 @@ getData db t (LastFun   c p) = do
     case xs of
          DynList xss -> return $ last xss
          y -> return y
+getData db t (EnvValFun   c) = do
+    let (pole, addition) = unCounter c
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit 1" 
+    case xs of
+         DynList xss -> return $ last xss
+         y -> return y
 getData db t (AvgFun    c p) = do
     let (pole, addition) = unCounter c
     rawRequest db (Counter "mean") $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
@@ -158,15 +167,6 @@ getData db t (NoDataFun c p) = do
          Right _ -> return $ toDyn False
          Left EmptyException -> return $ toDyn True
          Left e -> throw e
-
-
-{--
-counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
-counterType db t c = do
-    r <- rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
-    return $ dynTypeRep r
---}
--- min  SELECT MIN(status) FROM localhost group by time(24h) where time > now() - 24h
 
 unTable :: Table -> Text
 unTable (Table x) = x
