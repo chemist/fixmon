@@ -48,7 +48,7 @@ main = do
     (taskO, taskI) <- spawn Unbounded
     (saverO, saverI) <- spawn Unbounded
     (triggerO, triggerI) <- spawn Unbounded
-    p0 <- forkIO $ web
+    p0 <- forkIO web
     p1 <- forkIO $ (evalStateT . runEffect)  
                   (cron >-> taskMaker >-> toOutput taskO) 
                   m
@@ -102,7 +102,7 @@ tasker = forever $ do
     -- liftIO $ print c
     let ch = lookup (ctype c) routes
         host = chost c
-    yield =<< (liftIO $ maybe (notFound i) (doCheck' host c i) ch)
+    yield =<< liftIO (maybe (notFound i) (doCheck' host c i) ch)
     where
        notFound i = return $ CheckFail i
        doCheck' host check i doCheck'' = do
@@ -149,14 +149,14 @@ saver = forever $ do
                    modify $ \x -> x { queueCheck = (h,c) : queueCheck x }
                    each $ map (\x -> STriples h x ch) c
                    add 
-               STriples _ _ _ -> yield triples >> add
-               CheckFail _ -> yield triples >> add
+               STriples{} -> yield triples >> add
+               CheckFail{} -> yield triples >> add
                Dump -> return ()
 
 
 
 shower :: (Show a, MonadIO m) => Consumer a m ()
-shower = forever $ await >>= (\x -> liftIO $ print x)
+shower = forever $ await >>= liftIO . print
 
 checkTrigger :: Pipe Triples (Hostname, Complex) FixmonST ()
 checkTrigger = forever $ do
@@ -184,13 +184,13 @@ work (STriples (Hostname h) c i) = do
 work _ = undefined
 
 isRightComplex :: Complex -> [(Counter, Dyn)] -> Bool
-isRightComplex (Complex xs) ikeys = or $ map (flip elem xs) ikeys
+isRightComplex (Complex xs) = any (`elem` xs)
 
 unSplitId :: Counter -> Maybe (Counter, Dyn)
 unSplitId (Counter x) =
     case T.splitOn ":" x of
          [_] -> Nothing
-         [d,b] -> Just $ (Counter $ T.dropWhileEnd (/= '.') b <> "id", toDyn d)
+         [d,b] -> Just (Counter $ T.dropWhileEnd (/= '.') b <> "id", toDyn d)
          _ -> error "some thing wrong"
 
 unSplitCounter :: Counter -> (S.Set Counter, Maybe Dyn)
@@ -202,13 +202,6 @@ unSplitCounter (Counter x) =
 
 removeUnusedFromComplex :: S.Set Counter -> Complex -> Complex
 removeUnusedFromComplex keys (Complex xs) = Complex $ filter (\(x,_) -> S.member x keys) xs
-
-{--
-unCounter :: Counter -> (Text, Text)
-unCounter (Counter x) = case T.splitOn ":" x of
-                             [a] -> (a, T.empty)
-                             [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
-                             --}
 
 
 data CounterType = State
@@ -228,5 +221,5 @@ toCounter tr State = let TriggerName tn = tname tr
                      in Counter $ "trigger." <> tn <> ".status"
 toCounter tr Message = let TriggerName tn = tname tr
                        in Counter $ "trigger." <> tn <> ".message"
- 
+
 
