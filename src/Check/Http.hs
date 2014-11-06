@@ -42,16 +42,16 @@ checkUrl (Text x) = Right (Text x)
 checkUrl _ = Left "bad url type, must be text"
 
 checkUrl' :: Dyn -> Either String Dyn
-checkUrl' x = let url = fromDyn x
+checkUrl' x = let url = from x
               in if isAbsoluteURI (unpack url)
                     then Right x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
 doHttp :: Check -> IO [Complex]
-doHttp (Check _ _ _ _ _ p) = do
-    let Just url = fromDyn <$> lookup "url" p
+doHttp (Check (CheckName n) _ _ _ _ p) = do
+    let Just url = from <$> lookup "url" p
         unpackRedirects :: Dyn -> Int
-        unpackRedirects x = fromDyn x
+        unpackRedirects x = from x
         redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
     request' <-  parseUrl (unpack url)
     let request = request'
@@ -62,5 +62,5 @@ doHttp (Check _ _ _ _ _ p) = do
     resp <-  withManager $ \manager -> do
         response <- http request manager
         return $ responseStatus response
-    return [Complex [("status", toDyn $ statusCode resp)]] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+    return [Complex [("id", to n), ("status", to $ statusCode resp)]] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
 

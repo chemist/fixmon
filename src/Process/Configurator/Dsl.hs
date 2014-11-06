@@ -28,7 +28,7 @@ languageDef =
            , Token.commentEnd   = ""
            , Token.commentLine  = ""
            , Token.identStart   = letter
-           , Token.identLetter  = alphaNum <|> char '.' <|> char ':'
+           , Token.identLetter  = alphaNum <|> char '.' 
            , Token.reservedNames = [ "last"
                                    , "avg"
                                    , "min"
@@ -44,7 +44,11 @@ lexer :: Token.TokenParser st
 lexer = Token.makeTokenParser languageDef
 
 identifier :: Parser Text
-identifier = pack <$> Token.identifier lexer -- parses an identifier
+identifier = pack <$> do
+    i <- Token.identifier lexer -- parses an identifier
+    r <- char ':'
+    t <- Token.identifier lexer
+    return $ i <> [r] <> t
 
 reserved :: String -> Parser ()
 reserved   = Token.reserved   lexer -- parses a reserved name
@@ -121,7 +125,7 @@ val :: Parser DynExp
 val = Val <$> try (number <|> str)
 
 str :: Parser Dyn
-str = toDyn <$> stringLiteral
+str = to <$> stringLiteral
 
 number :: Parser Dyn
 number = do
@@ -130,11 +134,11 @@ number = do
     b <- try $ optionMaybe (many1 digit)
     c <- try $ optionMaybe quant
     case (a, p, b, c) of
-      (Nothing, Just _ , Just x , _       ) -> return (toDyn (read $ "0." <> x :: Double))
-      (Just x , Nothing, _      , Just q  ) -> return (toDyn (un q * (read x :: Int)))
-      (Just x , Nothing, _      , Nothing ) -> return (toDyn (read x :: Int))
-      (Just x , Just _ , Nothing, _       ) -> return (toDyn (read x :: Double))
-      (Just x , Just _ , Just y , _       ) -> return (toDyn (read $ x <> "." <> y :: Double ))
+      (Nothing, Just _ , Just x , _       ) -> return (to (read $ "0." <> x :: Double))
+      (Just x , Nothing, _      , Just q  ) -> return (to (un q * (read x :: Int)))
+      (Just x , Nothing, _      , Nothing ) -> return (to (read x :: Int))
+      (Just x , Just _ , Nothing, _       ) -> return (to (read x :: Double))
+      (Just x , Just _ , Just y , _       ) -> return (to (read $ x <> "." <> y :: Double ))
       _ -> fail "bad number"
 
 periodP :: Parser (Period Int)

@@ -31,8 +31,8 @@ import qualified Prelude
 import           Process.Configurator.Dsl (parseTrigger)
 import           Types                    (Check (..), CheckHost (..), CheckId,
                                            CheckName (..), Group (..),
-                                           GroupName (..), HostId, Dyn(..), toDyn,
-                                           Hostname (..), IntId (..), Counter(..),
+                                           GroupName (..), HostId, Dyn(..), Convert(..),
+                                           Hostname (..), Counter(..),
                                            Monitoring (..), Status (..), TriggerHostChecks(..),
                                            Trigger (..), TriggerHost (..),Exp,
                                            TriggerId, TriggerName (..))
@@ -212,12 +212,12 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
 convertCparams :: [(Text, Value)] -> [(Counter, Dyn)]
 convertCparams = Prelude.map convertValueToDyn
   where
-  convertValueToDyn (c, String x) = (Counter c, toDyn x)
-  convertValueToDyn (c, Data.Yaml.Bool x) = (Counter c, toDyn x)
+  convertValueToDyn (c, String x) = (Counter c, to x)
+  convertValueToDyn (c, Data.Yaml.Bool x) = (Counter c, to x)
   convertValueToDyn (c, Number x) =
     case floatingOrInteger x of
-         Left y -> (Counter c, toDyn (y :: Double))
-         Right y -> (Counter c, toDyn (y :: Int))
+         Left y -> (Counter c, to (y :: Double))
+         Right y -> (Counter c, to (y :: Int))
   convertValueToDyn c = error $ "convertValueToDyn, bad type" ++ show c
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
@@ -237,7 +237,7 @@ transformTrigger chs tr = makeTrigger =<< conv ("Problem with parse result in tr
   checks' = Prelude.map
               $ \x -> case findIndex (\c -> cname c == CheckName x) chs of
                        Nothing -> Left $ "check " <> x  <> " not found"
-                       Just i -> Right $ pId i
+                       Just i -> Right $ to i
 
 conv :: Show a => Text -> Either a b -> Either String b
 conv tag x = case x of
@@ -251,21 +251,21 @@ transformGroup ch hs tr gr = do
                                  funh :: Hostname -> Either String HostId
                                  funh h = case elemIndex h hs of
                                               Nothing -> Left "bad hostname in group"
-                                              Just i -> Right $ pId i
+                                              Just i -> Right $ to i
                                  tchecks :: Maybe [Text] -> Either String [CheckId]
                                  tchecks Nothing = return []
                                  tchecks (Just xs) = Prelude.mapM func xs
                                  func :: Text -> Either String CheckId
                                  func h = case findIndex (\a -> cname a == CheckName h) ch of
                                                Nothing -> Left "bad check in group"
-                                               Just i -> Right $ pId i
+                                               Just i -> Right $ to i
                                  ttriggers :: Maybe [Text] -> Either String [TriggerId]
                                  ttriggers Nothing = return []
                                  ttriggers (Just xs) = Prelude.mapM funt xs
                                  funt :: Text -> Either String TriggerId
                                  funt h = case findIndex (\a -> tname a == TriggerName h) tr of
                                                Nothing -> Left "bad trigger in group"
-                                               Just i -> Right $ pId i
+                                               Just i -> Right $ to i
                              hh <- thosts
                              cc <- tchecks $ igchecks gr
                              tt <- ttriggers $ igtriggers gr
@@ -290,7 +290,7 @@ checkHostsFromTrigger vt vg =
     S.fromList [ CheckHost (h, c)
                | h <- S.toList $ ghosts vg
                , t <- S.toList $ gtriggers vg
-               , c <- tcheck $ vt ! unId t
+               , c <- tcheck $ vt ! from t
                ]
 --------------------------------------------------------------------------------------------------
     -- _periodMap
@@ -304,7 +304,7 @@ cronChecks vc vt vg = M.fromSet fun cronSet
         fun :: Cron -> S.Set CheckHost
         fun c = S.filter (filterFun c) checkHosts'
         filterFun :: Cron -> CheckHost -> Bool
-        filterFun c (CheckHost (_, i)) = c == cperiod (vc ! unId i)
+        filterFun c (CheckHost (_, i)) = c == cperiod (vc ! from i)
         cronSet :: S.Set Cron
         cronSet = foldl (\sc c -> S.insert (cperiod c) sc) S.empty vc
 
@@ -313,7 +313,7 @@ cronChecks vc vt vg = M.fromSet fun cronSet
 --------------------------------------------------------------------------------------------------
 
 getCheckFromTrigger :: Vector Trigger -> TriggerId -> [CheckId]
-getCheckFromTrigger vt ti = tcheck $ vt ! unId ti
+getCheckFromTrigger vt ti = tcheck $ vt ! from ti
 
 triggerHostChecks :: Vector Group -> Vector Trigger -> S.Set TriggerHostChecks
 triggerHostChecks vg vt =

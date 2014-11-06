@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Types.Shared where
 
@@ -40,25 +41,21 @@ data Group = Group
 
 instance Binary Group
 
-class IntId a where
-    unId :: a -> Int
-    pId :: Int -> a
+instance Convert Int CheckId where
+    from (CheckId x) = x
+    to = CheckId
 
-instance IntId CheckId where
-    unId (CheckId x) = x
-    pId = CheckId
+instance Convert Int HostId where
+    from (HostId x) = x
+    to = HostId
 
-instance IntId HostId where
-    unId (HostId x) = x
-    pId = HostId
+instance Convert Int TriggerId where
+    from (TriggerId x) = x
+    to = TriggerId
 
-instance IntId TriggerId where
-    unId (TriggerId x) = x
-    pId = TriggerId
-
-instance IntId GroupId where
-    unId (GroupId x) = x
-    pId = GroupId
+instance Convert Int GroupId where
+    from (GroupId x) = x
+    to = GroupId
 
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Binary, Typeable, NFData, Eq, Ord)
@@ -100,7 +97,7 @@ data Trigger = Trigger
 instance Ord Trigger where
     compare x y = compare (tname x) (tname y)
 
-newtype Status = Status { unStatus :: Bool } deriving (Show, Eq, Ord, Binary)
+newtype Status = Status Bool deriving (Show, Eq, Ord, Binary)
 
 newtype TriggerFun = TriggerFun (Complex -> Status)
 

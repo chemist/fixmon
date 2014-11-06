@@ -18,7 +18,6 @@ module Types
 , Checkable(..)
 , RouteCheck
 , ToComplex(..)
-, CheckException(..)
 -- * Группы
 , GroupName(..)
 , GroupId
@@ -28,7 +27,6 @@ module Types
 , Status(..)
 , Monitoring(..)
 -- , Log(..)
-, IntId(..)
 , routeCheck'
 , Database(..)
 , DBException(..)
@@ -49,10 +47,6 @@ import Data.Vector (Vector)
 import Network.Snmp.Client (Config)
 import Storage.InfluxDB (InfluxDB)
 import qualified Storage.InfluxDB as InfluxDB
--- import           Network.HTTP.Conduit (Request)
--- import qualified Network.HTTP.Types.Status as H
--- import Data.Typeable
---
 
 class Database db where
     getData :: db -> Table -> Fun -> IO Dyn
@@ -70,10 +64,6 @@ data Monitoring = Monitoring
  , snmp      :: !Config
  , storage   :: !InfluxDB
  } deriving Show
-
-
--- emptyMonitoring :: Monitoring
--- emptyMonitoring = Monitoring M.empty V.empty V.empty V.empty V.empty M.empty (initial Version3) (config :: InfluxDB)
 
 instance Database InfluxDB where
     getData = InfluxDB.getData

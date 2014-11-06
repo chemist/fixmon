@@ -9,8 +9,6 @@ import           Data.Text         (Text)
 import           Data.Yaml.Builder
 import           Prelude           hiding (lookup, putStr)
 import Data.Lists
-import Control.Exception
-import Data.Typeable
 import Network.Protocol.Snmp (Suite)
 
 import           Types.Shared      (Check (..))
@@ -29,9 +27,6 @@ describeCheck (Check _ _ t _) = do
          Just (AC (_, x)) -> return $ example [x]
     --}
     --
-data CheckException = BadValue Text deriving (Show, Eq, Typeable)
-
-instance Exception CheckException
 
 type Description = Text
 type Name = Text

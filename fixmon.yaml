@@ -23,6 +23,7 @@ groups:
       - salt
     triggers:
       - disk
+      - yandex
     checks:
       - disk
 
@@ -44,6 +45,17 @@ checks:
     alias.root: '/'
     alias.swap: 'Swap space'
     alias.virtual: 'Virtual memory'
+  - name: ya
+    period: '* * * * *'
+    type: http.simple
+    url: http://yandex.ru
+    redirects: 3
+  - name: rambler
+    period: '* * * * *'
+    type: http.simple
+    url: http://rambler.ru
+    redirects: 3
+
 
 triggers:
   - name: disk
@@ -62,6 +74,13 @@ triggers:
       - network
     description: last here
     result: last(br0:network.interface.name,2) = "eth0"
+  - name: yandex
+    checks: 
+      - ya
+      - rambler
+    description: yandex status
+    result: ya:http.simple.status = 200 && rambler:http.simple.status = 200
+
 
 
 

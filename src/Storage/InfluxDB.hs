@@ -84,12 +84,12 @@ toSD c p = let col = map Counter c
            in SeriesData col po
 
 valToDyn :: Value -> Dyn
-valToDyn (String x) = toDyn x
+valToDyn (String x) = to x
 valToDyn (Number x) = case floatingOrInteger x of
-                           Left y -> toDyn (y :: Double)
-                           Right y -> toDyn (y :: Int)
-valToDyn (A.Bool x) = toDyn x
-valToDyn Null = toDyn ("null here" :: Text)
+                           Left y -> to (y :: Double)
+                           Right y -> to (y :: Int)
+valToDyn (A.Bool x) = to x
+valToDyn Null = to ("null here" :: Text)
 valToDyn e = error $ "bad val " ++ show e
 
 data SeriesData = SeriesData
@@ -134,7 +134,7 @@ getData db t (ChangeFun c) = do
     let (pole, addition) = unCounter c
     r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
     case r of
-         DynList (x:y:[]) -> return $ toDyn (x /= y)
+         DynList (x:y:[]) -> return $ to (x /= y)
          _ -> throw EmptyException
 getData db t (PrevFun   c) = do
     let (pole, addition) = unCounter c
@@ -164,8 +164,8 @@ getData db t (NoDataFun c p) = do
     let (pole, addition) = unCounter c
     r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1" 
     case r of
-         Right _ -> return $ toDyn False
-         Left EmptyException -> return $ toDyn True
+         Right _ -> return $ to False
+         Left EmptyException -> return $ to True
          Left e -> throw e
 
 unTable :: Table -> Text

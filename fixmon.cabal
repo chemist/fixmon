@@ -30,8 +30,6 @@ executable fixmon
                      , parsec
                      , yaml
                      , text
---                     , distributed-process
---                     , distributed-process-platform
                      , text-binary
                      , mtl
                      , aeson
@@ -45,8 +43,7 @@ executable fixmon
                      , scientific
                      , unordered-containers
                      , network
---                     , network-transport
---                     , network-transport-tcp
+                     , network-uri
                      , snmp
                      , attoparsec
                      , http-types

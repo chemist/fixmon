@@ -2,6 +2,7 @@
 module Checks where
 
 import           Check.Snmp
+import           Check.Http
 import           Types
 
 import           Data.Map.Strict (unions)
@@ -9,20 +10,18 @@ import           Data.Map.Strict (unions)
 
 checkRoutes :: RouteCheck
 checkRoutes =
-    let -- http   = map routeCheck [ HttpSimple ]
+    let http   = map routeCheck [ HttpSimple ]
 --        shell  = map routeCheck [ Shell ]
         system' = map routeCheck [ SnmpInterfaces, SnmpDisk ]
-    --    snmp = map routeCheck [SnmpInterfaces]
-        all' = system' -- ++ http -- ++ snmp -- ++ shell
+        all' = system' ++ http -- ++ snmp -- ++ shell
     in unions all'
 
 routes :: Route
 routes =
-    let -- system' = map route [HostName, Uptime, Boottime, CpuIntr, CpuLoad, CpuInfo, CpuSwitches, CpuUtil, LocalTime]
-        -- http = map route  [HttpSimple]
+    let http = map route  [HttpSimple]
         snmp' = map route [SnmpInterfaces, SnmpDisk ]
  --       shell = map route [Shell]
-        all' = snmp' -- system' ++ http --  ++ snmp --  ++ shell
+        all' = snmp' ++ http --  ++ snmp --  ++ shell
     in unions all'
 
 

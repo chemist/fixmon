@@ -6,9 +6,10 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE StandaloneDeriving      #-}
 module Types.Dynamic
 ( Dyn(..)
-, Dynamic(..)
 , Env(..)
 , Counter(..)
 , Complex(..)
@@ -19,9 +20,9 @@ module Types.Dynamic
 , Period(..)
 , eval
 , evalExp
+, Convert(..)
 , DBException(..)
 , Rule(..)
-, ToDyn(..)
 , countersFromExp
 )
 where
@@ -40,7 +41,7 @@ import qualified Data.ByteString as BS
 import           Data.Text.Binary     ()
 import           Data.Time
 import           Data.Typeable
-import           GHC.Generics
+import           GHC.Generics hiding (from)
 import qualified Network.Protocol.Snmp as S
 import           Numeric (showHex)
 
@@ -61,9 +62,9 @@ instance ToJSON Dyn where
     toJSON (Time x) = toJSON x
     toJSON (DynList x) = toJSON x
 
-class (Typeable a, Show a, Eq a, Ord a) => Dynamic a where
-    toDyn :: a -> Dyn
-    fromDyn :: Dyn -> a
+class (Typeable a, Show a, Eq a, Ord a) => Convert a b where
+    to :: a -> b
+    from :: b -> a
 
 data Rule = AsInt
           | AsLatinText
@@ -72,55 +73,56 @@ data Rule = AsInt
           | AsStatus
           deriving Show
 
-class (Show a, Eq a) => ToDyn a where
-    toDynR :: a -> Rule -> Dyn
+deriving instance Typeable S.Value 
+deriving instance Ord S.Value
 
-instance ToDyn S.Value where
-    toDynR (S.Integer x) AsInt = Int . fromIntegral $ x
-    toDynR (S.Integer 1) AsStatus = Text "up"
-    toDynR (S.Integer 2) AsStatus = Text "down"
-    toDynR (S.Integer 3) AsStatus = Text "testing"
-    toDynR (S.Integer 4) AsStatus = Text "unknown"
-    toDynR (S.Integer 5) AsStatus = Text "dormant"
-    toDynR (S.Integer 6) AsStatus = Text "notPresent"
-    toDynR (S.Integer 7) AsStatus = Text "lowerLayerDown"
-    toDynR (S.Counter32 x) AsInt = Int . fromIntegral $ x
-    toDynR (S.Gaude32 x) AsInt = Int . fromIntegral $ x
-    toDynR (S.TimeTicks x) AsInt = Int . fromIntegral $ x
-    toDynR (S.String x) AsText = Text . decodeUtf8 $ x
-    toDynR (S.String x) AsLatinText = Text . decodeLatin1 $ x
-    toDynR (S.String "") AsMac = Text ""
-    toDynR (S.String x) AsMac = Text . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
-    toDynR (S.OI x) AsText = Text . pack . foldr (\a b -> show a <> "." <> b) "" $ x
-    toDynR (S.Opaque x) AsText = Text . decodeUtf8 $ x
-    toDynR (S.Opaque x) AsLatinText = Text . decodeLatin1 $ x
-    toDynR (S.Counter64 x) AsInt = Int . fromIntegral $ x
-    toDynR x y = error $ show x ++ show y
+instance Convert S.Value (Rule -> Dyn) where
+    to (S.Integer x) AsInt = Int . fromIntegral $ x
+    to (S.Integer 1) AsStatus = Text "up"
+    to (S.Integer 2) AsStatus = Text "down"
+    to (S.Integer 3) AsStatus = Text "testing"
+    to (S.Integer 4) AsStatus = Text "unknown"
+    to (S.Integer 5) AsStatus = Text "dormant"
+    to (S.Integer 6) AsStatus = Text "notPresent"
+    to (S.Integer 7) AsStatus = Text "lowerLayerDown"
+    to (S.Counter32 x) AsInt = Int . fromIntegral $ x
+    to (S.Gaude32 x) AsInt = Int . fromIntegral $ x
+    to (S.TimeTicks x) AsInt = Int . fromIntegral $ x
+    to (S.String x) AsText = Text . decodeUtf8 $ x
+    to (S.String x) AsLatinText = Text . decodeLatin1 $ x
+    to (S.String "") AsMac = Text ""
+    to (S.String x) AsMac = Text . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
+    to (S.OI x) AsText = Text . pack . foldr (\a b -> show a <> "." <> b) "" $ x
+    to (S.Opaque x) AsText = Text . decodeUtf8 $ x
+    to (S.Opaque x) AsLatinText = Text . decodeLatin1 $ x
+    to (S.Counter64 x) AsInt = Int . fromIntegral $ x
+    to x y = error $ show x ++ show y
+    from _ = error "cant convert (Rule -> Dyn) to Value"
 
-instance Dynamic Int where
-    toDyn x = Int x
-    fromDyn (Int x) = x
-    fromDyn _ = error "fromDyn int"
+instance Convert Int Dyn where
+    to x = Int x
+    from (Int x) = x
+    from _ = error "from int"
 
-instance Dynamic Double  where
-    toDyn x = Double  x
-    fromDyn (Double  x) = x
-    fromDyn _ = error "fromDyn double"
+instance Convert Double Dyn where
+    to x = Double  x
+    from (Double  x) = x
+    from _ = error "fromDyn double"
 
-instance Dynamic Bool  where
-    toDyn x = Bool  x
-    fromDyn (Bool  x) = x
-    fromDyn _ = error "fromDyn bool"
+instance Convert Bool Dyn where
+    to x = Bool  x
+    from (Bool  x) = x
+    from _ = error "fromDyn bool"
 
-instance Dynamic Text  where
-    toDyn x = Text  x
-    fromDyn (Text  x) = x
-    fromDyn _ = error "formDyn text"
+instance Convert Text Dyn where
+    to x = Text  x
+    from (Text  x) = x
+    from _ = error "formDyn text"
 
-instance Dynamic UTCTime  where
-    toDyn x = Time  x
-    fromDyn (Time  x) = x
-    fromDyn _ = error "fromDyn time"
+instance Convert UTCTime Dyn  where
+    to x = Time  x
+    from (Time  x) = x
+    from _ = error "fromDyn time"
 
 data Period a = MicroSec { un :: a }
               | Byte { un :: a }
