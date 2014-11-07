@@ -147,6 +147,9 @@ saver = forever $ do
 getHost :: (Functor m, Monad m, MonadReader Monitoring m)  => CheckHost -> m Hostname
 getHost (CheckHost (i, _)) = (\x -> hosts x ! from i) <$> ask 
 
+getTrigger :: (Functor m, Monad m, MonadReader Monitoring m) => TriggerId -> m Trigger
+getTrigger i = (\x -> triggers x ! from i) <$> ask
+
 getCountersById :: (Functor m, Monad m, MonadReader Monitoring m) => Set TriggerId -> m (Map Dyn (Set Counter))
 getCountersById sti = do
     tv <- triggers <$> ask
@@ -190,20 +193,23 @@ work (STriples prefixCounter c i) = do
             liftIO $ print prefixCounter
             liftIO $ print ikeys
             liftIO $ print c
+            r <- Prelude.mapM getTrigger (S.toList $ fromJust trsm)
+            liftIO $ print r
+            liftIO $ print ("" :: String)
             yield (h, removeUnusedFromCombined ikeys c)
 --     mapM_ work' triggersToDo
 work _ = undefined
 
 
 createEnv :: Database db => db -> Table -> Cash -> Env
-createEnv db t cash = Env (createEnv' db t cash)
+createEnv db t cash = Env (createEnv' t)
   where
-  createEnv' db' (Table hostname) cash' (EnvValFun c) = 
-    let v = M.lookup (Hostname hostname, c) cash'
+  createEnv' (Table hostname) (EnvValFun c) = 
+    let v = M.lookup (Hostname hostname, c) cash
     in case v of
-            Nothing -> createEnv' db' (Table hostname) cash' (LastFun c (Count 1))
+            Nothing -> createEnv' t (LastFun c (Count 1))
             Just r -> return r
-  createEnv' db' t' _ f' = getData db' t' f'
+  createEnv' _ f  = getData db t f
 
 -- combined check when Check -> [Complex]
 isCombined :: Complex -> Set Dyn -> Bool
