@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Types.Check where
 import           Data.Map.Strict          (Map, keys, singleton)
 import           Data.Maybe
@@ -8,11 +9,12 @@ import           Data.Text         (Text)
 import           Data.Yaml.Builder
 import           Prelude           hiding (lookup, putStr)
 import Data.Lists
+import Network.Protocol.Snmp (Suite)
 
 import           Types.Shared      (Check (..))
 import           Types.Dynamic     (Complex(..), Dyn(..), Counter(..))
 
-type Route = Map Text (Check -> IO Complex)
+type Route = Map Text (Check -> IO [Complex])
 
 type RouteCheck = Map Text (Check -> Either String Check)
 
@@ -24,6 +26,7 @@ describeCheck (Check _ _ t _) = do
          Nothing -> return $ string ""
          Just (AC (_, x)) -> return $ example [x]
     --}
+    --
 
 type Description = Text
 type Name = Text
@@ -37,6 +40,10 @@ class Checkable a where
 
     example :: [a] -> YamlBuilder
     example xs = mapping [("checks", array $ map example' xs)]
+
+class ToComplex a where
+    complex :: a -> Complex
+    convert :: Suite -> [a]
 
 type Problem = String
 
@@ -59,7 +66,7 @@ routeCheck' x checkT = singleton checkT $! fun (describe x)
           result :: [Maybe Problem] -> Either String Check
           result r = case catMaybes r of
                           [] -> Right check
-                          xs -> Left $ foldl1 (\z y -> z ++ " " ++ y) xs
+                          xs -> Left $ foldr1 (\z y -> z ++ " " ++ y) xs
       in result checking
 
 example' :: Checkable a => a -> YamlBuilder

@@ -6,156 +6,128 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE StandaloneDeriving      #-}
 module Types.Dynamic
-( dynTypeRep
-, Dyn(..)
-, Dynamic(..)
+( Dyn(..)
 , Env(..)
-, runTrigger
 , Counter(..)
-, ETrigger
 , Complex(..)
 , Table(..)
-, iType
-, tType
-, bType
-, dType
-, timeType
 , Exp(..)
 , DynExp(..)
 , Fun(..)
 , Period(..)
 , eval
 , evalExp
+, Convert(..)
 , DBException(..)
+, Rule(..)
+, countersFromExp
 )
 where
 
 import           Control.Applicative  ((<$>), (<*>))
-import           Control.Monad.Except
+-- import           Control.Monad.Except
 import           Control.Exception
 import           Control.Monad.Reader
-import           Data.Aeson
+import           Data.Aeson hiding (Bool)
 import           Data.Binary
-import qualified Data.Dynamic         as D
-import           Data.Monoid          (Monoid)
+import           Data.Monoid          (Monoid, (<>))
 import           Data.String
-import           Data.Text            (Text, pack)
+import           Data.Text            (Text, chunksOf, pack)
+import           Data.Text.Encoding   (decodeUtf8, decodeLatin1)
+import qualified Data.ByteString as BS
 import           Data.Text.Binary     ()
 import           Data.Time
 import           Data.Typeable
-import           GHC.Generics
+import           GHC.Generics hiding (from)
+import qualified Network.Protocol.Snmp as S
+import           Numeric (showHex)
 
 
-data Dyn = Dyn     !D.Dynamic
-         | DynList ![Dyn] deriving (Typeable)
-
-dynTypeRep :: Dyn -> TypeRep
-dynTypeRep (Dyn x) = D.dynTypeRep x
-dynTypeRep (DynList x) = typeOf x
-
-iType, tType, bType, dType, timeType :: TypeRep
-iType = typeOf (error "" :: Int)
-tType = typeOf (error "":: Text)
-bType = typeOf (error "" :: Bool)
-dType = typeOf (error "" :: Double)
-timeType = typeOf (error "" :: UTCTime)
+data Dyn = Int Int
+         | Double Double
+         | Bool Bool
+         | Text Text
+         | Time UTCTime
+         | DynList [Dyn]
+         deriving (Show, Eq, Typeable, Ord)
 
 instance ToJSON Dyn where
-    toJSON (Dyn x)
-        | D.dynTypeRep x == iType = toJSON $ D.fromDyn x (error "toJson" :: Int)
-        | D.dynTypeRep x == dType = toJSON $ D.fromDyn x (error "toJson" :: Double)
-        | D.dynTypeRep x == bType = toJSON $ D.fromDyn x (error "toJson" :: Bool)
-        | D.dynTypeRep x == tType = toJSON $ D.fromDyn x (error "toJson" :: Text)
-        | D.dynTypeRep x == timeType = toJSON $ D.fromDyn x (error "toJson" :: UTCTime)
-        | otherwise = error "bad toJson"
+    toJSON (Int x) = toJSON x
+    toJSON (Double x) = toJSON x
+    toJSON (Text x) = toJSON x
+    toJSON (Bool x) = toJSON x
+    toJSON (Time x) = toJSON x
     toJSON (DynList x) = toJSON x
 
-class (Typeable a, Show a, Eq a, Ord a) => Dynamic a where
-    toDyn :: a -> Dyn
-    toDyn = Dyn . D.toDyn
-    fromDyn :: Dyn -> a
+class (Typeable a, Show a, Eq a, Ord a) => Convert a b where
+    to :: a -> b
+    from :: b -> a
 
-instance Dynamic Int where
-    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Int)
-    fromDyn _ = error "fromDyn"
+data Rule = AsInt
+          | AsLatinText
+          | AsText
+          | AsMac
+          | AsStatus
+          deriving Show
 
-instance Dynamic Text where
-    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Text)
-    fromDyn _ = error "fromDyn"
+deriving instance Typeable S.Value 
+deriving instance Ord S.Value
 
-instance Dynamic Bool where
-    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Bool)
-    fromDyn _ = error "fromDyn"
+instance Convert S.Value (Rule -> Dyn) where
+    to (S.Integer x) AsInt = Int . fromIntegral $ x
+    to (S.Integer 1) AsStatus = Text "up"
+    to (S.Integer 2) AsStatus = Text "down"
+    to (S.Integer 3) AsStatus = Text "testing"
+    to (S.Integer 4) AsStatus = Text "unknown"
+    to (S.Integer 5) AsStatus = Text "dormant"
+    to (S.Integer 6) AsStatus = Text "notPresent"
+    to (S.Integer 7) AsStatus = Text "lowerLayerDown"
+    to (S.Counter32 x) AsInt = Int . fromIntegral $ x
+    to (S.Gaude32 x) AsInt = Int . fromIntegral $ x
+    to (S.TimeTicks x) AsInt = Int . fromIntegral $ x
+    to (S.String x) AsText = Text . decodeUtf8 $ x
+    to (S.String x) AsLatinText = Text . decodeLatin1 $ x
+    to (S.String "") AsMac = Text ""
+    to (S.String x) AsMac = Text . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
+    to (S.OI x) AsText = Text . pack . foldr (\a b -> show a <> "." <> b) "" $ x
+    to (S.Opaque x) AsText = Text . decodeUtf8 $ x
+    to (S.Opaque x) AsLatinText = Text . decodeLatin1 $ x
+    to (S.Counter64 x) AsInt = Int . fromIntegral $ x
+    to x y = error $ show x ++ show y
+    from _ = error "cant convert (Rule -> Dyn) to Value"
 
-instance Dynamic Double where
-    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: Double)
-    fromDyn _ = error "fromDyn"
+instance Convert Int Dyn where
+    to x = Int x
+    from (Int x) = x
+    from _ = error "from int"
 
-instance Dynamic UTCTime where
-    fromDyn (Dyn x) = D.fromDyn x (error "Dynamic":: UTCTime)
-    fromDyn _ = error "fromDyn"
+instance Convert Double Dyn where
+    to x = Double  x
+    from (Double  x) = x
+    from _ = error "fromDyn double"
 
-instance Show Dyn where
-    show (Dyn x)
-        | D.dynTypeRep x == iType    = show $ D.fromDyn x (error "show dyn" :: Int)
-        | D.dynTypeRep x == dType = show $ D.fromDyn x (error "show dyn" :: Double)
-        | D.dynTypeRep x == tType   = show $ D.fromDyn x (error "show dyn" :: Text)
-        | D.dynTypeRep x == bType   = show $ D.fromDyn x (error "show dyn" :: Bool)
-        | D.dynTypeRep x == timeType   = show $ D.fromDyn x (error "show dyn":: UTCTime)
-        | otherwise = error "bad show"
-    show (DynList x) = "DynList " ++ show x
+instance Convert Bool Dyn where
+    to x = Bool  x
+    from (Bool  x) = x
+    from _ = error "fromDyn bool"
 
-instance Eq Dyn where
-    xx@(Dyn x) == yy@(Dyn y)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == iType      = (fromDyn xx :: Int) == (fromDyn yy :: Int)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == tType      = (fromDyn xx :: Text) == (fromDyn yy :: Text)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == dType      = (fromDyn xx :: Double) == (fromDyn yy :: Double)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == bType      = (fromDyn xx :: Bool) == (fromDyn yy :: Bool)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == timeType   = (fromDyn xx :: UTCTime) == (fromDyn yy :: UTCTime)
-          | otherwise = error "bad eq"
-    DynList x == DynList y = x == y
-    _ == _ = error "bad eq"
+instance Convert Text Dyn where
+    to x = Text  x
+    from (Text  x) = x
+    from _ = error "formDyn text"
 
-instance Ord Dyn where
-    compare xx@(Dyn x) yy@(Dyn y)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == iType    = compare (fromDyn xx :: Int) (fromDyn yy :: Int)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == tType    = compare (fromDyn xx :: Text) (fromDyn yy :: Text)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == dType    = compare (fromDyn xx :: Double) (fromDyn yy :: Double)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == bType    = compare (fromDyn xx :: Bool) (fromDyn yy :: Bool)
-          | D.dynTypeRep x == D.dynTypeRep y && D.dynTypeRep x == timeType = compare (fromDyn xx :: UTCTime) (fromDyn yy :: UTCTime)
-          | otherwise = error "bad compare"
-    compare (DynList x) (DynList y) = compare x y
-    compare _ _ = error "bad compare"
-
-instance Binary Dyn where
-    {-# INLINE put #-}
-    put (Dyn x)
-        | D.dynTypeRep x == iType      = putWord8 0 >> put (D.fromDyn x (error "Binary Dyn" :: Int))
-        | D.dynTypeRep x == dType      = putWord8 1 >> put (D.fromDyn x (error "Binary Dyn" :: Double))
-        | D.dynTypeRep x == bType      = putWord8 2 >> put (D.fromDyn x (error "Binary Dyn" :: Bool))
-        | D.dynTypeRep x == tType      = putWord8 3 >> put (D.fromDyn x (error "Binary Dyn" :: Text))
-        | D.dynTypeRep x == timeType   = putWord8 4 >> put (D.fromDyn x (error "Binary Dyn" :: UTCTime))
-        | otherwise = error "bad binary"
-    put (DynList x) = putWord8 5 >> put x
-    {-# INLINE get #-}
-    get = fun =<< getWord8
-        where
-        fun :: Word8 -> Get Dyn
-        fun 0 = toDyn <$> (get :: Get Int)
-        fun 1 = toDyn <$> (get :: Get Double)
-        fun 2 = toDyn <$> (get :: Get Bool)
-        fun 3 = toDyn <$> (get :: Get Text)
-        fun 4 = toDyn <$> (get :: Get UTCTime)
-        fun 5 = DynList <$> (get :: Get [Dyn])
-        fun _ = error "bad binary"
+instance Convert UTCTime Dyn  where
+    to x = Time  x
+    from (Time  x) = x
+    from _ = error "fromDyn time"
 
 data Period a = MicroSec { un :: a }
               | Byte { un :: a }
               | Count { un :: a }
               deriving (Show, Eq, Ord, Typeable, Generic, Functor)
-
-
 
 instance Binary (Period Int)
 
@@ -178,23 +150,18 @@ data DynExp = EnvVal Counter
             | Max Counter (Period Int)
             deriving (Show, Eq, Typeable, Generic)
 
-instance Binary DynExp
-instance Binary Exp
 
-newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
+newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
 
-instance IsString Counter where
-    fromString x = Counter $ pack x
 
 instance ToJSON Counter where
    toJSON (Counter x) = toJSON x
 
 newtype Table = Table Text deriving (Eq, Show, Ord, Typeable, Generic)
-newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic)
+newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
 
 instance Binary Counter
 instance Binary Table
-instance Binary Complex
 
 data Fun = ChangeFun Counter
          | LastFun Counter (Period Int)
@@ -203,6 +170,7 @@ data Fun = ChangeFun Counter
          | MinFun Counter (Period Int)
          | MaxFun Counter (Period Int)
          | NoDataFun Counter (Period Int)
+         | EnvValFun Counter
          deriving (Show, Eq, Ord, Typeable, Generic)
 
 instance Binary Fun
@@ -210,9 +178,6 @@ instance Binary Fun
 data Env = Env
   { getValue    :: Fun -> IO Dyn
   }
-
-runTrigger :: Env -> ETrigger -> IO (Either DBException Bool)
-runTrigger = eval
 
 type Eval = ReaderT Env IO 
 
@@ -242,22 +207,22 @@ evalExp (NoData c i) = do
       DynList [] -> return True
       _ -> return False
 evalExp (Change c) = do
-    last' <- evalVal (Last c (Count 0))
+    last' <- evalVal (EnvVal c)
     prev <- evalVal (Prev c)
     return $ last' /= prev
 
-
-
 evalVal :: DynExp -> Eval Dyn
 evalVal (Val c) = return c
-evalVal (EnvVal c) = evalVal (Last c (Count 0))
+evalVal (EnvVal c) = do
+    getFun <- getValue <$> ask
+    liftIO $ getFun (EnvValFun c)
 evalVal (Last c i) = do
         getFun <- getValue <$> ask
         liftIO $ getFun (LastFun c i)
 evalVal (Avg c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (AvgFun c i)
-evalVal (Prev c) = evalVal (Last c (Count 1))
+evalVal (Prev c) = evalVal (Last c (Count 2))
 evalVal (Min c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (MinFun c i)
@@ -265,7 +230,25 @@ evalVal (Max c i) = do
     getFun <- getValue <$> ask
     liftIO $ getFun (MaxFun c i)
 
-type ETrigger = Exp
+countersFromExp :: Exp -> [Counter]
+countersFromExp (Change _) = []
+countersFromExp (NoData _ _) = []
+countersFromExp (Not x) = countersFromExp x
+countersFromExp (Or x y) = countersFromExp x <> countersFromExp y
+countersFromExp (And x y) = countersFromExp x <> countersFromExp y
+countersFromExp (More x y) = countersFromDyn x <> countersFromDyn y 
+countersFromExp (Less x y) = countersFromDyn x <> countersFromDyn y 
+countersFromExp (Equal x y) = countersFromDyn x <> countersFromDyn y 
+
+countersFromDyn :: DynExp -> [Counter]
+countersFromDyn (EnvVal x) = [x]
+countersFromDyn (Last x _) = [x]
+countersFromDyn (Avg x _) = [x]
+countersFromDyn (Prev x) = [x]
+countersFromDyn (Min x _) = [x]
+countersFromDyn (Max x _) = [x]
+countersFromDyn _ = []
+
 
 instance Binary UTCTime where
     put (UTCTime x y) = put (fromEnum x) >> put (fromEnum y)

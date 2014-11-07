@@ -1,68 +1,94 @@
+system:
+  snmp:
+    version: 3
+    sequrityName: aes
+    privType: AES
+    privAuth: AuthPriv
+    authType: SHA
+    authPass: helloallhello
+    privPass: helloallhello
+  database:
+    user: fixmon
+    password: fixmon
+    database: fixmon
+    host: localhost
+    port: 8086
+
 hosts:
-  - localhost
+  - salt
+  - yandex.ru
+
 groups:
-  - name: local
+  - name: salt
     hosts:
-      - localhost
+      - salt
     triggers:
-      - hostname
-      - stupid
+      - disk
     checks:
-      - uptime
-      - boottime
-      - loadaverage
-      - intr
-      - cpuinfo
-      - switches
-      - util
-      - localtime
-      - checkUbank
+      - disk
+  - name: external
+    hosts:
+      - yandex.ru
+    triggers:
+      - yandex
+
+
 
 checks:
-  - name: gethost
+  - name: network
     period: '* * * * *'
-    type: system.hostname
-  - name: uptime
+    snmp:
+      version: 3
+      sequrityName: aes
+      privType: AES
+      privAuth: AuthPriv
+      authType: SHA
+      authPass: helloallhello
+      privPass: helloallhello
+    type: network.interface
+  - name: disk
     period: '* * * * *'
-    type: system.uptime
-  - name: boottime
-    period: '*/2 * * * *'
-    type: system.boottime
-  - name: loadaverage
-    period: '* * * * *'
-    type: system.cpu.loadavg
-  - name: intr
-    period: '* * * * *'
-    type: system.cpu.intr
-  - name: cpuinfo
-    period: '* * * * *'
-    type: system.cpu.info
-  - name: switches
-    period: '* * * * *'
-    type: system.cpu.switches
-  - name: util
-    period: '* * * * *'
-    type: system.cpu.util
-  - name: localtime
-    period: '* * * * *'
-    type: system.localtime
-  - name: checkUbank
+    type: system.disk
+    alias.root: '/'
+    alias.swap: 'Swap space'
+    alias.virtual: 'Virtual memory'
+  - name: ya
     period: '* * * * *'
     type: http.simple
-    url: http://ubank.ru
-    redirects: 2
+    url: http://yandex.ru
+    redirects: 3
+  - name: rambler
+    period: '* * * * *'
+    type: http.simple
+    url: http://rambler.ru
+    redirects: 3
+
 
 triggers:
-  - name: hostname
+  - name: disk
     checks:
-      - gethost
+      - disk
+    description: dist size here
+    result: root:system.disk.free > 35GB && root:system.disk.used > 10GB && swap:system.disk.used > 1GB
+  - name: networkt
+    checks:
+      - network
+      - disk
     description: тупо проверка имени
-    result: not system.hostname = "limbo-air" && system.hostname = "hello"
-  - name: stupid
+    result: eth0:network.interface.name = "eth0" || lo:network.interface.name = "lo" || root:system.disk.free > 35GB
+  - name: other
     checks:
-      - checkUbank
-    description: проверяю ответ ubank.ru
-    result: status.ee = 200
+      - network
+    description: last here
+    result: last(br0:network.interface.name,2) = "eth0"
+  - name: yandex
+    checks: 
+      - ya
+      - rambler
+    description: yandex status
+    result: ya:http.simple.status = 200 && rambler:http.simple.status = 200
+
+
 
 
 

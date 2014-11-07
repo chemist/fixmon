@@ -24,13 +24,12 @@ executable fixmon
                      , time >=1.4 && <1.5
                      , directory >=1.2 && <1.3
                      , deepseq >=1.3 && <1.4
+                     , async
                      , vector
                      , vector-binary-instances
                      , parsec
                      , yaml
                      , text
-                     , distributed-process
-                     , distributed-process-platform
                      , text-binary
                      , mtl
                      , aeson
@@ -44,97 +43,53 @@ executable fixmon
                      , scientific
                      , unordered-containers
                      , network
-                     , network-transport
-                     , network-transport-tcp
+                     , network-uri
                      , snmp
                      , attoparsec
                      , http-types
                      , http-conduit
                      , conduit
                      , pipes
+                     , pipes-concurrency
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
-
-executable memory
-  main-is:             Memory.hs            
-  other-extensions:    OverloadedStrings, GeneralizedNewtypeDeriving, GADTs, ExistentialQuantification, FlexibleInstances, DeriveGeneric, DeriveDataTypeable, RankNTypes, ScopedTypeVariables, MultiParamTypeClasses, FlexibleContexts, QuasiQuotes, StandaloneDeriving
-  build-depends:       base >=4.6 && <5, 
-                       containers , 
-                       aeson , 
-                       bimap , 
-                       old-locale , 
-                       text , 
-                       lists , 
-                       text-binary,
-                       mtl , 
-                       vector , 
-                       vector-binary-instances ,
-                       network , 
-                       network-conduit , 
-                       yaml , 
-                       bytestring , 
-                       conduit , 
-                       http-conduit,
-                       transformers , 
-                       binary , 
-                       cereal , 
-                       attoparsec , 
-                       time ,
-                       directory , 
-                       http-types , 
-                       unordered-containers , 
-                       network-transport,
-                       network-transport-tcp,
-                       distributed-process,
-                       distributed-process-platform,
-                       cron ,
-                       NetSNMP,
-                       lens == 4.3.*,
-                       wai,
-                       warp,
-                       wai-extra,
-                       scientific,
-                       deepseq,
-                       wai-middleware-static
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:   -Wall -threaded -rtsopts -auto-all -caf-all
+--  ghc-options:   -Wall -O2
 
 
-test-suite tests
-  type:           exitcode-stdio-1.0
-  main-is:             Test.hs
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  build-depends:       base >=4.6 && <5,
-                       deepseq >=1.3 && <1.4,
-                       binary , 
-                       aeson , 
-                       bimap , 
-                       text , 
-                       parsec, 
-                       text-binary,
-                       time , 
-                       old-locale , 
-                       mtl , 
-                       containers , 
-                       unordered-containers , 
-                       vector , 
-                       vector-binary-instances ,
-                       yaml , 
-                       cron ,
-                       NetSNMP,
-                       conduit, 
-                       lists,
-                       test-framework-quickcheck2,
-                       test-framework, 
-                       test-framework-hunit, 
-                       test-framework-quickcheck2,
-                       HUnit, 
-                       scientific,
-                       attoparsec , 
-                       QuickCheck
+
+--test-suite tests
+--  type:           exitcode-stdio-1.0
+--  main-is:             Test.hs
+--  hs-source-dirs:      src
+--  default-language:    Haskell2010
+--  build-depends:       base >=4.6 && <5,
+--                       deepseq >=1.3 && <1.4,
+--                       binary , 
+--                       aeson , 
+--                       bimap , 
+--                       text , 
+--                       parsec, 
+--                       text-binary,
+--                       time , 
+--                       old-locale , 
+--                       mtl , 
+--                       containers , 
+--                       unordered-containers , 
+--                       vector , 
+--                       vector-binary-instances ,
+--                       yaml , 
+--                       cron ,
+--                       conduit, 
+--                       lists,
+--                       test-framework-quickcheck2,
+--                       test-framework, 
+--                       test-framework-hunit, 
+--                       test-framework-quickcheck2,
+--                       HUnit, 
+--                       scientific,
+--                       attoparsec , 
+--                       QuickCheck
 
 source-repository head
   type: git

@@ -17,19 +17,13 @@ import           Network.HTTP.Conduit  hiding (host, port)
 import           Data.Conduit.List (consume)
 import           Data.Conduit (($$+-))
 import           Network.HTTP.Types.Status
-import           Types hiding (Status)
 import           Control.Applicative ((<$>))
 import           Control.Exception (try, throw, catch)
 import           Data.Scientific (floatingOrInteger)
 import Data.Maybe
-import Data.Typeable (TypeRep)
+import Types.Shared hiding (Status)
+import Types.Dynamic
 -- import Debug.Trace
-
-instance Database InfluxDB where
-    getData = get
-    saveData = save
-    config = defConf
-
 
 
 type DB = String
@@ -48,8 +42,8 @@ data InfluxDB = InfluxDB
   , ssl  :: !EnableSSL
   } deriving Show
 
-defConf :: InfluxDB
-defConf = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
+config :: InfluxDB
+config = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
 
 influxUrl :: InfluxDB -> String
 influxUrl db = let scheme = if ssl db
@@ -90,12 +84,12 @@ toSD c p = let col = map Counter c
            in SeriesData col po
 
 valToDyn :: Value -> Dyn
-valToDyn (String x) = toDyn x
+valToDyn (String x) = to x
 valToDyn (Number x) = case floatingOrInteger x of
-                           Left y -> toDyn (y :: Double)
-                           Right y -> toDyn (y :: Int)
-valToDyn (Bool x) = toDyn x
-valToDyn Null = toDyn ("null here" :: Text)
+                           Left y -> to (y :: Double)
+                           Right y -> to (y :: Int)
+valToDyn (A.Bool x) = to x
+valToDyn Null = to ("null here" :: Text)
 valToDyn e = error $ "bad val " ++ show e
 
 data SeriesData = SeriesData
@@ -105,25 +99,28 @@ data SeriesData = SeriesData
 
 type Column = Counter
 
-complexToSeriesData :: Complex -> SeriesData
-complexToSeriesData (Complex x) = let (c', p') = unzip x
-                                  in SeriesData c' [p']
+complexToSeriesData :: Counter -> Complex -> SeriesData
+complexToSeriesData prefixCounter (Complex x) = 
+    let (c', p') = unzip x
+        prefixCounter' = prefixCounter <> "."
+        columns' = map (\y -> prefixCounter' <> y) c'
+    in SeriesData columns' [p']
 
-toSeries :: (Hostname, Complex) -> Series
-toSeries (Hostname n, c) = Series n (complexToSeriesData c)
+toSeries :: (Hostname, Counter, [Complex]) -> [Series]
+toSeries (Hostname n, prefixCounter, c) = map (\x -> Series n (complexToSeriesData prefixCounter x)) c
 
-
-save :: InfluxDB -> [(Hostname, Complex)] -> IO ()
-save db forSave = do
+saveData :: InfluxDB -> [(Hostname, Counter, [Complex])] -> IO ()
+saveData db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
-        series = map toSeries forSave
+        series = concatMap toSeries forSave
         request'' = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
         request = addQueryStr request''
+    -- print $ encode series
     unless (null series) $ do
         response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
         unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
@@ -132,48 +129,57 @@ save db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
 
-get :: InfluxDB -> Table -> Fun -> IO Dyn
-get db t (ChangeFun c) = do
-    r <- rawRequest db c $ "select " <> unCounter c <> " from " <> unTable t <> " limit 2"
+getData :: InfluxDB -> Table -> Fun -> IO Dyn
+getData db t (ChangeFun c) = do
+    let (pole, addition) = unCounter c
+    r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
     case r of
-         DynList (x:y:[]) -> return $ toDyn (x /= y)
+         DynList (x:y:[]) -> return $ to (x /= y)
          _ -> throw EmptyException
-get db t (PrevFun   c) = rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
-get db t (LastFun   c p) = do
-    xs <- rawRequest db c ("select "<> unCounter c <>" from " <> unTable t <> " limit " <> ptt p)
+getData db t (PrevFun   c) = do
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "last") $ "select last(" <> pole <> ") from " <> unTable t <> addition
+getData db t (LastFun   c p) = do
+    let (pole, addition) = unCounter c
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit " <> ptt p
     case xs of
          DynList xss -> return $ last xss
          y -> return y
-get db t (AvgFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: avg function, counter value must be number"
-    rawRequest db (Counter "mean") ("select mean(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (MinFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: min function, counter value must be number"
-    rawRequest db (Counter "min") ("select min(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (MaxFun    c p) = do
-    typeR <- counterType db t c
-    when (typeR /= iType && typeR /= dType) $ throw $ TypeException "Influx problem: max function, counter value must be number"
-    rawRequest db (Counter "max") ("select max(" <> unCounter c <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p)
-get db t (NoDataFun c p) = do
-    r <- try $ rawRequest db c ("select " <> unCounter c <> " from " <> unTable t <> " where time > now() - " <> pt p <> " limit 1") 
+getData db t (EnvValFun   c) = do
+    let (pole, addition) = unCounter c
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit 1" 
+    case xs of
+         DynList xss -> return $ last xss
+         y -> return y
+getData db t (AvgFun    c p) = do
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "mean") $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db t (MinFun    c p) = do
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "min") $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db t (MaxFun    c p) = do
+    let (pole, addition) = unCounter c
+    rawRequest db (Counter "max") $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db t (NoDataFun c p) = do
+    let (pole, addition) = unCounter c
+    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1" 
     case r of
-         Right _ -> return $ toDyn False
-         Left EmptyException -> return $ toDyn True
+         Right _ -> return $ to False
+         Left EmptyException -> return $ to True
          Left e -> throw e
-
-counterType :: InfluxDB -> Table -> Counter -> IO TypeRep
-counterType db t c = do
-    r <- rawRequest db (Counter "last") ("select last(" <> unCounter c <> ") from " <> unTable t)
-    return $ dynTypeRep r
-
--- min  SELECT MIN(status) FROM localhost group by time(24h) where time > now() - 24h
 
 unTable :: Table -> Text
 unTable (Table x) = x
-unCounter :: Counter -> Text
-unCounter (Counter x) = x
+
+withAnd :: Text -> Text
+withAnd "" = ""
+withAnd x = " and " <> T.drop 6 x
+
+unCounter :: Counter -> (Text, Text)
+unCounter (Counter x) = case T.splitOn ":" x of
+                             [a] -> (a, T.empty)
+                             [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
+                             _ -> throw $ DBException "bad counter"
 
 pt :: Period Int -> Text
 pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
@@ -200,7 +206,7 @@ rawRequest db c raw = do
     let s = (decode . fromChunks . snd $ response :: Maybe Series)
     -- print s
     when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
-    return $ seriesToDyn c $ fromJust s
+    return $ seriesToDyn (Counter . fst . unCounter $ c) (fromJust s)
     where
     catchConduit :: HttpException -> IO (Status, [ByteString])
     catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e

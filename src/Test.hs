@@ -3,7 +3,7 @@
 module Main where
 
 import Types.Dynamic (Exp(..), Dyn(..))
-import Process.Configurator.Dsl  (parseTrigger)
+import Configurator.Dsl  (parseTrigger)
 
 import Test.Framework
 import Test.Framework.Providers.QuickCheck2
