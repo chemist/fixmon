@@ -16,6 +16,7 @@ system:
 
 hosts:
   - salt
+  - yandex.ru
 
 groups:
   - name: salt
@@ -23,9 +24,15 @@ groups:
       - salt
     triggers:
       - disk
-      - yandex
     checks:
       - disk
+  - name: external
+    hosts:
+      - yandex.ru
+    triggers:
+      - yandex
+
+
 
 checks:
   - name: network

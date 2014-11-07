@@ -15,8 +15,8 @@ import Data.Set (Set, unions)
 import qualified Data.Set as S
 import Data.Time.Clock
 import Control.Concurrent (threadDelay, killThread)
-import Process.Configurator.Yaml
-import Process.Web
+import Configurator.Yaml
+import Web
 import Control.Applicative
 import Data.Vector ((!))
 import System.IO 
