@@ -50,7 +50,7 @@ import qualified Storage.InfluxDB as InfluxDB
 
 class Database db where
     getData :: db -> Table -> Fun -> IO Dyn
-    saveData :: db -> [(Hostname, Counter, [Complex])] -> IO ()
+    saveData :: db -> [(Hostname, Counter, Complex)] -> IO ()
     config :: db
 
 data Monitoring = Monitoring

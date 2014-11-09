@@ -74,12 +74,11 @@ newtype Fixmon a b = Fixmon { runFixmon :: ReaderT Monitoring (StateT a IO) b}
 run :: forall s a. Monitoring -> Effect (Fixmon s) a -> s -> IO a
 run m = evalStateT . (flip runReaderT m) . runFixmon . runEffect
 
-type SaveQueue = [(Hostname, Counter, [Complex])]
+type SaveQueue = [(Hostname, Prefix, [Complex])]
 
 type Prefix = Counter -- ctype in check
 
-data Triples = Triples Prefix [Complex] CheckHost
-             | STriples Prefix Complex CheckHost
+data Triples = Triples Prefix Complex CheckHost
              | CheckFail CheckHost
              | Dump
              deriving (Show)
@@ -111,18 +110,18 @@ tasker = forever $ do
     Task c i <- await
     -- liftIO $ print c
     let ch = lookup (ctype c) routes
-    yield =<< liftIO (maybe (notFound i) (doCheck' c i) ch)
+    each =<< liftIO (maybe (notFound i) (doCheck' c i) ch)
     where
-       notFound i = return $ CheckFail i
+       notFound i = return $ [CheckFail i]
        doCheck' check i doCheck'' = do
          checkResult <- try $ doCheck'' check
          case checkResult of
            Left (h :: SomeException) -> do
                print h
-               return $ CheckFail i
-           Right r -> return $ Triples (Counter $ ctype check) r i
+               return $ [CheckFail i]
+           Right r -> return $ map (\x -> Triples (Counter $ ctype check) x i) r
 
-saver :: Pipe Triples Triples (Fixmon SaveQueue) ()
+saver :: Pipe Triples Triples (Fixmon [(Hostname, Prefix, Complex)]) ()
 saver = forever $ do
     add
     saveChecks
@@ -138,9 +137,8 @@ saver = forever $ do
                Triples prefixCounter c ch -> do
                    h <- getHost ch 
                    modify $ (:) (h, prefixCounter, c)
-                   each $ map (\x -> STriples prefixCounter x ch) c
+                   yield triples
                    add 
-               STriples{} -> error "saver, Striples"
                CheckFail{} -> yield triples >> add
                Dump -> return ()
 
@@ -182,7 +180,7 @@ work (CheckFail i) = do
         let trs = fromJust trsm
         liftIO $ print $ "trigger fail " ++ show trs
         yield (h, Complex [])
-work (STriples prefixCounter c i) = do
+work (Triples prefixCounter c i) = do
     tm <- triggerMap <$> ask
     h <- getHost i 
     let trsm = lookup i tm

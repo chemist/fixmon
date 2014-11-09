@@ -106,14 +106,14 @@ complexToSeriesData prefixCounter (Complex x) =
         columns' = map (\y -> prefixCounter' <> y) c'
     in SeriesData columns' [p']
 
-toSeries :: (Hostname, Counter, [Complex]) -> [Series]
-toSeries (Hostname n, prefixCounter, c) = map (\x -> Series n (complexToSeriesData prefixCounter x)) c
+toSeries :: (Hostname, Counter, Complex) -> Series
+toSeries (Hostname n, prefixCounter, c) = Series n (complexToSeriesData prefixCounter c) 
 
-saveData :: InfluxDB -> [(Hostname, Counter, [Complex])] -> IO ()
+saveData :: InfluxDB -> [(Hostname, Counter, Complex)] -> IO ()
 saveData db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
-        series = concatMap toSeries forSave
+        series = map toSeries forSave
         request'' = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
