@@ -31,6 +31,7 @@ groups:
       - yandex.ru
     triggers:
       - yandex
+      - rambler
 
 
 
@@ -87,6 +88,11 @@ triggers:
       - rambler
     description: yandex status
     result: ya:http.simple.status = 200 && rambler:http.simple.status = 200
+  - name: rambler
+    checks:
+      - rambler
+    description: rambler status
+    result: rambler:http.simple.status = 300
 
 
 

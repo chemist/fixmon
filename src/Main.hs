@@ -57,14 +57,14 @@ main = do
 --    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
     p3 <- forkIO $ runEffect $ dumpMessages >-> toOutput saverO
     p4 <- forkIO $ run m (fromInput saverI >-> saver >-> toOutput triggerO) [] 
-    p5 <- forkIO $ run m (fromInput triggerI >-> checkTrigger >-> shower) ()
+    p5 <- forkIO $ run m (fromInput triggerI >-> checkTrigger >-> shower) M.empty
     _ <- getLine :: IO String
     mapM_ killThread [p0,p1,p2,p3,p4,p5]
 
 seconds :: Int -> Int
 seconds = (* 1000000)
 
-type Cash = Map (Hostname, Counter) Dyn
+type Cache = Map (Hostname, Counter) Dyn
 
 data Task = Task Check CheckHost
 
@@ -162,7 +162,7 @@ getCountersById sti = do
 shower :: (Show a, MonadIO m) => Consumer a m ()
 shower = forever $ await >>= liftIO . print
 
-checkTrigger :: Pipe Triples (Hostname, Complex) (Fixmon ()) ()
+checkTrigger :: Pipe Triples (Hostname, Complex) (Fixmon Cache) ()
 checkTrigger = forever $ do
     work =<< await
     -- r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
@@ -171,7 +171,7 @@ checkTrigger = forever $ do
     -- liftIO $ print $ show h <> " " <>  show c <> " " <> show i
     -- where
       -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
-work :: Triples -> Pipe Triples (Hostname, Complex) (Fixmon ()) ()
+work :: Triples -> Pipe Triples (Hostname, Complex) (Fixmon Cache) ()
 work (CheckFail i) = do
     tm <- triggerMap <$> ask
     let trsm = lookup i tm
@@ -188,18 +188,21 @@ work (Triples prefixCounter c i) = do
             -- TODO: can be evaluated when application start
         ikeys <- getCountersById (fromJust trsm)
         when (isCombined c $ M.keysSet ikeys) $ do
-            liftIO $ print prefixCounter
-            liftIO $ print ikeys
-            liftIO $ print c
-            r <- Prelude.mapM getTrigger (S.toList $ fromJust trsm)
-            liftIO $ print r
-            liftIO $ print ("" :: String)
-            yield (h, removeUnusedFromCombined ikeys c)
+            let toCache = map (\(x,y) -> ((h, x), y)) $ removeUnusedFromCombined ikeys prefixCounter c
+            modify (M.union (M.fromList toCache))
+            cache <- get
+            db <- storage <$> ask
+            tr <- Prelude.mapM getTrigger (S.toList $ fromJust trsm)
+            liftIO $ print tr
+            result <- liftIO $ mapM (\x -> eval (createEnv db (Table $ from h) cache ) (tresult x)) tr
+            liftIO $ print result
+            yield (h, Complex $ removeUnusedFromCombined ikeys prefixCounter c)
 --     mapM_ work' triggersToDo
 work _ = undefined
 
+type IKeys = Map Dyn (Set Counter)
 
-createEnv :: Database db => db -> Table -> Cash -> Env
+createEnv :: Database db => db -> Table -> Cache -> Env
 createEnv db t cash = Env (createEnv' t)
   where
   createEnv' (Table hostname) (EnvValFun c) = 
@@ -217,11 +220,12 @@ isCombined (Complex xs) ids =
             Nothing -> False
             Just id'' -> S.member id'' ids
 
-removeUnusedFromCombined :: Map Dyn (Set Counter) -> Complex -> Complex
-removeUnusedFromCombined keys (Complex xs) =
+removeUnusedFromCombined :: IKeys -> Prefix -> Complex -> [(Counter, Dyn)]
+removeUnusedFromCombined keys (Counter pr) (Complex xs) =
     let id' = fromJust $ Prelude.lookup (Counter "id") xs
         ikeys x = fromJust $ M.lookup x keys
-    in Complex $ Prelude.filter (\(x,_) -> S.member x (ikeys id')) xs
+        fun (Counter x,y) = (Counter (from id' <> ":" <> pr <> "." <> x), y)
+    in map fun $ Prelude.filter (\(x,_) -> S.member x (ikeys id')) xs
 
 
 data CounterType = State

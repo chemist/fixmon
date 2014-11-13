@@ -57,6 +57,10 @@ instance Convert Int GroupId where
     from (GroupId x) = x
     to = GroupId
 
+instance Convert Text Hostname where
+    from (Hostname x) = x
+    to = Hostname
+
 newtype CheckId = CheckId Int deriving (Show, Eq, Ord, Binary, Read, Typeable, NFData)
 newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Binary, Typeable, NFData, Eq, Ord)
 
