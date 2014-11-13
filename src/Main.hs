@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving   #-}
 module Main where
 
@@ -23,7 +24,6 @@ import System.IO
 import Control.Exception
 import Data.Monoid ((<>))
 import Data.Maybe
-import Data.Text (pack)
 import qualified Data.Text as T
 import Prelude hiding (lookup)
 import qualified Prelude 
@@ -31,12 +31,12 @@ import qualified Prelude
 -- import System.Mem (performGC)
 
 import Types ( 
-               DBException, saveData, Trigger, TriggerId, countersFromExp, Dyn, Period(..)
-             , Hostname(..), Complex(..), Convert(..), Counter(..), Fun(..)
-             , TriggerName(..), tname, Database, chost, ctype
+               DBException(..), saveData, Trigger(..), TriggerId, countersFromExp, Dyn, Period(..)
+             , Hostname(..), Complex(..), Convert(..), Counter(..), Fun(..), HostId, TriggerHost(..)
+             , Database, chost, ctype
              , getData, Env(..), Monitoring(..), CheckHost(..)
              , Cron(..), Check(..), Table(..), Status(..)
-             , tdescription, tresult, eval
+             , eval
              )
 import Checks (routes)
 
@@ -79,9 +79,8 @@ type SaveQueue = [(Hostname, Prefix, [Complex])]
 type Prefix = Counter -- ctype in check
 
 data Triples = Triples Prefix Complex CheckHost
-             | CheckFail CheckHost
+             | CheckFail CheckHost SomeException
              | Dump
-             deriving (Show)
 
 
 cron :: Producer CheckHost (Fixmon ()) ()
@@ -99,7 +98,7 @@ dumpMessages = forever $ do
 
 taskMaker :: Pipe CheckHost Task (Fixmon ()) ()
 taskMaker = forever $ do
-    Monitoring _ hosts' _ _ checks' _ _ snmp' _ <- ask
+    Monitoring _ hosts' _ _ checks' _ snmp' _ <- ask
     CheckHost (h, c) <- await
     let check = checks' ! from c
         host = hosts' ! from h
@@ -112,13 +111,13 @@ tasker = forever $ do
     let ch = lookup (ctype c) routes
     each =<< liftIO (maybe (notFound i) (doCheck' c i) ch)
     where
-       notFound i = return $ [CheckFail i]
+       notFound i = return $ [CheckFail i (SomeException EmptyException)]
        doCheck' check i doCheck'' = do
          checkResult <- try $ doCheck'' check
          case checkResult of
            Left (h :: SomeException) -> do
                print h
-               return $ [CheckFail i]
+               return $ [CheckFail i h]
            Right r -> return $ map (\x -> Triples (Counter $ ctype check) x i) r
 
 saver :: Pipe Triples Triples (Fixmon [(Hostname, Prefix, Complex)]) ()
@@ -162,7 +161,7 @@ getCountersById sti = do
 shower :: (Show a, MonadIO m) => Consumer a m ()
 shower = forever $ await >>= liftIO . print
 
-checkTrigger :: Pipe Triples (Hostname, Complex) (Fixmon Cache) ()
+checkTrigger :: Pipe Triples (TriggerHost, Status) (Fixmon Cache) ()
 checkTrigger = forever $ do
     work =<< await
     -- r <- liftIO $ eval (Env (getData db (Table h))) (tresult t)
@@ -171,36 +170,44 @@ checkTrigger = forever $ do
     -- liftIO $ print $ show h <> " " <>  show c <> " " <> show i
     -- where
       -- saveTriggers queue = liftIO $ saveData db queue `catch` \(e :: DBException) -> print e
-work :: Triples -> Pipe Triples (Hostname, Complex) (Fixmon Cache) ()
-work (CheckFail i) = do
+work :: Triples -> Pipe Triples (TriggerHost, Status) (Fixmon Cache) ()
+work (CheckFail i e) = do
     tm <- triggerMap <$> ask
     let trsm = lookup i tm
-    h <- getHost i 
+        CheckHost (hid, _) = i
+        til = S.toList $ fromJust trsm
+        result = repeat (Left e)
     when (isJust trsm) $ do
-        let trs = fromJust trsm
-        liftIO $ print $ "trigger fail " ++ show trs
-        yield (h, Complex [])
+        each $ toTriggerHost hid til result
 work (Triples prefixCounter c i) = do
     tm <- triggerMap <$> ask
     h <- getHost i 
     let trsm = lookup i tm
+        CheckHost (hid, _) = i
     when (isJust trsm) $ do  -- if not in triggerMap skip, and wait next
             -- TODO: can be evaluated when application start
         ikeys <- getCountersById (fromJust trsm)
         when (isCombined c $ M.keysSet ikeys) $ do
             let toCache = map (\(x,y) -> ((h, x), y)) $ removeUnusedFromCombined ikeys prefixCounter c
+                til = S.toList $ fromJust trsm
             modify (M.union (M.fromList toCache))
             cache <- get
             db <- storage <$> ask
-            tr <- Prelude.mapM getTrigger (S.toList $ fromJust trsm)
+            tr <- Prelude.mapM getTrigger til
             liftIO $ print tr
             result <- liftIO $ mapM (\x -> eval (createEnv db (Table $ from h) cache ) (tresult x)) tr
-            liftIO $ print result
-            yield (h, Complex $ removeUnusedFromCombined ikeys prefixCounter c)
---     mapM_ work' triggersToDo
+            each $ toTriggerHost hid til result 
 work _ = undefined
 
 type IKeys = Map Dyn (Set Counter)
+
+toTriggerHost :: HostId -> [TriggerId] -> [Either SomeException Bool] -> [(TriggerHost, Status)]
+toTriggerHost hid tids rs = map (\(t, r) -> (TriggerHost (hid, t), toStatus r)) $  zip tids rs
+
+toStatus :: Either SomeException Bool -> Status
+toStatus (Right True) = Ok
+toStatus (Right False) = Bad "false"
+toStatus (Left e) = Bad $ show e
 
 createEnv :: Database db => db -> Table -> Cache -> Env
 createEnv db t cash = Env (createEnv' t)
@@ -226,24 +233,4 @@ removeUnusedFromCombined keys (Counter pr) (Complex xs) =
         ikeys x = fromJust $ M.lookup x keys
         fun (Counter x,y) = (Counter (from id' <> ":" <> pr <> "." <> x), y)
     in map fun $ Prelude.filter (\(x,_) -> S.member x (ikeys id')) xs
-
-
-data CounterType = State
-                 | Message
-
-triggerToComplex :: Trigger -> Either DBException Bool -> Complex
-triggerToComplex tr (Left e) = Complex [ (toCounter tr State , to False)
-                                       , (toCounter tr Message, to $ pack $ show e)
-                                       ]
-triggerToComplex tr (Right True) = Complex [ (toCounter tr State, to True) ]
-triggerToComplex tr (Right False) = Complex [ (toCounter tr State, to False)
-                                            , (toCounter tr Message, to $ tdescription tr)
-                                            ]
-
-toCounter :: Trigger -> CounterType -> Counter
-toCounter tr State = let TriggerName tn = tname tr
-                     in Counter $ "trigger." <> tn <> ".status"
-toCounter tr Message = let TriggerName tn = tname tr
-                       in Counter $ "trigger." <> tn <> ".message"
-
 

@@ -181,7 +181,7 @@ data Env = Env
 
 type Eval = ReaderT Env IO 
 
-eval :: Env -> Exp -> IO (Either DBException Bool)
+eval :: Env -> Exp -> IO (Either SomeException Bool)
 eval env e = try (runReaderT (evalExp e) env)
 
 evalExp :: Exp -> Eval Bool

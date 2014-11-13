@@ -33,7 +33,7 @@ import           Types                    (Check (..), CheckHost (..), CheckId,
                                            CheckName (..), Group (..),
                                            GroupName (..), HostId, Dyn(..), Convert(..),
                                            Hostname (..), Counter(..),
-                                           Monitoring (..), Status (..), TriggerHostChecks(..),
+                                           Monitoring (..), TriggerHostChecks(..),
                                            Trigger (..), TriggerHost (..),Exp,
                                            TriggerId, TriggerName (..))
 import           Types.Cron               (Cron (..))
@@ -318,7 +318,8 @@ getCheckFromTrigger vt ti = tcheck $ vt ! from ti
 triggerHostChecks :: Vector Group -> Vector Trigger -> S.Set TriggerHostChecks
 triggerHostChecks vg vt =
     let sth :: S.Set TriggerHost
-        sth = M.keysSet . triggerHosts $ vg
+--        sth = M.keysSet . triggerHosts $ vg
+        sth = triggerHosts vg
         fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, getCheckFromTrigger vt t)
     in S.map fun sth
 
@@ -336,11 +337,17 @@ triggersMap vg vt =
 --------------------------------------------------------------------------------------------------
     -- _status
 --------------------------------------------------------------------------------------------------
+triggerHosts:: Vector Group -> S.Set TriggerHost
+triggerHosts vg = 
+    let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)] 
+    in foldl' S.union S.empty $ map ths vg
 
+{--
 triggerHosts :: Vector Group -> M.Map TriggerHost Status
 triggerHosts vg =
   let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)]
   in M.fromSet (const (Status True)) $ foldl' S.union S.empty $ map ths vg
+  --}
 
 
 configToMonitoring :: Config -> Either String Monitoring
@@ -349,9 +356,9 @@ configToMonitoring x = do
     tr <-  Data.Vector.mapM (transformTrigger ch) $ ctriggers x
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
     let crch = cronChecks ch tr gg
-    let ths = triggerHosts gg
+    -- let ths = triggerHosts gg
     let trhcs = triggersMap gg tr
-    return $ Monitoring crch (chosts x) gg tr ch ths trhcs (isnmp $ csystem x) (idb $ csystem x)
+    return $ Monitoring crch (chosts x) gg tr ch trhcs (isnmp $ csystem x) (idb $ csystem x)
 
 parseConfig :: FilePath -> IO (Either String Monitoring)
 parseConfig file = do

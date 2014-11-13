@@ -101,7 +101,11 @@ data Trigger = Trigger
 instance Ord Trigger where
     compare x y = compare (tname x) (tname y)
 
-newtype Status = Status Bool deriving (Show, Eq, Ord, Binary)
+-- newtype Status = Status Bool deriving (Show, Eq, Ord, Binary)
+
+data Status = Ok
+            | Bad String
+            deriving (Show, Eq, Ord)
 
 newtype TriggerFun = TriggerFun (Complex -> Status)
 
