@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Configurator.Yaml
 (parseConfig) where
 
-import           Control.Applicative      ((<$>), (<*>))
 import           Control.Monad            (mzero)
 
 import           Data.Attoparsec.Text     (parseOnly)

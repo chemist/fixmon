@@ -70,7 +70,7 @@ triggers:
     checks:
       - disk
     description: dist size here
-    result: root:system.disk.free > 35GB && root:system.disk.used > 10GB && swap:system.disk.used > 1GB
+    result: root:system.disk.free > 35GB 
   - name: networkt
     checks:
       - network

@@ -17,7 +17,6 @@ import qualified Data.Set as S
 import Data.Time.Clock
 import Control.Concurrent (threadDelay, killThread)
 import Configurator.Yaml
-import Web
 import Control.Applicative
 import Data.Vector ((!))
 import System.IO 
@@ -48,10 +47,9 @@ main :: IO ()
 main = do
     hSetBuffering stdout LineBuffering
     Right m <- parseConfig "fixmon.yaml"
-    (taskO, taskI) <- spawn Unbounded
-    (saverO, saverI) <- spawn Unbounded
-    (triggerO, triggerI) <- spawn Unbounded
-    p0 <- forkIO web
+    (taskO, taskI) <- spawn unbounded
+    (saverO, saverI) <- spawn unbounded
+    (triggerO, triggerI) <- spawn unbounded
     p1 <- forkIO $ run m (cron >-> taskMaker >-> toOutput taskO) ()
     p2 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
 --    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
@@ -59,7 +57,7 @@ main = do
     p4 <- forkIO $ run m (fromInput saverI >-> saver >-> toOutput triggerO) [] 
     p5 <- forkIO $ run m (fromInput triggerI >-> checkTrigger >-> shower) M.empty
     _ <- getLine :: IO String
-    mapM_ killThread [p0,p1,p2,p3,p4,p5]
+    mapM_ killThread [p1,p2,p3,p4,p5]
 
 seconds :: Int -> Int
 seconds = (* 1000000)
