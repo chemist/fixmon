@@ -3,9 +3,9 @@ module Checks where
 
 import           Check.Http
 import           Check.Snmp
+import           Data.Yaml
+import           System.Cron
 import           Types
-import System.Cron
-import Data.Yaml
 
 import           Data.Map.Strict (unions)
 

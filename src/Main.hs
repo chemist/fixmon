@@ -1,47 +1,49 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE FlexibleContexts   #-}
-{-# LANGUAGE RankNTypes   #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving   #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 module Main where
 
-import Pipes 
-import Pipes.Concurrent
-import System.Cron
-import Control.Monad.State
-import Control.Monad.Reader
-import Data.Map.Strict (Map, elems, filterWithKey, lookup)
-import qualified Data.HashMap.Strict as HM
-import qualified Data.Map.Strict as M
-import Data.Set (Set, unions)
-import qualified Data.Set as S
-import Data.Time.Clock
-import Control.Concurrent (threadDelay, killThread)
-import Configurator.Yaml
-import Data.Yaml
-import Control.Applicative
-import Data.Vector ((!))
-import System.IO 
-import Control.Exception
-import Data.Monoid ((<>))
-import Data.Maybe
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Text.Encoding (decodeUtf8)
-import Prelude hiding (lookup, log)
--- import qualified Prelude 
+import           Configurator.Yaml
+import           Control.Applicative
+import           Control.Concurrent   (killThread, threadDelay)
+import           Control.Exception
+import           Control.Monad.Reader
+import           Control.Monad.State
+import qualified Data.HashMap.Strict  as HM
+import           Data.Map.Strict      (Map, elems, filterWithKey, lookup)
+import qualified Data.Map.Strict      as M
+import           Data.Maybe
+import           Data.Monoid          ((<>))
+import           Data.Set             (Set, unions)
+import qualified Data.Set             as S
+import qualified Data.Text            as T
+import           Data.Text.Encoding   (decodeUtf8)
+import qualified Data.Text.IO         as T
+import           Data.Time.Clock
+import           Data.Vector          ((!))
+import           Data.Yaml
+import           Pipes
+import           Pipes.Concurrent
+import           Prelude              hiding (log, lookup)
+import           System.Cron
+import           System.IO
+-- import qualified Prelude
 -- import Debug.Trace
 -- import System.Mem (performGC)
 
-import Types ( 
-               DBException(..), saveData, Trigger(..), TriggerId, countersFromExp, Dyn, Period(..)
-             , Hostname(..), Complex, Convert(..), Counter, Fun(..), HostId, CheckId, TriggerHost(..)
-             , Database, chost, ctype
-             , getData, Env(..), Monitoring(..), CheckHost(..)
-             , Cron(..), Check(..), Table(..), Status(..)
-             , eval
-             )
-import Checks (routes)
+import           Checks               (routes)
+import           Types                (Check (..), CheckHost (..), CheckId,
+                                       Complex, Convert (..), Counter,
+                                       Cron (..), DBException (..), Database,
+                                       Dyn, Env (..), Fun (..), HostId,
+                                       Hostname (..), Monitoring (..),
+                                       Period (..), Status (..), Table (..),
+                                       Trigger (..), TriggerHost (..),
+                                       TriggerId, chost, countersFromExp, ctype,
+                                       eval, getData, saveData)
 
 -- PEN assigned for fixmon
 -- Prefix: iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
@@ -57,7 +59,7 @@ main = do
     p1 <- forkIO $ run m (cron >-> log "cron >-> taskMaker" >-> taskMaker >-> log "taskMaker >-> taskO" >->  toOutput taskO) ()
     p2 <- forkIO $ run m (fromInput taskI >-> log "taskI >-> tasker" >-> tasker >-> log "tasker >-> saverO" >-> toOutput saverO) ()
 --    p3 <- forkIO $ runEffect $ fromInput taskI >-> tasker >-> toOutput saverO
-    p4 <- forkIO $ run m (fromInput saverI  >-> saver >-> log "saver >-> triggerO" >-> toOutput triggerO) [] 
+    p4 <- forkIO $ run m (fromInput saverI  >-> saver >-> log "saver >-> triggerO" >-> toOutput triggerO) []
     p5 <- forkIO $ run m (fromInput triggerI >-> log "triggerI >-> checkTrigger" >-> checkTrigger >-> log "checkTrigger >-> shower" >-> shower) M.empty
     _ <- getLine :: IO String
     mapM_ killThread [p1,p2,p4,p5]
@@ -83,11 +85,11 @@ cron = forever $ do
     now <- liftIO getCurrentTime
     st <- periodMap <$> ask
     let tasks = unions . elems $ filterWithKey (\(Cron x) _ -> scheduleMatches x now) st
-    each tasks 
+    each tasks
 
-log :: (Monad m, Show a, MonadIO m) => String -> Pipe a a m () 
+log :: (Monad m, Show a, MonadIO m) => String -> Pipe a a m ()
 log _prefix = forever $ do
-   x <- await 
+   x <- await
    -- liftIO $ putStr $ _prefix ++ ": " ++ show x ++ "\n\n"
    yield x
 
@@ -108,19 +110,19 @@ tasker = forever $ do
     yield =<< liftIO (maybe (notFound vCheck vCheckHost vHost) (doCheck' vCheck vCheckHost vHost) mfCheck)
     where
        notFound :: Check -> CheckHost -> Hostname -> IO Complex
-       notFound vCheck (CheckHost (vHostId, vCheckId)) vHost = return $ object $ 
+       notFound vCheck (CheckHost (vHostId, vCheckId)) vHost = return $ object $
          [ "_success_" .= Bool False
          , "_host_id_"   .= (to vHostId :: Value)
          , "_host_name_"   .= (to vHost :: Value)
          , "_check_id_"  .= (to vCheckId :: Value)
          , "_error_message_" .= String "check type not found"
          , "_check_prefix_" .= (String $ ctype vCheck)
-         ] 
+         ]
        doCheck' :: Check -> CheckHost -> Hostname -> (Check -> IO Complex) -> IO Complex
        doCheck' vCheck (CheckHost (vHostId, vCheckId)) vHost doCheck'' = do
          checkResult <- try $ doCheck'' vCheck
          case checkResult of
-           Left (h :: SomeException) -> return $ object $ 
+           Left (h :: SomeException) -> return $ object $
              [ "_success_" .= Bool False
              , "_host_id_"   .= (to vHostId :: Value)
              , "_host_name_"   .= (to vHost :: Value)
@@ -128,13 +130,13 @@ tasker = forever $ do
              , "_error_message_" .= (String $ T.pack $ show h)
              , "_check_prefix_" .= (String $ ctype vCheck)
              ]
-           Right r -> return $ unionObject r $ object $ 
+           Right r -> return $ unionObject r $ object $
              [ "_success_" .= Bool True
              , "_host_id_"    .= (to vHostId :: Value)
              , "_host_name_"  .= (to vHost :: Value)
              , "_check_id_"   .= (to vCheckId :: Value)
              , "_check_prefix_" .= (String $ ctype vCheck)
-             ] 
+             ]
 
 
 unionObject :: Value -> Value -> Value
@@ -149,7 +151,7 @@ saver = forever $ do
     where
       saveChecks = do
           queue <- get
-          db <- storage <$> ask 
+          db <- storage <$> ask
           liftIO $ saveData db queue `catch` (\(e :: DBException) -> print e)
       add = do
           vComplex <- await
@@ -159,7 +161,7 @@ saver = forever $ do
           if s > 10 then return () else add
 
 getHost :: (Functor m, Monad m, MonadReader Monitoring m)  => CheckHost -> m Hostname
-getHost (CheckHost (i, _)) = (\x -> hosts x ! from i) <$> ask 
+getHost (CheckHost (i, _)) = (\x -> hosts x ! from i) <$> ask
 
 getTrigger :: (Functor m, Monad m, MonadReader Monitoring m) => TriggerId -> m Trigger
 getTrigger i = (\x -> triggers x ! from i) <$> ask
@@ -195,22 +197,22 @@ work vComplex@(Object vComplexBody) = do
         Just vCheckId = from <$> HM.lookup "_check_id_" vComplexBody :: Maybe CheckId
         Just vHostname = from <$> HM.lookup "_host_name_" vComplexBody :: Maybe Hostname
         Just vHostId = from <$> HM.lookup "_host_id_" vComplexBody :: Maybe HostId
-        Just (String vErrorMessage) = HM.lookup "_error_message_" vComplexBody 
+        Just (String vErrorMessage) = HM.lookup "_error_message_" vComplexBody
         Just (String vPrefix) = HM.lookup "_check_prefix_" vComplexBody
         mvSetTriggerId = lookup (CheckHost (vHostId, vCheckId)) vTriggerMap
         vTriggerIdList = S.toList $ fromJust mvSetTriggerId
-    when (isJust mvSetTriggerId && isCheckSuccess) $ do 
+    when (isJust mvSetTriggerId && isCheckSuccess) $ do
       vIKeys <- getCountersById (fromJust mvSetTriggerId)
       when (isCombined vComplex $ M.keysSet vIKeys) $ do
-          liftIO $ print vIKeys
-          let toCache = makeCache vHostname vIKeys vPrefix vComplex 
-          modify (M.union toCache)
-          cache <- get
-          db <- storage <$> ask
-          triggerValue <- Prelude.mapM getTrigger vTriggerIdList
-          result <- liftIO $ mapM (\x -> eitherToStatus vComplex <$> eval (createEnv db (Table $ from vHostname) cache ) (tresult x)) triggerValue
-          each $ toTriggerHost vHostId vTriggerIdList result 
-    when (isJust mvSetTriggerId && not isCheckSuccess) $ do 
+        liftIO $ print vIKeys
+        let toCache = makeCache vHostname vIKeys vPrefix vComplex
+        modify (M.union toCache)
+        cache <- get
+        db <- storage <$> ask
+        triggerValue <- Prelude.mapM getTrigger vTriggerIdList
+        result <- liftIO $ mapM (\x -> eitherToStatus vComplex <$> eval (createEnv db (Table $ from vHostname) cache ) (tresult x)) triggerValue
+        each $ toTriggerHost vHostId vTriggerIdList result
+    when (isJust mvSetTriggerId && not isCheckSuccess) $ do
       each $ toTriggerHost vHostId vTriggerIdList (repeat (SomethingWrong vErrorMessage))
     return ()
     where
@@ -227,7 +229,7 @@ toTriggerHost hid tids rs = map (\(t, r) -> (TriggerHost (hid, t), r)) $  zip ti
 createEnv :: Database db => db -> Table -> Cache -> Env
 createEnv db t cash = Env (createEnv' t)
   where
-  createEnv' (Table hostname) (EnvValFun c) = 
+  createEnv' (Table hostname) (EnvValFun c) =
     let v = M.lookup (Hostname hostname, c) cash
     in case v of
             Nothing -> createEnv' t (LastFun c (Count 1))
@@ -244,7 +246,7 @@ isCombined (Object xs) ids =
 isCombined _ _ = error "bad complex in isCombined"
 
 makeCache :: Hostname -> IKeys -> Prefix -> Complex -> Cache
-makeCache vHost vIKeys vPrefix (Object vComplexBody) = 
+makeCache vHost vIKeys vPrefix (Object vComplexBody) =
     let vValue = fromJust $ HM.lookup "id" vComplexBody
         ikeys = fromJust . flip M.lookup vIKeys
         addPrefix (x,y) = ((vHost, from vValue <> ":" <> vPrefix <> "." <> x), y)
@@ -253,5 +255,5 @@ makeCache vHost vIKeys vPrefix (Object vComplexBody) =
     in M.fromList $ map addPrefix . filter filterOnlyUsed $  asList
 makeCache _ _ _ _ = error "bad Complex in removeUnusedFromCombined"
 
-    
+
 

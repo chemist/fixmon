@@ -18,11 +18,11 @@ import           Data.Text           (Text, pack)
 import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
 import           Data.Binary         (Binary)
+import           Data.Scientific     (floatingOrInteger)
 import           Data.Text.Binary    ()
 import           Data.Typeable
 import           GHC.Generics        (Generic)
 import           Network.Snmp.Client (Config)
-import           Data.Scientific (floatingOrInteger)
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)

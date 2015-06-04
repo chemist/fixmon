@@ -2,17 +2,17 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedStrings  #-}
 module Types.Check where
-import qualified Data.HashMap.Strict   as HM
-import           Data.Map.Strict       (Map, keys, singleton)
+import qualified Data.HashMap.Strict as HM
+import           Data.Map.Strict     (Map, keys, singleton)
 import           Data.Maybe
-import           Data.Monoid           ((<>))
-import           Data.Text             (Text)
-import           Data.Yaml             hiding (array)
+import           Data.Monoid         ((<>))
+import           Data.Text           (Text)
+import           Data.Yaml           hiding (array)
 import           Data.Yaml.Builder
-import           Prelude               hiding (lookup, putStr)
+import           Prelude             hiding (lookup, putStr)
 
-import           Types.Dynamic         (Complex, Counter, Dyn)
-import           Types.Shared          (Check (..))
+import           Types.Dynamic       (Complex, Counter, Dyn)
+import           Types.Shared        (Check (..))
 
 type Route = Map Text (Check -> IO Complex)
 

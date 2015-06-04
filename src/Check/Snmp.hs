@@ -7,16 +7,16 @@ module Check.Snmp where
 
 import           Control.Exception
 import           Data.ByteString       (ByteString)
-import           Data.List             hiding (stripPrefix, lookup)
-import           Data.Map.Strict       (singleton, fromList, Map, lookup, empty)
-import           Data.Text             (unpack, pack)
+import           Data.List             hiding (lookup, stripPrefix)
+import           Data.Map.Strict       (Map, empty, fromList, lookup, singleton)
+import           Data.Monoid           ((<>))
+import           Data.Text             (pack, unpack)
 import qualified Data.Yaml             as A
 import           Network.Protocol.Snmp hiding (Value)
 import           Network.Snmp.Client
+import           Prelude               hiding (lookup)
 import           System.Cron
 import           Types
-import Prelude hiding (lookup)
-import Data.Monoid ((<>))
 
 -- import Debug.Trace
 
@@ -46,7 +46,7 @@ instance ToComplex Snmp where
     complex (Snmp name oi (Just (Suite suite))) =
         let size = length (oidFromBS oi)
             shorted = map conv suite
-            conv (Coupla o v) = 
+            conv (Coupla o v) =
               let [t, i] = drop size o
                   Just (snmpName, convFun) = lookup t (aliasDict name)
               in (snmpName <> "." <> pack (show i), convFun v)
@@ -86,7 +86,7 @@ aliasDict "network.interfaces" = fromList
   , (21, ("inOutQlen", flip to AsInt))
   ]
 aliasDict _ = empty
- 
+
 {--
 addAliases :: A.Value -> [Disk] -> [Disk]
 addAliases = error "addAliases, not implemented"
