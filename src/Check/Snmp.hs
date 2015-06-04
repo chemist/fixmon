@@ -1,58 +1,99 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeFamilies      #-}
 module Check.Snmp where
 
-import Network.Snmp.Client
-import Network.Protocol.Snmp
-import Types
-import Data.Map.Strict (singleton)
-import Data.Text (unpack, stripPrefix)
-import Data.Text.Encoding (encodeUtf8)
-import Data.ByteString (ByteString)
-import Control.Exception
-import System.Cron
-import Data.List hiding (stripPrefix)
-import Data.Maybe (mapMaybe)
+import           Control.Exception
+import           Data.ByteString       (ByteString)
+import           Data.List             hiding (stripPrefix, lookup)
+import           Data.Map.Strict       (singleton, fromList, Map, lookup, empty)
+import           Data.Text             (unpack, pack)
+import qualified Data.Yaml             as A
+import           Network.Protocol.Snmp hiding (Value)
+import           Network.Snmp.Client
+import           System.Cron
+import           Types
+import Prelude hiding (lookup)
+import Data.Monoid ((<>))
+
 -- import Debug.Trace
-
-data Snmp = SnmpInterfaces 
-          | SnmpDisk
-          deriving Show
-
-instance Checkable Snmp where
-    describe SnmpInterfaces = []
-    describe SnmpDisk = []
-    route SnmpInterfaces = singleton "network.interface" (doSnmp SnmpInterfaces interfacesOid)
-    route SnmpDisk = singleton "system.disk" (doSnmp SnmpDisk diskOid)
-    routeCheck SnmpInterfaces = routeCheck' SnmpInterfaces "network.interface"
-    routeCheck SnmpDisk = routeCheck' SnmpDisk "system.disk"
-    
 
 interfacesOid :: ByteString
 interfacesOid = "1.3.6.1.2.1.2.2.1"
 
-diskOid :: ByteString 
+diskOid :: ByteString
 diskOid = "1.3.6.1.2.1.25.2.3.1"
 
-doSnmp :: Snmp -> ByteString -> Check -> IO [Complex]
-doSnmp s oi (Check _ (Hostname host) _ _ (Just conf) p) = do
-    -- print $ "doSnmp start " <> oi
+data Snmp = Snmp Counter ByteString (Maybe Suite)
+            deriving Show
+
+instance Checkable Snmp where
+    describe (Snmp _ _ _) = []
+    route (Snmp name oi _) = singleton name $ doSnmp (Snmp name oi Nothing)
+    routeCheck a@(Snmp x _ _) = routeCheck' a x
+
+doSnmp :: Snmp -> Check -> IO Complex
+doSnmp (Snmp c oi _) (Check _ (Hostname host) _ _ (Just conf) _p) = do
     r <- bracket (client (conf { hostname = unpack host }))
                 close
                 (flip bulkwalk [oidFromBS oi])
-    -- print $ "doSnmp end " <> oi
-    return $ case s of
-                  SnmpInterfaces -> map complex (convert r :: [Interface])
-                  SnmpDisk       -> map (complex . addAliases p) (convert r :: [Disk])
-doSnmp _ _ (Check _ _ _ _ _ _) = error "oops"
+    return $ complex (Snmp c oi (Just r))
+doSnmp _ (Check _ _ _ _ _ _) = error "oops"
 
-addAliases :: [(Counter, Dyn)] -> Disk -> Disk
-addAliases p d = 
+instance ToComplex Snmp where
+    complex (Snmp name oi (Just (Suite suite))) =
+        let size = length (oidFromBS oi)
+            shorted = map conv suite
+            conv (Coupla o v) = 
+              let [t, i] = drop size o
+                  Just (snmpName, convFun) = lookup t (aliasDict name)
+              in (snmpName <> "." <> pack (show i), convFun v)
+        in A.object shorted
+    complex _ = error ""
+
+aliasDict :: Counter -> Map Integer (Counter, Value -> A.Value)
+aliasDict "system.disk" = fromList
+  [ (1, ("index", (`to` AsInt)))
+  , (2, ("id"   , (`to` AsText)))
+  , (3, ("descr", (`to` AsText)))
+  , (4, ("size" , (`to` AsInt)))
+  , (5, ("used" , (`to` AsInt)))
+  , (6, ("free" , (`to` AsInt)))
+  ]
+aliasDict "network.interfaces" = fromList
+  [ (1,  ("index", flip to AsInt))
+  , (2,  ("id", flip to AsLatinText))
+  , (3,  ("name", flip to AsLatinText))
+  , (4,  ("mtu", flip to AsInt))
+  , (5,  ("speed", flip to AsInt))
+  , (6,  ("physAddress", flip to AsMac))
+  , (7,  ("adminStatus", flip to AsStatus))
+  , (8,  ("operStatus", flip to AsStatus))
+  , (9,  ("lastChange", flip to AsInt))
+  , (10, ("inOctets", flip to AsInt))
+  , (11, ("inUcastPkts", flip to AsInt))
+  , (12, ("inNUcastPkts", flip to AsInt))
+  , (13, ("inDiscards", flip to AsInt))
+  , (14, ("inErrors", flip to AsInt))
+  , (15, ("inUnknownProtos", flip to AsInt))
+  , (16, ("inOutOctets", flip to AsInt))
+  , (17, ("inOutUcastPkts", flip to AsInt))
+  , (18, ("inOutNUcastPkts", flip to AsInt))
+  , (19, ("inOutDiscards", flip to AsInt))
+  , (20, ("inOutErrors", flip to AsInt))
+  , (21, ("inOutQlen", flip to AsInt))
+  ]
+aliasDict _ = empty
+ 
+{--
+addAliases :: A.Value -> [Disk] -> [Disk]
+addAliases = error "addAliases, not implemented"
+addAliases :: A.Value -> [Disk] -> [Disk]
+addAliases (A.Object p) d =
     let aliasesOnly = mapMaybe getAlias p
-        getAlias (Counter a, Text b) = case stripPrefix "alias." a of
+        getAlias (a, String b) = case stripPrefix "alias." a of
                                        Nothing -> Nothing
                                        Just x -> Just (String $ encodeUtf8 b,String $ encodeUtf8 x)
         getAlias _ = error "bad type in addAliases"
@@ -60,34 +101,36 @@ addAliases p d =
             Nothing -> d
             Just x -> d { storageId = x }
 
+--}
 testSnmp :: Check
-testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf) []
+testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf)$ A.object []
 
 testConf :: Config
-testConf = ConfigV3 {hostname = "", port = "161", timeout = 5000000, sequrityName = "aes", authPass = "helloallhello", privPass = "helloallhello", sequrityLevel = AuthPriv, context = "", authType = SHA, privType = AES}
+testConf = ConfigV3 {hostname = "salt", port = "161", timeout = 5000000, sequrityName = "aes", authPass = "helloallhello", privPass = "helloallhello", sequrityLevel = AuthPriv, context = "", authType = SHA, privType = AES}
 
+{--
 data Interface = Interface
-  { ifIndex :: Value
-  , ifDescr :: Value
-  , ifType  :: Value
-  , ifMtu   :: Value
-  , ifSpeed :: Value
-  , ifPhysAddress :: Value
-  , ifAdminStatus :: Value
-  , ifOperStatus  :: Value
-  , ifLastChange  :: Value
-  , ifInOctets :: Value
-  , ifInUcastPkts :: Value
-  , ifInNUcastPkts :: Value
-  , ifInDiscards :: Value
-  , ifInErrors :: Value
+  { ifIndex           :: Value
+  , ifDescr           :: Value
+  , ifType            :: Value
+  , ifMtu             :: Value
+  , ifSpeed           :: Value
+  , ifPhysAddress     :: Value
+  , ifAdminStatus     :: Value
+  , ifOperStatus      :: Value
+  , ifLastChange      :: Value
+  , ifInOctets        :: Value
+  , ifInUcastPkts     :: Value
+  , ifInNUcastPkts    :: Value
+  , ifInDiscards      :: Value
+  , ifInErrors        :: Value
   , ifInUnknownProtos :: Value
-  , ifOutOctets :: Value
-  , ifOutUcastPkts :: Value
-  , ifOutNUcastPkts :: Value
-  , ifOutDiscards :: Value
-  , ifOutErrors :: Value
-  , ifOutQLen :: Value
+  , ifOutOctets       :: Value
+  , ifOutUcastPkts    :: Value
+  , ifOutNUcastPkts   :: Value
+  , ifOutDiscards     :: Value
+  , ifOutErrors       :: Value
+  , ifOutQLen         :: Value
   } deriving (Show)
 
 data Disk = Disk
@@ -100,7 +143,7 @@ data Disk = Disk
   } deriving (Show)
 
 instance ToComplex Disk where
-    complex i = Complex
+    complex i = A.object
       [ ("index", to (storageIndex i) AsInt)
       , ("id", to (storageId i) AsText)
       , ("descr", to (storageDescr i) AsText)
@@ -111,7 +154,7 @@ instance ToComplex Disk where
     convert xs = map convD (groupCoupla xs)
 
 instance ToComplex Interface where
-    complex i = Complex
+    complex i = A.object
       [ ("index", to (ifIndex i) AsInt)
       , ("id", to (ifDescr i) AsLatinText)
       , ("name", to (ifDescr i) AsLatinText)
@@ -135,7 +178,6 @@ instance ToComplex Interface where
       , ("inOutQlen", to (ifOutQLen i) AsInt)
       ]
     convert xs = map convS (groupCoupla xs)
-    
 groupCoupla :: Suite -> [[Coupla]]
 groupCoupla (Suite xs) = groupBy fun $ sortBy sortFun xs
       where fun :: Coupla -> Coupla -> Bool
@@ -143,8 +185,8 @@ groupCoupla (Suite xs) = groupBy fun $ sortBy sortFun xs
             sortFun x y = compare (fm x) (fm y)
             fm = last  . oid
 
-     
-phy :: ByteString 
+
+phy :: ByteString
 phy = "\224\203NQ\198C"
 
 convD :: [Coupla] -> Disk
@@ -169,4 +211,5 @@ convS xs =
 {-# INLINE convS #-}
 
 
+--}
 

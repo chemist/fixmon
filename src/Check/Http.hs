@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Check.Http where
 
-import           Control.Applicative       ((<$>))
+import qualified Data.HashMap.Strict       as HM
 import           Data.Map.Strict           (singleton)
 import           Data.Maybe                (fromMaybe)
 import           Data.Text                 (unpack)
+import           Data.Yaml
 import           Network.HTTP.Conduit
 import           Network.HTTP.Types.Status (statusCode)
 import           Network.URI
@@ -30,15 +31,15 @@ instance Checkable Http where
     routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
 
 checkAgent :: Dyn -> Either String Dyn
-checkAgent (Text x) = Right (Text  x)
+checkAgent (String x) = Right (String  x)
 checkAgent _ = Left "bad agent type, must be text"
 
 checkRedirects :: Dyn -> Either String Dyn
-checkRedirects (Int x) = Right (Int x)
+checkRedirects (Number x) = Right (Number x)
 checkRedirects _ = Left "bad redirects type, must be int"
 
 checkUrl :: Dyn -> Either String Dyn
-checkUrl (Text x) = Right (Text x)
+checkUrl (String x) = Right (String x)
 checkUrl _ = Left "bad url type, must be text"
 
 checkUrl' :: Dyn -> Either String Dyn
@@ -47,12 +48,12 @@ checkUrl' x = let url = from x
                     then Right x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
-doHttp :: Check -> IO [Complex]
-doHttp (Check (CheckName n) _ _ _ _ p) = do
-    let Just url = from <$> lookup "url" p
+doHttp :: Check -> IO Complex
+doHttp (Check (CheckName n) _ _ _ _ (Object p)) = do
+    let Just url = from <$> HM.lookup "url" p
         unpackRedirects :: Dyn -> Int
         unpackRedirects x = from x
-        redirects' = fromMaybe 0 $ unpackRedirects <$> lookup "redirects" p
+        redirects' = fromMaybe 0 $ unpackRedirects <$> HM.lookup "redirects" p
     request' <-  parseUrl (unpack url)
     let request = request'
             { method = "GET"
@@ -62,5 +63,6 @@ doHttp (Check (CheckName n) _ _ _ _ p) = do
     resp <-  withManager $ \manager -> do
         response <- http request manager
         return $ responseStatus response
-    return [Complex [("id", to n), ("status", to $ statusCode resp)]] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+    return $ object [("id", to n), ("status", to $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
+doHttp (Check _ _ _ _ _ _) = error "something was wrong in doHttp"
 

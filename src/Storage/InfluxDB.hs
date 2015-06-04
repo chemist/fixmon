@@ -1,28 +1,29 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Storage.InfluxDB where
 
-import           Control.Monad         (unless, when)
-import           Data.Aeson (ToJSON(..), object, (.=), encode, FromJSON(..), (.:), Value(..), decode)
-import qualified Data.Aeson as A
-import qualified Data.Vector as V
-import           Data.ByteString.Char8 (pack, ByteString)
-import           Data.ByteString.Lazy (fromChunks)
-import           Data.Monoid           ((<>))
-import           Data.Text             (Text)
-import qualified Data.Text as T
-import           Data.Text.Encoding    (encodeUtf8)
-import           Network.HTTP.Conduit  hiding (host, port)
-import           Data.Conduit.List (consume)
-import           Data.Conduit (($$+-))
+import           Control.Exception         (catch, throw, try)
+import           Control.Monad             (unless, when)
+import           Data.Aeson                (FromJSON (..), ToJSON (..),
+                                            Value (..), decode, encode, object,
+                                            (.:), (.=))
+import           Data.ByteString.Char8     (ByteString, pack)
+import           Data.ByteString.Lazy      (fromChunks)
+import           Data.Conduit              (($$+-))
+import           Data.Conduit.List         (consume)
+import           Data.Maybe
+import           Data.Monoid               ((<>))
+import           Data.Scientific           (floatingOrInteger)
+import           Data.Text                 (Text)
+import qualified Data.Text                 as T
+import           Data.Text.Encoding        (encodeUtf8)
+import qualified Data.Vector               as V
+import qualified Data.Yaml                 as A
+import           Network.HTTP.Conduit      hiding (host, port)
 import           Network.HTTP.Types.Status
-import           Control.Applicative ((<$>))
-import           Control.Exception (try, throw, catch)
-import           Data.Scientific (floatingOrInteger)
-import Data.Maybe
-import Types.Shared hiding (Status)
-import Types.Dynamic
+import           Types.Dynamic
+import           Types.Shared              hiding (Status)
 -- import Debug.Trace
 
 
@@ -43,7 +44,7 @@ data InfluxDB = InfluxDB
   } deriving Show
 
 config :: InfluxDB
-config = InfluxDB "fixmon" "fixmon" "fixmon" "localhost" 8086 False
+config = InfluxDB "fixmon" "fixmon" "fixmon" "fixmon" 8086 False
 
 influxUrl :: InfluxDB -> String
 influxUrl db = let scheme = if ssl db
@@ -67,8 +68,8 @@ instance ToJSON Series where
         SeriesData {..} = seriesData
 
 instance FromJSON Series where
-    parseJSON (A.Array k) = do 
-      if V.null k 
+    parseJSON (A.Array k) = do
+      if V.null k
          then throw $ EmptyException
          else do
              let (Object v) = V.head k
@@ -79,7 +80,7 @@ instance FromJSON Series where
     parseJSON e = error $ show e
 
 toSD :: [Text] -> [[Value]] -> SeriesData
-toSD c p = let col = map Counter c
+toSD c p = let col = c
                po  = map (map valToDyn) p
            in SeriesData col po
 
@@ -100,20 +101,21 @@ data SeriesData = SeriesData
 type Column = Counter
 
 complexToSeriesData :: Counter -> Complex -> SeriesData
-complexToSeriesData prefixCounter (Complex x) = 
-    let (c', p') = unzip x
+complexToSeriesData _prefixCounter _x = error "complexToSeriesData, not implemented"
+  {--  let (c', p') = unzip  x
         prefixCounter' = prefixCounter <> "."
         columns' = map (\y -> prefixCounter' <> y) c'
     in SeriesData columns' [p']
+    --}
 
 toSeries :: (Hostname, Counter, Complex) -> Series
-toSeries (Hostname n, prefixCounter, c) = Series n (complexToSeriesData prefixCounter c) 
+toSeries (Hostname n, prefixCounter, c) = Series n (complexToSeriesData prefixCounter c)
 
-saveData :: InfluxDB -> [(Hostname, Counter, Complex)] -> IO ()
+saveData :: InfluxDB -> [Complex] -> IO ()
 saveData db forSave = do
     request' <-  parseUrl $ influxUrl db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
-        series = map toSeries forSave
+        series = map toSeries undefined -- forSave
         request'' = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
@@ -123,7 +125,7 @@ saveData db forSave = do
     -- print $ encode series
     unless (null series) $ do
         response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
-        unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
+        unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request
     return ()
     where
     catchConduit :: HttpException -> IO Status
@@ -134,35 +136,35 @@ getData db t (ChangeFun c) = do
     let (pole, addition) = unCounter c
     r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
     case r of
-         DynList (x:y:[]) -> return $ to (x /= y)
+       --  Array (x:y:[]) -> return $ to (x /= y)
          _ -> throw EmptyException
 getData db t (PrevFun   c) = do
     let (pole, addition) = unCounter c
-    rawRequest db (Counter "last") $ "select last(" <> pole <> ") from " <> unTable t <> addition
+    rawRequest db "last" $ "select last(" <> pole <> ") from " <> unTable t <> addition
 getData db t (LastFun   c p) = do
     let (pole, addition) = unCounter c
     xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit " <> ptt p
     case xs of
-         DynList xss -> return $ last xss
+       --  Array xss -> return $ last xss
          y -> return y
 getData db t (EnvValFun   c) = do
     let (pole, addition) = unCounter c
-    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit 1" 
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit 1"
     case xs of
-         DynList xss -> return $ last xss
+       --  Array xss -> return $ last xss
          y -> return y
 getData db t (AvgFun    c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db (Counter "mean") $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+    rawRequest db "mean" $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 getData db t (MinFun    c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db (Counter "min") $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+    rawRequest db "min" $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 getData db t (MaxFun    c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db (Counter "max") $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+    rawRequest db "max" $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
 getData db t (NoDataFun c p) = do
     let (pole, addition) = unCounter c
-    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1" 
+    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1"
     case r of
          Right _ -> return $ to False
          Left EmptyException -> return $ to True
@@ -176,7 +178,7 @@ withAnd "" = ""
 withAnd x = " and " <> T.drop 6 x
 
 unCounter :: Counter -> (Text, Text)
-unCounter (Counter x) = case T.splitOn ":" x of
+unCounter x = case T.splitOn ":" x of
                              [a] -> (a, T.empty)
                              [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
                              _ -> throw $ DBException "bad counter"
@@ -185,7 +187,7 @@ pt :: Period Int -> Text
 pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
 
 ptt :: Period Int -> Text
-ptt  = T.pack . show . un 
+ptt  = T.pack . show . un
 
 rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
 rawRequest db c raw = do
@@ -202,11 +204,11 @@ rawRequest db c raw = do
         result <- responseBody r $$+- consume
         return (responseStatus r, result)
         ) catchConduit
-    unless (fst response  == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request 
+    unless (fst response  == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request
     let s = (decode . fromChunks . snd $ response :: Maybe Series)
     -- print s
     when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
-    return $ seriesToDyn (Counter . fst . unCounter $ c) (fromJust s)
+    return $ seriesToDyn (fst . unCounter $ c) (fromJust s)
     where
     catchConduit :: HttpException -> IO (Status, [ByteString])
     catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
@@ -218,9 +220,10 @@ seriesToDyn c s = let col = columns . seriesData $ s
                   in case mapped of
                           [] -> throw $ TypeException $ "Influx problem: cant found result for counter " ++ show c
                           [x] -> x
-                          xs -> DynList xs
+                        --  xs -> Array xs
+                          _ -> error "ops series to dyn"
 
-                              
+
 
 
 -- curl -G 'http://localhost:8086/db/fixmon/series?u=fixmon&p=fixmon' --data-urlencode "q=select status from localhost limit 1"

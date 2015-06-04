@@ -20,6 +20,8 @@ executable fixmon
   build-depends:       base >=4.6 && <5
                      , binary 
                      , containers 
+                     , unordered-containers 
+                     , hashable
                      , bytestring 
                      , time 
                      , directory 

@@ -5,14 +5,14 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE StandaloneDeriving      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 module Types.Dynamic
-( Dyn(..)
+( Dyn
 , Env(..)
-, Counter(..)
-, Complex(..)
+, Counter
+, Complex
 , Table(..)
 , Exp(..)
 , DynExp(..)
@@ -27,40 +27,33 @@ module Types.Dynamic
 )
 where
 
-import           Control.Applicative  ((<$>), (<*>))
 -- import           Control.Monad.Except
 import           Control.Exception
 import           Control.Monad.Reader
-import           Data.Aeson hiding (Bool)
 import           Data.Binary
-import           Data.Monoid          (Monoid, (<>))
-import           Data.String
-import           Data.Text            (Text, chunksOf, pack)
-import           Data.Text.Encoding   (decodeUtf8, decodeLatin1)
-import qualified Data.ByteString as BS
-import           Data.Text.Binary     ()
+import qualified Data.ByteString       as BS
+import           Data.Monoid           ((<>))
+import           Data.Scientific
+import           Data.Text             (Text, chunksOf, pack)
+import           Data.Text.Binary      ()
+import           Data.Text.Encoding    (decodeLatin1, decodeUtf8)
 import           Data.Time
 import           Data.Typeable
-import           GHC.Generics hiding (from)
+import qualified Data.Vector           as V
+import           Data.Yaml
+import           GHC.Generics          hiding (from)
 import qualified Network.Protocol.Snmp as S
-import           Numeric (showHex)
+import           Numeric               (showHex)
 
 
-data Dyn = Int Int
-         | Double Double
-         | Bool Bool
-         | Text Text
-         | Time UTCTime
-         | DynList [Dyn]
-         deriving (Show, Eq, Typeable, Ord)
+type Dyn = Value
 
-instance ToJSON Dyn where
-    toJSON (Int x) = toJSON x
-    toJSON (Double x) = toJSON x
-    toJSON (Text x) = toJSON x
-    toJSON (Bool x) = toJSON x
-    toJSON (Time x) = toJSON x
-    toJSON (DynList x) = toJSON x
+instance Ord Dyn where
+    compare Null Null = EQ
+    compare (String x) (String y) = compare x y
+    compare (Number x) (Number y) = compare x y
+    compare (Array x) (Array y) = compare x y
+    compare _ _ = LT
 
 class (Typeable a, Show a, Eq a, Ord a) => Convert a b where
     to :: a -> b
@@ -73,40 +66,45 @@ data Rule = AsInt
           | AsStatus
           deriving Show
 
-deriving instance Typeable S.Value 
+deriving instance Typeable S.Value
 deriving instance Ord S.Value
 
 instance Convert S.Value (Rule -> Dyn) where
-    to (S.Integer x) AsInt = Int . fromIntegral $ x
-    to (S.Integer 1) AsStatus = Text "up"
-    to (S.Integer 2) AsStatus = Text "down"
-    to (S.Integer 3) AsStatus = Text "testing"
-    to (S.Integer 4) AsStatus = Text "unknown"
-    to (S.Integer 5) AsStatus = Text "dormant"
-    to (S.Integer 6) AsStatus = Text "notPresent"
-    to (S.Integer 7) AsStatus = Text "lowerLayerDown"
-    to (S.Counter32 x) AsInt = Int . fromIntegral $ x
-    to (S.Gaude32 x) AsInt = Int . fromIntegral $ x
-    to (S.TimeTicks x) AsInt = Int . fromIntegral $ x
-    to (S.String x) AsText = Text . decodeUtf8 $ x
-    to (S.String x) AsLatinText = Text . decodeLatin1 $ x
-    to (S.String "") AsMac = Text ""
-    to (S.String x) AsMac = Text . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
-    to (S.OI x) AsText = Text . pack . foldr (\a b -> show a <> "." <> b) "" $ x
-    to (S.Opaque x) AsText = Text . decodeUtf8 $ x
-    to (S.Opaque x) AsLatinText = Text . decodeLatin1 $ x
-    to (S.Counter64 x) AsInt = Int . fromIntegral $ x
+    to (S.Integer x) AsInt = Number . fromIntegral $ x
+    to (S.Integer 1) AsStatus = String "up"
+    to (S.Integer 2) AsStatus = String "down"
+    to (S.Integer 3) AsStatus = String "testing"
+    to (S.Integer 4) AsStatus = String "unknown"
+    to (S.Integer 5) AsStatus = String "dormant"
+    to (S.Integer 6) AsStatus = String "notPresent"
+    to (S.Integer 7) AsStatus = String "lowerLayerDown"
+    to (S.Counter32 x) AsInt = Number . fromIntegral $ x
+    to (S.Gaude32 x) AsInt = Number . fromIntegral $ x
+    to (S.TimeTicks x) AsInt = Number . fromIntegral $ x
+    to (S.String x) AsText = String . decodeUtf8 $ x
+    to (S.String x) AsLatinText = String . decodeLatin1 $ x
+    to (S.String "") AsMac = String ""
+    to (S.String x) AsMac = String . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
+    to (S.OI x) AsText = String . pack . foldr (\a b -> show a <> "." <> b) "" $ x
+    to (S.Opaque x) AsText = String . decodeUtf8 $ x
+    to (S.Opaque x) AsLatinText = String . decodeLatin1 $ x
+    to (S.Counter64 x) AsInt = Number . fromIntegral $ x
     to x y = error $ show x ++ show y
     from _ = error "cant convert (Rule -> Dyn) to Value"
 
+
 instance Convert Int Dyn where
-    to x = Int x
-    from (Int x) = x
+    to x = Number . fromIntegral $ x
+    from (Number x) = case (floatingOrInteger x :: Either Double Int) of
+                           Left _ -> error "from int, float"
+                           Right i -> i
     from _ = error "from int"
 
 instance Convert Double Dyn where
-    to x = Double  x
-    from (Double  x) = x
+    to x = Number  . fromFloatDigits $ x
+    from (Number  x) = case (floatingOrInteger x :: Either Double Int) of
+                            Left d -> d
+                            Right _ -> error "integer when must be float"
     from _ = error "fromDyn double"
 
 instance Convert Bool Dyn where
@@ -115,14 +113,16 @@ instance Convert Bool Dyn where
     from _ = error "fromDyn bool"
 
 instance Convert Text Dyn where
-    to x = Text  x
-    from (Text  x) = x
+    to x = String  x
+    from (String  x) = x
     from _ = error "formDyn text"
 
+{--
 instance Convert UTCTime Dyn  where
     to x = Time  x
     from (Time  x) = x
     from _ = error "fromDyn time"
+    --}
 
 data Period a = MicroSec { un :: a }
               | Byte { un :: a }
@@ -151,16 +151,12 @@ data DynExp = EnvVal Counter
             deriving (Show, Eq, Typeable, Generic)
 
 
-newtype Counter = Counter Text deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
+type Counter = Text -- deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
 
-
-instance ToJSON Counter where
-   toJSON (Counter x) = toJSON x
 
 newtype Table = Table Text deriving (Eq, Show, Ord, Typeable, Generic)
-newtype Complex = Complex [(Counter, Dyn)] deriving (Eq, Show, Ord, Typeable, Generic, Monoid)
+type Complex = Value -- deriving (Eq, Show, Typeable, Generic)
 
-instance Binary Counter
 instance Binary Table
 
 data Fun = ChangeFun Counter
@@ -176,10 +172,10 @@ data Fun = ChangeFun Counter
 instance Binary Fun
 
 data Env = Env
-  { getValue    :: Fun -> IO Dyn
+  { getValue :: Fun -> IO Dyn
   }
 
-type Eval = ReaderT Env IO 
+type Eval = ReaderT Env IO
 
 eval :: Env -> Exp -> IO (Either SomeException Bool)
 eval env e = try (runReaderT (evalExp e) env)
@@ -201,10 +197,10 @@ evalExp (Not e) = not <$> evalExp e
 evalExp (Or e1 e2) = (||) <$> evalExp e1 <*>  evalExp e2
 evalExp (And e1 e2) = (&&) <$> evalExp e1 <*> evalExp e2
 evalExp (NoData c i) = do
-    getFun <- getValue <$> ask 
+    getFun <- getValue <$> ask
     r <- liftIO $ getFun (NoDataFun c i)
     case r of
-      DynList [] -> return True
+      Array x -> if (V.null x) then return True else return False
       _ -> return False
 evalExp (Change c) = do
     last' <- evalVal (EnvVal c)
@@ -236,9 +232,9 @@ countersFromExp (NoData _ _) = []
 countersFromExp (Not x) = countersFromExp x
 countersFromExp (Or x y) = countersFromExp x <> countersFromExp y
 countersFromExp (And x y) = countersFromExp x <> countersFromExp y
-countersFromExp (More x y) = countersFromDyn x <> countersFromDyn y 
-countersFromExp (Less x y) = countersFromDyn x <> countersFromDyn y 
-countersFromExp (Equal x y) = countersFromDyn x <> countersFromDyn y 
+countersFromExp (More x y) = countersFromDyn x <> countersFromDyn y
+countersFromExp (Less x y) = countersFromDyn x <> countersFromDyn y
+countersFromExp (Equal x y) = countersFromDyn x <> countersFromDyn y
 
 countersFromDyn :: DynExp -> [Counter]
 countersFromDyn (EnvVal x) = [x]
@@ -259,10 +255,10 @@ instance Binary UTCTime where
 
 data DBException = HTTPException String
                  | TypeException String
-                 | EmptyException 
+                 | EmptyException
                  | DBException String deriving (Show, Typeable)
 
-instance Exception DBException 
+instance Exception DBException
 
 
 

@@ -11,7 +11,7 @@ system:
     user: fixmon
     password: fixmon
     database: fixmon
-    host: localhost
+    host: fixmon
     port: 8086
 
 hosts:
@@ -32,8 +32,6 @@ groups:
     triggers:
       - yandex
       - rambler
-
-
 
 checks:
   - name: network

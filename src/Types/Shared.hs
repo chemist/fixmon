@@ -1,14 +1,15 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Types.Shared where
 
 import           Control.DeepSeq
 import           Types.Cron
-import           Types.Dynamic 
+import           Types.Dynamic
 
 import           Control.Monad       (mzero)
 import           Data.Set            (Set)
@@ -16,12 +17,12 @@ import           Data.String         (IsString, fromString)
 import           Data.Text           (Text, pack)
 import           Data.Yaml           (FromJSON (..), Value (..), parseJSON)
 
-import           Control.Applicative (pure)
 import           Data.Binary         (Binary)
 import           Data.Text.Binary    ()
+import           Data.Typeable
 import           GHC.Generics        (Generic)
-import Data.Typeable
-import Network.Snmp.Client (Config)
+import           Network.Snmp.Client (Config)
+import           Data.Scientific (floatingOrInteger)
 
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)
@@ -31,6 +32,25 @@ newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary, NFData)
 
 instance IsString GroupName where
     fromString x = GroupName . pack $ x
+
+instance Convert HostId Dyn where
+    to (HostId x) = Number . fromIntegral $ x
+    from (Number x) = case (floatingOrInteger x :: Either Double Int) of
+                           Right d -> HostId d
+                           Left _ -> error "hostid must be integer"
+    from _ = error "convert hostid, only number here"
+
+instance Convert CheckId Dyn where
+    to (CheckId x) = Number . fromIntegral $ x
+    from (Number x) = case (floatingOrInteger x :: Either Double Int) of
+                           Right d -> CheckId d
+                           Left _ -> error "checkid must be integer"
+    from _ = error "convert hostid, only number here"
+
+instance Convert Hostname Dyn where
+    to (Hostname x) = String x
+    from (String x) = Hostname x
+    from _ = error "convert hostid, only number here"
 
 data Group = Group
  { gname     :: !GroupName
@@ -77,7 +97,7 @@ data Check = Check { cname   :: !CheckName
                    , cperiod :: !Cron
                    , ctype   :: !Text
                    , csnmp   :: Maybe Config
-                   , cparams :: ![(Counter, Dyn)]
+                   , cparams :: !Value
                    } deriving (Show, Typeable, Generic, Eq, Ord)
 
 instance Ord Config where
@@ -104,7 +124,8 @@ instance Ord Trigger where
 -- newtype Status = Status Bool deriving (Show, Eq, Ord, Binary)
 
 data Status = Ok
-            | Bad String
+            | SomethingWrong Text
+            | Bad Text
             deriving (Show, Eq, Ord)
 
 newtype TriggerFun = TriggerFun (Complex -> Status)

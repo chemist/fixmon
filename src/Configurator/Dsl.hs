@@ -28,7 +28,7 @@ languageDef =
            , Token.commentEnd   = ""
            , Token.commentLine  = ""
            , Token.identStart   = letter
-           , Token.identLetter  = alphaNum <|> char '.' 
+           , Token.identLetter  = alphaNum <|> char '.'
            , Token.reservedNames = [ "last"
                                    , "avg"
                                    , "min"
@@ -84,8 +84,8 @@ bOperators = [ [Prefix (try $ whiteSpace >> reservedOp "not" >> return Not) ]
              ]
 
 bTerm :: Parser Exp
-bTerm = parens topLevel <|> 
-               middleLevel <|> 
+bTerm = parens topLevel <|>
+               middleLevel <|>
                nodata <|>
                change
 
@@ -107,19 +107,19 @@ funs :: Parser DynExp
 funs = (fun "min" Min) <|> (fun "max" Max) <|> (fun "last" Last) <|> (fun "avg" Avg) <|> prev <|> envval <|> val
 
 fun :: String -> (Counter -> Period Int -> DynExp) -> Parser DynExp
-fun i f = f <$> (reserved i *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
+fun i f = f <$> (reserved i *> char '(' *> identifier <* char ',') <*> periodP <* char ')'
 
 prev :: Parser DynExp
-prev = Prev <$> (reserved "prev" *> char '(' *> (Counter <$> identifier) <* char ')')
+prev = Prev <$> (reserved "prev" *> char '(' *> identifier <* char ')')
 
 envval :: Parser DynExp
-envval = EnvVal <$> Counter <$> identifier
+envval = EnvVal <$> identifier
 
 change :: Parser Exp
-change = Change <$> (reserved "change" *> char '(' *> (Counter <$> identifier) <* char ')')
+change = Change <$> (reserved "change" *> char '(' *> identifier <* char ')')
 
 nodata :: Parser Exp
-nodata = NoData <$> (reserved "nodata" *> char '(' *> (Counter <$> identifier) <* char ',') <*> periodP <* char ')'
+nodata = NoData <$> (reserved "nodata" *> char '(' *> identifier <* char ',') <*> periodP <* char ')'
 
 val :: Parser DynExp
 val = Val <$> try (number <|> str)

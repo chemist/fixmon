@@ -4,9 +4,8 @@ module Types.Cron
 ( Cron(..) )
 where
 
-import           Control.Applicative ((<$>), (<*>))
-import           Data.Binary         (Binary, get, getWord8, put, putWord8)
-import           Data.Typeable       (Typeable)
+import           Data.Binary   (Binary, get, getWord8, put, putWord8)
+import           Data.Typeable (Typeable)
 import           System.Cron
 
 newtype Cron = Cron CronSchedule deriving (Show, Eq, Typeable)

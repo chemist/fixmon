@@ -1,45 +1,46 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Configurator.Yaml
 (parseConfig) where
 
-import           Control.Monad            (mzero)
+import           Control.Monad         (mzero)
 
-import           Data.Attoparsec.Text     (parseOnly)
-import           Data.Either              (lefts, rights)
-import           Data.HashMap.Strict      (toList)
-import qualified Data.Map.Strict          as M
-import           Data.Monoid              ((<>))
+import           Data.Attoparsec.Text  (parseOnly)
+import           Data.Either           (lefts, rights)
+import           Data.HashMap.Strict   (toList)
+import qualified Data.Map.Strict       as M
+import           Data.Monoid           ((<>))
 import           Data.Scientific
-import qualified Data.Set                 as S
-import           Data.Text                (Text, concat, unpack)
-import           Data.Text.Encoding (encodeUtf8)
-import           Data.Vector              (Vector, elemIndex, findIndex, foldl,
-                                           foldl', foldl1, map, mapM, (!))
-import           Data.Vector.Binary       ()
-import           Data.Yaml                (FromJSON (..), Value (..),
-                                           decodeFileEither, (.:), (.:?), (.!=))
-import           System.Cron.Parser       (cronSchedule)
+import qualified Data.Set              as S
+import           Data.Text             (Text, concat, unpack)
+import           Data.Text.Encoding    (encodeUtf8)
+import           Data.Vector           (Vector, elemIndex, findIndex, foldl,
+                                        foldl', foldl1, map, mapM, (!))
+import           Data.Vector.Binary    ()
+import           Data.Yaml             (FromJSON (..), Value (..),
+                                        decodeFileEither, object, (.!=), (.:),
+                                        (.:?))
+import           System.Cron.Parser    (cronSchedule)
 
 import           Checks
-import           Prelude                  hiding (concat, filter, foldl, foldl1,
-                                           map)
+import           Prelude               hiding (concat, filter, foldl, foldl1,
+                                        map)
 import qualified Prelude
 
-import           Configurator.Dsl         (parseTrigger)
-import           Types                    (Check (..), CheckHost (..), CheckId,
-                                           CheckName (..), Group (..),
-                                           GroupName (..), HostId, Dyn(..), Convert(..),
-                                           Hostname (..), Counter(..),
-                                           Monitoring (..), TriggerHostChecks(..),
-                                           Trigger (..), TriggerHost (..),Exp,
-                                           TriggerId, TriggerName (..))
-import           Types.Cron               (Cron (..))
+import           Configurator.Dsl      (parseTrigger)
 import qualified Network.Protocol.Snmp as Snmp
-import qualified Network.Snmp.Client as Snmp
-import Storage.InfluxDB (InfluxDB(..))
+import qualified Network.Snmp.Client   as Snmp
+import           Storage.InfluxDB      (InfluxDB (..))
+import           Types                 (Check (..), CheckHost (..), CheckId,
+                                        CheckName (..), Convert (..), Exp,
+                                        Group (..), GroupName (..), HostId,
+                                        Hostname (..), Monitoring (..),
+                                        Trigger (..), TriggerHost (..),
+                                        TriggerHostChecks (..), TriggerId,
+                                        TriggerName (..))
+import           Types.Cron            (Cron (..))
 
 data ITrigger = ITrigger
   { itname        :: !Text
@@ -82,14 +83,14 @@ instance FromJSON Config where
                            v .: "groups" <*>
                            v .: "checks" <*>
                            v .: "triggers" <*>
-                           v .: "system" 
+                           v .: "system"
     parseJSON _ = mzero
 
 instance FromJSON ISystem where
     parseJSON (Object v) = do
         s <- v .: "snmp"
         d <-  v .: "database"
-        return $ ISystem s d 
+        return $ ISystem s d
     parseJSON _ = mzero
 
 instance FromJSON InfluxDB where
@@ -107,8 +108,8 @@ instance FromJSON Snmp.Config where
     parseJSON (Object v) = do
         ver <- v .:? "version" .!= (3 :: Int)
         case ver of
-             3 -> parseVersion3 
-             2 -> parseVersion2 
+             3 -> parseVersion3
+             2 -> parseVersion2
              _ -> error "bad snmp version"
         where
             parseVersion3 = do
@@ -120,15 +121,15 @@ instance FromJSON Snmp.Config where
                 t <-  v .:? "timeout"  .!= (5 :: Int)
                 ap <- v .: "authPass"
                 pp <- v .:? "privPass" .!= ap
-                return $ Snmp.ConfigV3 "" 
-                                       p 
+                return $ Snmp.ConfigV3 ""
+                                       p
                                        (t * 1000000)
-                                       (encodeUtf8 sn) 
+                                       (encodeUtf8 sn)
                                        (encodeUtf8 ap)
-                                       (encodeUtf8 pp) 
-                                       (encodePrivAuth pa) 
-                                       "" 
-                                       (encodeAuthType at) 
+                                       (encodeUtf8 pp)
+                                       (encodePrivAuth pa)
+                                       ""
+                                       (encodeAuthType at)
                                        (encodePrivType pt)
             parseVersion2 = do
                 (sn :: Text) <- v .: "community" .!= "public"
@@ -209,15 +210,15 @@ transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> 
                                         , cparams = convertCparams $ icparams ch
                                         }
 
-convertCparams :: [(Text, Value)] -> [(Counter, Dyn)]
-convertCparams = Prelude.map convertValueToDyn
+convertCparams :: [(Text, Value)] -> Value
+convertCparams = object . Prelude.map convertValueToDyn
   where
-  convertValueToDyn (c, String x) = (Counter c, to x)
-  convertValueToDyn (c, Data.Yaml.Bool x) = (Counter c, to x)
+  convertValueToDyn (c, String x) = (c, to x)
+  convertValueToDyn (c, Data.Yaml.Bool x) = (c, to x)
   convertValueToDyn (c, Number x) =
     case floatingOrInteger x of
-         Left y -> (Counter c, to (y :: Double))
-         Right y -> (Counter c, to (y :: Int))
+         Left y -> (c, to (y :: Double))
+         Right y -> (c, to (y :: Int))
   convertValueToDyn c = error $ "convertValueToDyn, bad type" ++ show c
 
 transformTrigger :: Vector Check -> ITrigger -> Either String Trigger
@@ -277,7 +278,7 @@ transformGroup ch hs tr gr = do
 checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
 checkHosts vtrigger vgroup = foldl1 S.union $
     -- bad magic here, with trigger must be first!!! see Eq and Ord instance for CheckHost
-    map (checkHostsFromTrigger vtrigger) vgroup <> map checkHostsFromGroup vgroup 
+    map (checkHostsFromTrigger vtrigger) vgroup <> map checkHostsFromGroup vgroup
 
 checkHostsFromGroup :: Group -> S.Set CheckHost
 checkHostsFromGroup gr = S.fromList [ CheckHost (h, c)
@@ -330,7 +331,7 @@ triggersMap :: Vector Group -> Vector Trigger -> M.Map CheckHost (S.Set TriggerI
 triggersMap vg vt =
     let s = triggerHostChecks vg vt
         fun :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId) -> M.Map CheckHost (S.Set TriggerId)
-        fun x = M.unionWith S.union (thcTohcM x) 
+        fun x = M.unionWith S.union (thcTohcM x)
     in S.fold fun M.empty s
 
 
@@ -338,8 +339,8 @@ triggersMap vg vt =
     -- _status
 --------------------------------------------------------------------------------------------------
 triggerHosts:: Vector Group -> S.Set TriggerHost
-triggerHosts vg = 
-    let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)] 
+triggerHosts vg =
+    let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)]
     in foldl' S.union S.empty $ map ths vg
 
 {--
