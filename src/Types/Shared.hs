@@ -86,6 +86,12 @@ newtype CheckHost = CheckHost (HostId, CheckId) deriving (Show, Binary, Typeable
 
 newtype CheckName = CheckName Text deriving (Eq, Ord, Binary, Typeable)
 
+instance Convert CheckName Dyn where
+    to (CheckName x) = String x
+    from (String x) = CheckName x
+    from _ = error "convert CheckName, only string here"
+
+
 instance Show CheckName where
     show (CheckName x) = show x
 

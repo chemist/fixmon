@@ -8,8 +8,9 @@ import           Control.Monad             (unless, when)
 import           Data.Aeson                (FromJSON (..), ToJSON (..),
                                             Value (..), decode, encode, object,
                                             (.:), (.=))
+import qualified Data.Aeson.Encode.Pretty as A
 import           Data.ByteString.Char8     (ByteString, pack)
-import           Data.ByteString.Lazy      (fromChunks)
+import           Data.ByteString.Lazy      (fromChunks, putStr)
 import           Data.Conduit              (($$+-))
 import           Data.Conduit.List         (consume)
 import           Data.Maybe
@@ -23,7 +24,9 @@ import qualified Data.Yaml                 as A
 import           Network.HTTP.Conduit      hiding (host, port)
 import           Network.HTTP.Types.Status
 import           Types.Dynamic
-import           Types.Shared              hiding (Status)
+-- import           Types.Shared              hiding (Status)
+import qualified Data.HashMap.Strict as HM
+import Prelude hiding (putStr)
 -- import Debug.Trace
 
 
@@ -46,12 +49,19 @@ data InfluxDB = InfluxDB
 config :: InfluxDB
 config = InfluxDB "fixmon" "fixmon" "fixmon" "fixmon" 8086 False
 
-influxUrl :: InfluxDB -> String
-influxUrl db = let scheme = if ssl db
-                                 then "https://"
-                                 else "http://"
-                   port' = show . port $ db
-               in scheme <> host db <> ":" <> port' <> "/db/" <> base db <> "/series"
+data InfluxQueryType = IWrite | IQuery
+
+instance Show InfluxQueryType where
+    show IWrite = "/write"
+    show IQuery = "/query"
+
+influxUrl :: InfluxQueryType -> InfluxDB -> String
+influxUrl itype db =
+   let scheme = if ssl db
+                   then "https://"
+                   else "http://"
+       port' = show . port $ db
+   in scheme <> host db <> ":" <> port' <> show itype
 
 data Series = Series
     { seriesName :: !Text
@@ -108,28 +118,73 @@ complexToSeriesData _prefixCounter _x = error "complexToSeriesData, not implemen
     in SeriesData columns' [p']
     --}
 
-toSeries :: (Hostname, Counter, Complex) -> Series
-toSeries (Hostname n, prefixCounter, c) = Series n (complexToSeriesData prefixCounter c)
+rebuildComplex :: InfluxDB -> [Complex] -> Complex
+rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
+    [ "database" .= base db
+    , "user"     .= user db
+    , "password" .= pass db
+    , "points"   .= A.array points
+    ]
+    where
+      points = map convert cs
+      convert :: Complex -> Complex
+      convert (Object c) =
+          let vName:vSubtype:_ = splitByPoint $ c HM.! "_check_prefix_"
+              splitByPoint (String xs) = map String $ T.splitOn "." xs
+              splitByPoint _ = error "rebuildComplex: splitByPoint, only String here"
+              vHostname = c HM.! "_host_name_"
+              vCheckName = c HM.! "_check_name_"
+              vCheckSubname = HM.lookupDefault Null "_check_subname_" c
+              vCheckStatus = case HM.lookupDefault Null "_success_" c of
+                                  Bool True -> String "true"
+                                  Bool False -> String "false"
+                                  _ -> Null
+              cleaned = HM.difference c cleanMap
+              result = Object $ HM.fromList
+                [ ("name", vName)
+                , ("tags", object 
+                    [ "host" .= vHostname
+                    , "check_status" .= vCheckStatus
+                    , "check_name" .= vCheckName
+                    , "subtype" .= vSubtype 
+                    , "check_id" .= vCheckSubname 
+                    ])
+                , ("fields", Object cleaned)
+                ]
+          in result
+      convert _ = error "bad object in rebuildComplex"
+            
+
+cleanMap :: HM.HashMap T.Text Value
+cleanMap = HM.fromList
+  [ ("_check_prefix_" , Null)
+  , ("_host_name_"    , Null)
+  , ("_success_"      , Null)
+  , ("_check_id_"     , Null)
+  , ("_check_name_"   , Null)
+  , ("_check_subname_"   , Null)
+  , ("_host_id_"      , Null)
+  ]
+
+    
 
 saveData :: InfluxDB -> [Complex] -> IO ()
-saveData db _forSave = do
-    request' <-  parseUrl $ influxUrl db
-    let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db))]
-        series = map toSeries undefined -- forSave
-        request'' = request'
+saveData db forSave = do
+    request' <-  parseUrl $ influxUrl IWrite db
+    let series = rebuildComplex db forSave
+        request = request'
             { method = "POST"
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
-        request = addQueryStr request''
-    -- print $ encode series
-    unless (null series) $ do
-        response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
-        unless (response == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request
+    print $ (" ----------" :: String)
+    putStr $ A.encodePretty series
+    response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
+    unless (response == ok200 || response == status204 ) $ throw $ DBException $ "Write Influx problem: status = " ++ show response ++ " request = " ++ show request
     return ()
     where
     catchConduit :: HttpException -> IO Status
-    catchConduit e = throw $ HTTPException $ "Influx problem: http exception = " ++ show e
+    catchConduit e = throw $ HTTPException $ "Write Influx problem: http exception = " ++ show e
 
 getData :: InfluxDB -> Table -> Fun -> IO Dyn
 getData db t (ChangeFun c) = do
@@ -191,7 +246,7 @@ ptt  = T.pack . show . un
 
 rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
 rawRequest db c raw = do
-    request' <- parseUrl $ influxUrl db
+    request' <- parseUrl $ influxUrl IQuery db
     let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
         request'' = request'
             { method = "GET"

@@ -1,0 +1,66 @@
+aliases:
+  disk:
+    root: "/"
+    swap: "Swap space"
+    virtual: "Virtual memory"
+  status:
+    up: 1
+    down: 2
+    testing: 3
+    unknown: 4
+    dormant: 5
+    notPresent: 6
+    lowerLayerDown: 7
+  mac: AsMac
+
+snmp:
+  system:
+    # disk usage
+    request: bulk
+    oid: 1.3.6.1.2.1.25.2.3.1
+    tag: disk
+    names:
+      - index: 1
+      - description: 3
+        tag: subname
+        tag_alias: disk
+      - size: 4
+      - used: 5
+      - free: 6
+  network:
+    # network usage
+    request: bulk
+    oid: 1.3.6.1.2.1.2.2.1
+    tag: interface
+    names:
+      - index: 1
+      - id: 2
+      - name: 3
+      - mtu: 4
+      - speed: 5
+      - physAddress: 6
+        alias: mac
+      - adminStatus: 7
+        alias: status
+      - operStatus: 8
+        alias: status
+      - lastChange: 9
+      - inOctets: 10
+      - inUcastPkts: 11
+      - inNUcastPkts: 12
+      - inDiscards: 13
+      - inErrors: 14
+      - inUnknownProtos: 15
+      - inOutOctets: 16
+      - inOutUcastPkts: 17
+      - inOutNUcastPkts: 18
+      - inOutDiscards: 19
+      - inOutErrors: 20
+      - inOutQlen: 21
+
+
+
+
+
+
+

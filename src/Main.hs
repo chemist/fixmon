@@ -114,6 +114,7 @@ tasker = forever $ do
          [ "_success_" .= Bool False
          , "_host_id_"   .= (to vHostId :: Value)
          , "_host_name_"   .= (to vHost :: Value)
+         , "_check_name_"  .= (to (cname vCheck) :: Value)
          , "_check_id_"  .= (to vCheckId :: Value)
          , "_error_message_" .= String "check type not found"
          , "_check_prefix_" .= (String $ ctype vCheck)
@@ -126,6 +127,7 @@ tasker = forever $ do
              [ "_success_" .= Bool False
              , "_host_id_"   .= (to vHostId :: Value)
              , "_host_name_"   .= (to vHost :: Value)
+             , "_check_name_"  .= (to (cname vCheck) :: Value)
              , "_check_id_"  .= (to vCheckId :: Value)
              , "_error_message_" .= (String $ T.pack $ show h)
              , "_check_prefix_" .= (String $ ctype vCheck)
@@ -134,6 +136,7 @@ tasker = forever $ do
              [ "_success_" .= Bool True
              , "_host_id_"    .= (to vHostId :: Value)
              , "_host_name_"  .= (to vHost :: Value)
+             , "_check_name_"  .= (to (cname vCheck) :: Value)
              , "_check_id_"   .= (to vCheckId :: Value)
              , "_check_prefix_" .= (String $ ctype vCheck)
              ]
@@ -158,7 +161,7 @@ saver = forever $ do
           modify $ (:) vComplex
           yield vComplex
           s <- length <$> get
-          if s > 10 then return () else add
+          if s > 1 then return () else add
 
 getHost :: (Functor m, Monad m, MonadReader Monitoring m)  => CheckHost -> m Hostname
 getHost (CheckHost (i, _)) = (\x -> hosts x ! from i) <$> ask

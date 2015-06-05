@@ -35,6 +35,7 @@ executable fixmon
                      , text-binary
                      , mtl
                      , aeson
+                     , aeson-pretty
                      , cron
                      , lists
                      , warp
