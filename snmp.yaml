@@ -1,17 +1,16 @@
 aliases:
-  disk:
-    root: "/"
-    swap: "Swap space"
-    virtual: "Virtual memory"
-  status:
-    up: 1
-    down: 2
-    testing: 3
-    unknown: 4
-    dormant: 5
-    notPresent: 6
-    lowerLayerDown: 7
-  mac: AsMac
+    - &disk
+      root: "/"
+      swap: "Swap space"
+      virtual: "Virtual memory"
+    - &status
+      up: 1
+      down: 2
+      testing: 3
+      unknown: 4
+      dormant: 5
+      notPresent: 6
+      lowerLayerDown: 7
 
 snmp:
   system:
@@ -23,7 +22,7 @@ snmp:
       - index: 1
       - description: 3
         tag: subname
-        tag_alias: disk
+        tag_alias: *disk
       - size: 4
       - used: 5
       - free: 6
@@ -39,11 +38,11 @@ snmp:
       - mtu: 4
       - speed: 5
       - physAddress: 6
-        alias: mac
+        convert: AsMac
       - adminStatus: 7
-        alias: status
+        alias: *status
       - operStatus: 8
-        alias: status
+        alias: *status
       - lastChange: 9
       - inOctets: 10
       - inUcastPkts: 11

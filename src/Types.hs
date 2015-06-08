@@ -47,6 +47,7 @@ import           Types.Check
 import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
+import           Check.Snmp.Snmp (Rules)
 
 class Database db where
     getData :: db -> Table -> Fun -> IO Dyn
@@ -62,6 +63,7 @@ data Monitoring = Monitoring
 -- , status    :: !(Map TriggerHost Status)
  , triggerMap:: !(Map CheckHost (Set TriggerId))
  , snmp       :: !Config
+ , snmpRules  :: !Rules
  , storage    :: !InfluxDB
  } deriving Show
 

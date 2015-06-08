@@ -52,7 +52,7 @@ import           Types                (Check (..), CheckHost (..), CheckId,
 main :: IO ()
 main = do
     hSetBuffering stdout LineBuffering
-    Right m <- parseConfig "fixmon.yaml"
+    Right m <- parseConfig "fixmon.yaml" "snmp.yaml"
     (taskO, taskI) <- spawn unbounded
     (saverO, saverI) <- spawn unbounded
     (triggerO, triggerI) <- spawn unbounded
@@ -95,7 +95,7 @@ log _prefix = forever $ do
 
 taskMaker :: Pipe CheckHost Task (Fixmon ()) ()
 taskMaker = forever $ do
-    Monitoring _ hosts' _ _ checks' _ snmp' _ <- ask
+    Monitoring _ hosts' _ _ checks' _ snmp' _ _ <- ask
     CheckHost (h, c) <- await
     let check = checks' ! from c
         host = hosts' ! from h
@@ -105,8 +105,9 @@ tasker :: Pipe Task Complex (Fixmon ()) ()
 tasker = forever $ do
     Task vCheck vCheckHost <- await
     vHost <- getHost vCheckHost
+    rules <- snmpRules <$> ask
     -- liftIO $ print c
-    let mfCheck = lookup (ctype vCheck) routes
+    let mfCheck = lookup (ctype vCheck) (routes rules)
     yield =<< liftIO (maybe (notFound vCheck vCheckHost vHost) (doCheck' vCheck vCheckHost vHost) mfCheck)
     where
        notFound :: Check -> CheckHost -> Hostname -> IO Complex

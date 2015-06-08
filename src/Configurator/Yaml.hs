@@ -25,6 +25,7 @@ import           Data.Yaml             (FromJSON (..), Value (..),
 import           System.Cron.Parser    (cronSchedule)
 
 import           Checks
+import           Check.Snmp.Snmp (Rules, parseRules)
 import           Prelude               hiding (concat, filter, foldl, foldl1,
                                         map)
 import qualified Prelude
@@ -197,10 +198,10 @@ instance FromJSON IGroup where
 decodeConf :: FilePath -> IO (Either String Config)
 decodeConf fp = conv "Problem with parse yaml format: " <$> decodeFileEither fp
 
-transformCheck :: ICheck -> Either String Check
-transformCheck ch = makeCheck =<< conv ("Problem with parse cron in check: " <> icname ch) (parseOnly cronSchedule (icperiod ch))
+transformCheck :: Rules -> ICheck -> Either String Check
+transformCheck rules ch = makeCheck =<< conv ("Problem with parse cron in check: " <> icname ch) (parseOnly cronSchedule (icperiod ch))
   where
-    makeCheck cr = case M.lookup (ictype ch) checkRoutes of
+    makeCheck cr = case M.lookup (ictype ch) (checkRoutes rules) of
                        Nothing -> Left $ "unknown check type " ++ unpack (ictype ch)
                        Just f -> f Check { cname = CheckName (icname ch)
                                         , chost = Hostname ""
@@ -351,17 +352,18 @@ triggerHosts vg =
   --}
 
 
-configToMonitoring :: Config -> Either String Monitoring
-configToMonitoring x = do
-    ch <-  Data.Vector.mapM transformCheck $ cchecks x
+configToMonitoring :: Rules -> Config -> Either String Monitoring
+configToMonitoring r x = do
+    ch <-  Data.Vector.mapM (transformCheck r) $ cchecks x
     tr <-  Data.Vector.mapM (transformTrigger ch) $ ctriggers x
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
     let crch = cronChecks ch tr gg
     -- let ths = triggerHosts gg
     let trhcs = triggersMap gg tr
-    return $ Monitoring crch (chosts x) gg tr ch trhcs (isnmp $ csystem x) (idb $ csystem x)
+    return $ Monitoring crch (chosts x) gg tr ch trhcs (isnmp $ csystem x) r (idb $ csystem x)
 
-parseConfig :: FilePath -> IO (Either String Monitoring)
-parseConfig file = do
+parseConfig :: FilePath -> FilePath -> IO (Either String Monitoring)
+parseConfig file snmpConf = do
     f <-  decodeConf file
-    return $ configToMonitoring =<< f
+    Right s <-  parseRules snmpConf
+    return $ configToMonitoring s =<< f
