@@ -107,7 +107,9 @@ convertRuleFromYuml (Y.Object v) = do
 convertRuleFromYuml _ = Left "not object"
 
 convertByRule :: Rule -> S.Value -> S.Value
+convertByRule AsMac (S.String "") = S.String ""
 convertByRule AsMac (S.String x) = S.String . encodeUtf8 . foldr1 (\a b -> a <> ":" <> b) . chunksOf 2 . pack . BS.foldr showHex "" $ x
+
 convertByRule _ _ = error "convertByRule"
 
 

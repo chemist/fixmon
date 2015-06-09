@@ -26,6 +26,7 @@ groups:
       - disk
     checks:
       - disk
+      - network
   - name: external
     hosts:
       - yandex.ru
