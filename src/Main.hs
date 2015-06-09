@@ -24,6 +24,7 @@ import           Data.Text.Encoding   (decodeUtf8)
 import qualified Data.Text.IO         as T
 import           Data.Time.Clock
 import           Data.Vector          ((!))
+import qualified Data.Vector as V
 import           Data.Yaml
 import           Pipes
 import           Pipes.Concurrent
@@ -52,7 +53,7 @@ import           Types                (Check (..), CheckHost (..), CheckId,
 main :: IO ()
 main = do
     hSetBuffering stdout LineBuffering
-    Right m <- parseConfig "fixmon.yaml" "snmp.yaml"
+    m <- either (error . show) id <$> parseConfig "fixmon.yaml" "snmp.yaml"
     (taskO, taskI) <- spawn unbounded
     (saverO, saverI) <- spawn unbounded
     (triggerO, triggerI) <- spawn unbounded
@@ -145,6 +146,7 @@ tasker = forever $ do
 
 unionObject :: Value -> Value -> Value
 unionObject (Object x) (Object y) = Object $ HM.union x y
+unionObject (Array xm) (Object x) = Array $ V.map (\(Object y) -> Object $ HM.union x y) xm
 unionObject _ _ = error "unionObject only for Object"
 
 saver :: Pipe Complex Complex (Fixmon [Complex]) ()
@@ -195,6 +197,7 @@ checkTrigger :: Pipe Complex (TriggerHost, Status) (Fixmon Cache) ()
 checkTrigger = forever $ work =<< await
 
 work :: Complex -> Pipe Complex (TriggerHost, Status) (Fixmon Cache) ()
+work (Array vComplexBody) = V.mapM_ work vComplexBody
 work vComplex@(Object vComplexBody) = do
     vTriggerMap <- triggerMap <$> ask
     let Just (Bool isCheckSuccess) = HM.lookup "_success_" vComplexBody

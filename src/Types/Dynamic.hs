@@ -92,6 +92,18 @@ instance Convert S.Value (Rule -> Dyn) where
     to x y = error $ show x ++ show y
     from _ = error "cant convert (Rule -> Dyn) to Value"
 
+instance Convert S.Value Dyn where
+    to (S.Integer x) = Number . fromIntegral $ x
+    to (S.Counter32 x) = Number . fromIntegral $ x
+    to (S.Gaude32 x) = Number . fromIntegral $ x
+    to (S.TimeTicks x) = Number . fromIntegral $ x
+    to (S.String x) = String . decodeUtf8 $ x
+    to (S.OI x) = String . pack . foldr (\a b -> show a <> "." <> b) "" $ x
+    to (S.Opaque x) = String . decodeUtf8 $ x
+    to (S.Counter64 x) = Number . fromIntegral $ x
+    to x = error $ show x 
+    from _ = error "cant convert (Rule -> Dyn) to Value"
+
 
 instance Convert Int Dyn where
     to x = Number . fromIntegral $ x

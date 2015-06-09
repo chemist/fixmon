@@ -126,8 +126,9 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
     , "points"   .= A.array points
     ]
     where
-      points = map convert cs
-      convert :: Complex -> Complex
+      points = concatMap convert cs
+      convert :: Complex -> [Complex]
+      convert (Array a) = concatMap convert $ V.toList a
       convert (Object c) =
           let vName:vSubtype:_ = splitByPoint $ c HM.! "_check_prefix_"
               splitByPoint (String xs) = map String $ T.splitOn "." xs
@@ -151,7 +152,7 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
                     ])
                 , ("fields", Object cleaned)
                 ]
-          in result
+          in [result]
       convert _ = error "bad object in rebuildComplex"
             
 
@@ -162,7 +163,6 @@ cleanMap = HM.fromList
   , ("_success_"      , Null)
   , ("_check_id_"     , Null)
   , ("_check_name_"   , Null)
-  , ("_check_subname_"   , Null)
   , ("_host_id_"      , Null)
   ]
 

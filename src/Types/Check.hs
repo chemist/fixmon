@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Types.Check where
 import qualified Data.HashMap.Strict as HM
-import           Data.Map.Strict     (Map, keys, singleton)
+import           Data.Map.Strict     (Map, keys, singleton, empty)
 import           Data.Maybe
 import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
@@ -13,6 +13,7 @@ import           Prelude             hiding (lookup, putStr)
 
 import           Types.Dynamic       (Complex, Counter, Dyn)
 import           Types.Shared        (Check (..))
+import           Check.Snmp.Snmp (Rules(..))
 
 type Route = Map Text (Check -> IO Complex)
 
@@ -34,15 +35,12 @@ type Required = Bool
 type CheckValue = Dyn -> Either String Dyn
 
 class Checkable a where
-    route :: a -> Route
+    route :: Rules -> a -> Route
     describe :: a -> [(Counter, Required, CheckValue, Description)]
-    routeCheck :: a -> RouteCheck
+    routeCheck :: Rules -> a -> RouteCheck
 
     example :: [a] -> YamlBuilder
     example xs = mapping [("checks", array $ map example' xs)]
-
-class ToComplex a where
-    complex :: a -> Complex
 
 type Problem = String
 
@@ -71,7 +69,7 @@ routeCheck' x checkT = singleton checkT $! fun (describe x)
 example' :: Checkable a => a -> YamlBuilder
 example' a = let m = describe a
                  def = [("name", string "must be"), ("period", string "must be, in cron format")]
-                 ty = [("type", string $ head $ keys $ route a)]
+                 ty = [("type", string $ head $ keys $ route (Rules empty) a)]
                  nds = def <> ty <> map fun m
                  fun (t, b, _, d) = if b
                                     then (t, string $ "must be: " <> d)

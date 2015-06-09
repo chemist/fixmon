@@ -25,20 +25,20 @@ data SnmpDefinition = Bulk
   { oid   :: S.OID
   , bucket :: Text
   , tag   :: Text
+  , bId   :: Text
   , names :: Map Integer ConvertRule
   } deriving Show
 
 data ConvertRule = Replace
-  { simple :: Y.Value
-  , asTag :: Maybe Y.Value
+  { simple :: T.Text
   , convertFun :: S.Value -> S.Value
   , replaceAlias :: S.Value -> S.Value
   , replaceTag   :: S.Value -> S.Value
   }
 instance Show ConvertRule where
   show x = "ConvertRule: simple = " 
-        ++ show (simple x) ++ " asTag = "
-        ++ show (asTag x) 
+        ++ show (simple x) 
+ 
 
 
 
@@ -69,10 +69,11 @@ convertRuleFromYuml (Y.Object v) = do
           Y.String request <-  maybe (Right "bulk") Right $ HM.lookup "request" rule
           Y.String oid' <- maybe (Left "oid not found") Right $ HM.lookup "oid" rule
           Y.String tag' <- maybe (Left "tag not found") Right $ HM.lookup "tag" rule
+          Y.String subname <- maybe (Left "id not found") Right $ HM.lookup "id" rule
           namesArray <- maybe (Right Y.Null) Right $ HM.lookup "names" rule
           names' <-  getConvertRules namesArray
           case request of
-               "bulk" -> return $ (name <> "." <> tag', Bulk (toOid oid') name tag' names')
+               "bulk" -> return $ (name <> "." <> tag', Bulk (toOid oid') name tag' subname names')
                _ -> fail "bad request type"
       getConvertRules :: Y.Value -> Either String (Map Integer ConvertRule)
       getConvertRules Y.Null = Right M.empty
@@ -80,18 +81,14 @@ convertRuleFromYuml (Y.Object v) = do
       getConvertRules _ = Left "some thing wrong in getConvertRule"
       getConvertRule :: Y.Value -> Either String (Integer, ConvertRule)
       getConvertRule (Y.Object r) = do
-          let key = filter (\(x, _) -> (x /= "tag" && x /= "alias" && x /= "tag_alias" && x /= "convert")) (HM.toList r)
-          tag' <- replaceTag' $ HM.lookup "tag" r 
+          let key = filter (\(x, _) -> (x /= "alias" && x /= "tag_alias" && x /= "convert")) (HM.toList r)
           convert <- replaceFun $ HM.lookup "convert" r
           tagAlias <- replaceAlias' $ HM.lookup "tag_alias" r
           alias <- replaceAlias' $ HM.lookup "alias" r
           case key of
-               [(k, Y.Number i)] -> Right (coefficient i, Replace (Y.String k) tag' convert alias tagAlias)
+               [(k, Y.Number i)] -> Right (coefficient i, Replace k convert alias tagAlias)
                _ -> Left (show key ++ show (HM.toList r))
       getConvertRule _ = fail "not object in rule"
-      replaceTag' :: Maybe Y.Value -> Either String (Maybe Y.Value)
-      replaceTag' = return . id
-      replaceFun :: Maybe Y.Value -> Either String (S.Value -> S.Value)
       replaceFun Nothing = return id
       replaceFun (Just "AsMac") = return $ convertByRule AsMac
       replaceFun x = fail $ "bad convert value: " ++ show x

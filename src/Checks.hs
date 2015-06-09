@@ -13,16 +13,15 @@ import           Data.Map.Strict (unions)
 
 checkRoutes :: Rules -> RouteCheck
 checkRoutes rs =
-    let http   = map routeCheck [ HttpSimple ]
---        shell  = map routeCheck [ Shell ]
-        system' = map routeCheck [ Snmp "system.disk" diskOid Nothing, Snmp "network.interface" interfacesOid Nothing ]
+    let http   = map (routeCheck rs) [ HttpSimple ]
+        system' = map (routeCheck rs) [ Snmp "system.disk", Snmp "network.interface" ]
         all' = system' ++ http -- ++ snmp -- ++ shell
     in unions all'
 
 routes :: Rules -> Route
 routes rs =
-    let http = map route  [HttpSimple]
-        snmp' = map route [ Snmp "system.disk" diskOid Nothing, Snmp "network.interface" interfacesOid Nothing ]
+    let http = map (route rs)  [HttpSimple]
+        snmp' = map (route rs) [ Snmp "system.disk", Snmp "network.interface" ]
  --       shell = map route [Shell]
         all' = snmp' ++ http --  ++ snmp --  ++ shell
     in unions all'

@@ -19,16 +19,16 @@ data Shell = Shell deriving Show
 
 instance Checkable Shell where
     describe Shell = error "http check"
-    route Shell = singleton "cmd.run" (error "http check")
-    routeCheck Shell = routeCheck' Shell "cmd.run"
+    route _ Shell = singleton "cmd.run" (error "http check")
+    routeCheck _ Shell = routeCheck' Shell "cmd.run"
 
 instance Checkable Http where
     describe HttpSimple = [ ("url", True, checkUrl, "Uri - as string, RFC3986")
                           , ("agent", False, checkAgent, "Host - as string, check will be starting from this host, default start from server")
                           , ("redirects", False, checkRedirects, "Count - as integer, default 0")
                           ]
-    route HttpSimple = singleton "http.simple" doHttp
-    routeCheck HttpSimple = routeCheck' HttpSimple "http.simple"
+    route _ HttpSimple = singleton "http.simple" doHttp
+    routeCheck _ HttpSimple = routeCheck' HttpSimple "http.simple"
 
 checkAgent :: Dyn -> Either String Dyn
 checkAgent (String x) = Right (String  x)

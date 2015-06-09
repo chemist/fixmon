@@ -17,7 +17,6 @@ module Types
 , Route
 , Checkable(..)
 , RouteCheck
-, ToComplex(..)
 -- * Группы
 , GroupName(..)
 , GroupId

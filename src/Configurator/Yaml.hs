@@ -365,5 +365,8 @@ configToMonitoring r x = do
 parseConfig :: FilePath -> FilePath -> IO (Either String Monitoring)
 parseConfig file snmpConf = do
     f <-  decodeConf file
-    Right s <-  parseRules snmpConf
-    return $ configToMonitoring s =<< f
+    s <-  parseRules snmpConf
+    return $ do
+       x <- s
+       y <- f
+       configToMonitoring x y
