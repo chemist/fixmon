@@ -163,6 +163,7 @@ cleanMap = HM.fromList
   , ("_success_"      , Null)
   , ("_check_id_"     , Null)
   , ("_check_name_"   , Null)
+  , ("_check_subname_"   , Null)
   , ("_host_id_"      , Null)
   ]
 
