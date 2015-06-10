@@ -26,6 +26,8 @@ import           Data.Time.Clock
 import           Data.Vector          ((!))
 import qualified Data.Vector as V
 import           Data.Yaml
+import qualified Data.Aeson.Encode.Pretty as P
+import Data.ByteString.Lazy (toStrict)
 import           Pipes
 import           Pipes.Concurrent
 import           Prelude              hiding (log, lookup)
@@ -41,7 +43,7 @@ import           Types                (Check (..), CheckHost (..), CheckId,
                                        Cron (..), DBException (..), Database,
                                        Dyn, Env (..), Fun (..), HostId,
                                        Hostname (..), Monitoring (..),
-                                       Period (..), Status (..), Table (..),
+                                       Period (..), Status (..), 
                                        Trigger (..), TriggerHost (..),
                                        TriggerId, chost, countersFromExp, ctype,
                                        eval, getData, saveData)
@@ -107,7 +109,6 @@ tasker = forever $ do
     Task vCheck vCheckHost <- await
     vHost <- getHost vCheckHost
     rules <- snmpRules <$> ask
-    -- liftIO $ print c
     let mfCheck = lookup (ctype vCheck) (routes rules)
     yield =<< liftIO (maybe (notFound vCheck vCheckHost vHost) (doCheck' vCheck vCheckHost vHost) mfCheck)
     where
@@ -158,7 +159,7 @@ saver = forever $ do
       saveChecks = do
           queue <- get
           db <- storage <$> ask
-          liftIO $ saveData db queue `catch` (\(e :: DBException) -> print e)
+          liftIO $ saveData db queue `catch` (\(e :: DBException) -> print $ "saver: " <> show e)
       add = do
           vComplex <- await
           modify $ (:) vComplex
@@ -186,8 +187,7 @@ getCountersById sti = do
 shower :: MonadIO m => Consumer (TriggerHost, Status) m ()
 shower = forever $ do
     (vTriggerHost, vStatus) <- await
-    liftIO $ print vTriggerHost
-    liftIO . T.putStr $ (toText vStatus) <> "\n"
+    liftIO . T.putStr $ (T.pack $ show vTriggerHost) <> " " <> toText vStatus <> "\n"
     where
       toText Ok = "Success"
       toText (Bad e) = "Problem\n" <> e
@@ -211,13 +211,12 @@ work vComplex@(Object vComplexBody) = do
     when (isJust mvSetTriggerId && isCheckSuccess) $ do
       vIKeys <- getCountersById (fromJust mvSetTriggerId)
       when (isCombined vComplex $ M.keysSet vIKeys) $ do
-        liftIO $ print vIKeys
         let toCache = makeCache vHostname vIKeys vPrefix vComplex
         modify (M.union toCache)
         cache <- get
         db <- storage <$> ask
         triggerValue <- Prelude.mapM getTrigger vTriggerIdList
-        result <- liftIO $ mapM (\x -> eitherToStatus vComplex <$> eval (createEnv db (Table $ from vHostname) cache ) (tresult x)) triggerValue
+        result <- liftIO $ mapM (\x -> eitherToStatus vComplex <$> eval (createEnv db (from vHostname) cache ) (tresult x)) triggerValue
         each $ toTriggerHost vHostId vTriggerIdList result
     when (isJust mvSetTriggerId && not isCheckSuccess) $ do
       each $ toTriggerHost vHostId vTriggerIdList (repeat (SomethingWrong vErrorMessage))
@@ -225,7 +224,7 @@ work vComplex@(Object vComplexBody) = do
     where
       eitherToStatus _ (Left e) = Bad $ T.pack $ show e
       eitherToStatus _ (Right True) = Ok
-      eitherToStatus o (Right False) = Bad $ "trigger say problem\n" <> decodeUtf8 (encode o)
+      eitherToStatus o (Right False) = Bad $ "trigger say problem\n" <> decodeUtf8 (toStrict $ P.encodePretty o)
 work _ = error "work: bad complex"
 
 type IKeys = Map Dyn (Set Counter)
@@ -233,10 +232,10 @@ type IKeys = Map Dyn (Set Counter)
 toTriggerHost :: HostId -> [TriggerId] -> [Status] -> [(TriggerHost, Status)]
 toTriggerHost hid tids rs = map (\(t, r) -> (TriggerHost (hid, t), r)) $  zip tids rs
 
-createEnv :: Database db => db -> Table -> Cache -> Env
+createEnv :: Database db => db -> T.Text -> Cache -> Env
 createEnv db t cash = Env (createEnv' t)
   where
-  createEnv' (Table hostname) (EnvValFun c) =
+  createEnv' hostname (EnvValFun c) =
     let v = M.lookup (Hostname hostname, c) cash
     in case v of
             Nothing -> createEnv' t (LastFun c (Count 1))

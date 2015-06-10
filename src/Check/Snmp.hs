@@ -48,16 +48,9 @@ complex :: SnmpDefinition -> Suite -> A.Value
 complex vSnmpDefinition (Suite vSuite) =
     let size = length (oid vSnmpDefinition)
         shorted = map rulesToObject $ splitByI $ map conv vSuite
-        vId = bId vSnmpDefinition
         splitByI = Map.elems . Map.fromListWith (\[x] y -> x:y) 
         convertAlias x = to . replaceAlias x . convertFun x
-        convertTag x = to . replaceTag x
-        rulesToObject ((Just vRule, vValue):xs)
-          | simple vRule == vId = ("_check_subname_" A..= (convertTag vRule vValue :: A.Value))
-                               : (simple vRule A..= (convertAlias vRule  vValue :: A.Value)) 
-                               : rulesToObject xs
-          | otherwise = (simple vRule A..= (convertAlias  vRule vValue :: A.Value)) 
-                      : rulesToObject xs
+        rulesToObject ((Just vRule, vValue):xs) = (simple vRule A..= (convertAlias  vRule vValue :: A.Value)) : rulesToObject xs
         rulesToObject ((Nothing, _):xs) = rulesToObject xs
         rulesToObject [] = []
         conv (Coupla o v) =

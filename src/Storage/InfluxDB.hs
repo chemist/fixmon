@@ -130,12 +130,10 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
       convert :: Complex -> [Complex]
       convert (Array a) = concatMap convert $ V.toList a
       convert (Object c) =
-          let vName:vSubtype:_ = splitByPoint $ c HM.! "_check_prefix_"
+          let vName:vTag:_ = splitByPoint $ c HM.! "_check_prefix_"
               splitByPoint (String xs) = map String $ T.splitOn "." xs
               splitByPoint _ = error "rebuildComplex: splitByPoint, only String here"
               vHostname = c HM.! "_host_name_"
-              vCheckName = c HM.! "_check_name_"
-              vCheckSubname = HM.lookupDefault Null "_check_subname_" c
               vCheckStatus = case HM.lookupDefault Null "_success_" c of
                                   Bool True -> String "true"
                                   Bool False -> String "false"
@@ -146,9 +144,7 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
                 , ("tags", object 
                     [ "host" .= vHostname
                     , "check_status" .= vCheckStatus
-                    , "check_name" .= vCheckName
-                    , "subtype" .= vSubtype 
-                    , "check_id" .= vCheckSubname 
+                    , "type" .= vTag
                     ])
                 , ("fields", Object cleaned)
                 ]
@@ -158,13 +154,10 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
 
 cleanMap :: HM.HashMap T.Text Value
 cleanMap = HM.fromList
-  [ ("_check_prefix_" , Null)
-  , ("_host_name_"    , Null)
-  , ("_success_"      , Null)
+  [ ("_success_"      , Null)
   , ("_check_id_"     , Null)
-  , ("_check_name_"   , Null)
-  , ("_check_subname_"   , Null)
   , ("_host_id_"      , Null)
+  , ("_check_subname_"      , Null)
   ]
 
     
@@ -178,8 +171,8 @@ saveData db forSave = do
             , checkStatus = \_ _ _ -> Nothing
             , requestBody = RequestBodyLBS $ encode series
             }
-    print $ (" ----------" :: String)
-    putStr $ A.encodePretty series
+ --    print $ (" ---------- send json" :: String)
+ --    putStr $ A.encodePretty series
     response <-  catch (withManager $ \manager -> responseStatus <$> http request manager) catchConduit
     unless (response == ok200 || response == status204 ) $ throw $ DBException $ "Write Influx problem: status = " ++ show response ++ " request = " ++ show request
     return ()
@@ -187,47 +180,78 @@ saveData db forSave = do
     catchConduit :: HttpException -> IO Status
     catchConduit e = throw $ HTTPException $ "Write Influx problem: http exception = " ++ show e
 
-getData :: InfluxDB -> Table -> Fun -> IO Dyn
-getData db t (ChangeFun c) = do
+-- 'http://fixmon:8086/query?pretty=true&db=fixmon' --data-urlencode "q=select * from payments limit 10"
+rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
+rawRequest db c raw = do
+    request' <- parseUrl $ influxUrl IQuery db
+    let addQueryStr = setQueryString [("db", Just (pack $ base db)), ("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
+        request'' = request'
+            { method = "GET"
+            , checkStatus = \_ _ _ -> Nothing
+            }
+        request = addQueryStr request''
+    print request
+    response <- catch (withManager $ \manager -> do
+        r <-  http request manager
+        result <- responseBody r $$+- consume
+        return (responseStatus r, result)
+        ) catchConduit
+    unless (fst response  == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request
+    let s = (decode . fromChunks . snd $ response :: Maybe Series)
+    -- print s
+    when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
+    return $ seriesToDyn (fst . unCounter $ c) (fromJust s)
+    where
+    catchConduit :: HttpException -> IO (Status, [ByteString])
+    catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
+
+getData :: InfluxDB -> Text -> Fun -> IO Dyn
+-- get last value
+getData db vHost (LastFun   c p) = do
     let (pole, addition) = unCounter c
-    r <- rawRequest db c $ "select " <> pole <> " from " <> unTable t <> addition <> " limit 2"
+    print "----------"
+    print c
+    print vHost
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> vHost <> addition <> " limit " <> ptt p
+    case xs of
+       --  Array xss -> return $ last xss
+         y -> return y
+    where
+      counterToIdAndWhere counter =
+          case T.splitOn ":" counter of
+               vId:bucketTypeName:[] -> undefined
+
+getData db vHost (ChangeFun c) = do
+    let (pole, addition) = unCounter c
+    r <- rawRequest db c $ "select " <> pole <> " from " <> vHost <> addition <> " limit 2"
     case r of
        --  Array (x:y:[]) -> return $ to (x /= y)
          _ -> throw EmptyException
-getData db t (PrevFun   c) = do
+getData db vHost (PrevFun   c) = do
     let (pole, addition) = unCounter c
-    rawRequest db "last" $ "select last(" <> pole <> ") from " <> unTable t <> addition
-getData db t (LastFun   c p) = do
+    rawRequest db "last" $ "select last(" <> pole <> ") from " <> vHost <> addition
+getData db vHost (EnvValFun   c) = do
     let (pole, addition) = unCounter c
-    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit " <> ptt p
+    xs <- rawRequest db c $ "select "<> pole <>" from " <> vHost <> addition <> " limit 1"
     case xs of
        --  Array xss -> return $ last xss
          y -> return y
-getData db t (EnvValFun   c) = do
+getData db vHost (AvgFun    c p) = do
     let (pole, addition) = unCounter c
-    xs <- rawRequest db c $ "select "<> pole <>" from " <> unTable t <> addition <> " limit 1"
-    case xs of
-       --  Array xss -> return $ last xss
-         y -> return y
-getData db t (AvgFun    c p) = do
+    rawRequest db "mean" $ "select mean(" <> pole <> ") from " <> vHost <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db vHost (MinFun    c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db "mean" $ "select mean(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-getData db t (MinFun    c p) = do
+    rawRequest db "min" $ "select min(" <> pole <> ") from " <> vHost <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db vHost (MaxFun    c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db "min" $ "select min(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-getData db t (MaxFun    c p) = do
+    rawRequest db "max" $ "select max(" <> pole <> ") from " <> vHost <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
+getData db vHost (NoDataFun c p) = do
     let (pole, addition) = unCounter c
-    rawRequest db "max" $ "select max(" <> pole <> ") from " <> unTable t <> " group by time(" <> pt p <> ") where time > now() - " <> pt p <> withAnd addition
-getData db t (NoDataFun c p) = do
-    let (pole, addition) = unCounter c
-    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> unTable t <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1"
+    r <- try $ rawRequest db c $ "select " <> pole <> " from " <> vHost <> " where time > now() - " <> pt p <> withAnd addition <> " limit 1"
     case r of
          Right _ -> return $ to False
          Left EmptyException -> return $ to True
          Left e -> throw e
-
-unTable :: Table -> Text
-unTable (Table x) = x
 
 withAnd :: Text -> Text
 withAnd "" = ""
@@ -244,30 +268,6 @@ pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
 
 ptt :: Period Int -> Text
 ptt  = T.pack . show . un
-
-rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
-rawRequest db c raw = do
-    request' <- parseUrl $ influxUrl IQuery db
-    let addQueryStr = setQueryString [("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
-        request'' = request'
-            { method = "GET"
-            , checkStatus = \_ _ _ -> Nothing
-            }
-        request = addQueryStr request''
-    -- print request
-    response <- catch (withManager $ \manager -> do
-        r <-  http request manager
-        result <- responseBody r $$+- consume
-        return (responseStatus r, result)
-        ) catchConduit
-    unless (fst response  == ok200) $ throw $ DBException $ "Influx problem: status = " ++ show response ++ " request = " ++ show request
-    let s = (decode . fromChunks . snd $ response :: Maybe Series)
-    -- print s
-    when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
-    return $ seriesToDyn (fst . unCounter $ c) (fromJust s)
-    where
-    catchConduit :: HttpException -> IO (Status, [ByteString])
-    catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
 
 seriesToDyn :: Counter -> Series -> Dyn
 seriesToDyn c s = let col = columns . seriesData $ s

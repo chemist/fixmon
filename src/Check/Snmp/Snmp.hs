@@ -24,8 +24,7 @@ import Data.Either (rights)
 data SnmpDefinition = Bulk
   { oid   :: S.OID
   , bucket :: Text
-  , tag   :: Text
-  , bId   :: Text
+  , tag    :: Text
   , names :: Map Integer ConvertRule
   } deriving Show
 
@@ -43,11 +42,6 @@ instance Show ConvertRule where
 
 
 newtype Rules = Rules (Map Text SnmpDefinition) deriving (Show)
-
-check :: IO ()
-check = do
-    Just o <- Y.decodeFile "snmp.yaml" :: IO (Maybe Y.Value)
-    print (convertRuleFromYuml o)
 
 parseRules :: FilePath -> IO (Either String Rules)
 parseRules f = do
@@ -69,11 +63,10 @@ convertRuleFromYuml (Y.Object v) = do
           Y.String request <-  maybe (Right "bulk") Right $ HM.lookup "request" rule
           Y.String oid' <- maybe (Left "oid not found") Right $ HM.lookup "oid" rule
           Y.String tag' <- maybe (Left "tag not found") Right $ HM.lookup "tag" rule
-          Y.String subname <- maybe (Left "id not found") Right $ HM.lookup "id" rule
           namesArray <- maybe (Right Y.Null) Right $ HM.lookup "names" rule
           names' <-  getConvertRules namesArray
           case request of
-               "bulk" -> return $ (name <> "." <> tag', Bulk (toOid oid') name tag' subname names')
+               "bulk" -> return $ (name <> "." <> tag', Bulk (toOid oid') name tag' names')
                _ -> fail "bad request type"
       getConvertRules :: Y.Value -> Either String (Map Integer ConvertRule)
       getConvertRules Y.Null = Right M.empty

@@ -47,9 +47,10 @@ import           Types.Cron
 import           Types.Dynamic
 import           Types.Shared
 import           Check.Snmp.Snmp (Rules)
+import Data.Text (Text)
 
 class Database db where
-    getData :: db -> Table -> Fun -> IO Dyn
+    getData :: db -> Text -> Fun -> IO Dyn
     saveData :: db -> [Complex] -> IO ()
     config :: db
 

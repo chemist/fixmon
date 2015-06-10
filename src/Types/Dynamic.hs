@@ -13,7 +13,6 @@ module Types.Dynamic
 , Env(..)
 , Counter
 , Complex
-, Table(..)
 , Exp(..)
 , DynExp(..)
 , Fun(..)
@@ -162,14 +161,20 @@ data DynExp = EnvVal Counter
             | Max Counter (Period Int)
             deriving (Show, Eq, Typeable, Generic)
 
+type Counter = Text
+{--
 
-type Counter = Text -- deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
+data Counter = Counter
+  { cId     :: Maybe Text
+  , cBucker :: Text-- deriving (Eq, Show, Ord, Typeable, Generic, Monoid, IsString)
+  , cType   :: Text
+  , cName   :: Text
+  } deriving (Eq, Show, Ord, Typeable, Generic)
 
-
-newtype Table = Table Text deriving (Eq, Show, Ord, Typeable, Generic)
+instance Binary Counter
+--}
 type Complex = Value -- deriving (Eq, Show, Typeable, Generic)
 
-instance Binary Table
 
 data Fun = ChangeFun Counter
          | LastFun Counter (Period Int)

@@ -49,9 +49,6 @@ checks:
   - name: disk
     period: '* * * * *'
     type: system.disk
-    alias.root: '/'
-    alias.swap: 'Swap space'
-    alias.virtual: 'Virtual memory'
   - name: ya
     period: '* * * * *'
     type: http.simple
