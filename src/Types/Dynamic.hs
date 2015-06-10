@@ -11,7 +11,7 @@
 module Types.Dynamic
 ( Dyn
 , Env(..)
-, Counter
+, Counter(..)
 , Complex
 , Exp(..)
 , DynExp(..)
@@ -161,8 +161,6 @@ data DynExp = EnvVal Counter
             | Max Counter (Period Int)
             deriving (Show, Eq, Typeable, Generic)
 
-type Counter = Text
-{--
 
 data Counter = Counter
   { cId     :: Maybe Text
@@ -172,9 +170,8 @@ data Counter = Counter
   } deriving (Eq, Show, Ord, Typeable, Generic)
 
 instance Binary Counter
---}
-type Complex = Value -- deriving (Eq, Show, Typeable, Generic)
 
+type Complex = Value -- deriving (Eq, Show, Typeable, Generic)
 
 data Fun = ChangeFun Counter
          | LastFun Counter (Period Int)

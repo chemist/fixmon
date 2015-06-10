@@ -11,7 +11,7 @@ import           Data.ByteString       (ByteString)
 import           Data.List             hiding (lookup, stripPrefix)
 import           Data.Map.Strict       (lookup, singleton, keys, unions)
 import qualified Data.Map.Strict as Map
-import           Data.Text             (unpack)
+import           Data.Text             (unpack, Text)
 import qualified Data.Yaml             as A
 import           Network.Protocol.Snmp hiding (Value, oid)
 import           Network.Snmp.Client hiding (oid)
@@ -29,7 +29,7 @@ interfacesOid = "1.3.6.1.2.1.2.2.1"
 diskOid :: ByteString
 diskOid = "1.3.6.1.2.1.25.2.3.1"
 
-newtype Snmp = Snmp Counter deriving Show
+newtype Snmp = Snmp Text deriving Show
 
 instance Checkable Snmp where
     describe _ = []

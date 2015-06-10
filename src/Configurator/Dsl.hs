@@ -4,7 +4,7 @@
 module Configurator.Dsl
 where
 
-import           Control.Applicative                    hiding ((<|>))
+import           Control.Applicative                    hiding ((<|>), many)
 import           Control.Monad
 import           Data.Monoid                            ((<>))
 import           Data.Text                              (Text, pack, unpack)
@@ -43,12 +43,14 @@ languageDef =
 lexer :: Token.TokenParser st
 lexer = Token.makeTokenParser languageDef
 
-identifier :: Parser Text
-identifier = pack <$> do
-    i <- Token.identifier lexer -- parses an identifier
-    r <- char ':'
-    t <- Token.identifier lexer
-    return $ i <> [r] <> t
+triggerIdentifier :: Parser Counter
+triggerIdentifier = try $ do
+    i <- optionMaybe $ (Token.identifier lexer) <* char ':' -- parses an identifier
+    allpart <- (many alphaNum) `sepBy` (char '.')
+    case allpart of
+         [a,b,c] -> return $ Counter (pack <$> i) (pack a) (pack b) (pack c)
+         _ -> fail "not counter"
+
 
 reserved :: String -> Parser ()
 reserved   = Token.reserved   lexer -- parses a reserved name
@@ -107,19 +109,19 @@ funs :: Parser DynExp
 funs = (fun "min" Min) <|> (fun "max" Max) <|> (fun "last" Last) <|> (fun "avg" Avg) <|> prev <|> envval <|> val
 
 fun :: String -> (Counter -> Period Int -> DynExp) -> Parser DynExp
-fun i f = f <$> (reserved i *> char '(' *> identifier <* char ',') <*> periodP <* char ')'
+fun i f = f <$> (reserved i *> char '(' *> triggerIdentifier <* char ',') <*> periodP <* char ')'
 
 prev :: Parser DynExp
-prev = Prev <$> (reserved "prev" *> char '(' *> identifier <* char ')')
+prev = Prev <$> (reserved "prev" *> char '(' *> triggerIdentifier <* char ')')
 
 envval :: Parser DynExp
-envval = EnvVal <$> identifier
+envval = EnvVal <$> triggerIdentifier
 
 change :: Parser Exp
-change = Change <$> (reserved "change" *> char '(' *> identifier <* char ')')
+change = Change <$> (reserved "change" *> char '(' *> triggerIdentifier <* char ')')
 
 nodata :: Parser Exp
-nodata = NoData <$> (reserved "nodata" *> char '(' *> identifier <* char ',') <*> periodP <* char ')'
+nodata = NoData <$> (reserved "nodata" *> char '(' *> triggerIdentifier <* char ',') <*> periodP <* char ')'
 
 val :: Parser DynExp
 val = Val <$> try (number <|> str)

@@ -108,7 +108,7 @@ data SeriesData = SeriesData
     , points  :: ![[Dyn]]
     } deriving (Show, Eq)
 
-type Column = Counter
+type Column = Text
 
 complexToSeriesData :: Counter -> Complex -> SeriesData
 complexToSeriesData _prefixCounter _x = error "complexToSeriesData, not implemented"
@@ -200,7 +200,7 @@ rawRequest db c raw = do
     let s = (decode . fromChunks . snd $ response :: Maybe Series)
     -- print s
     when (isNothing s) $ throw $ DBException $ "Influx problem: cant parse result"
-    return $ seriesToDyn (fst . unCounter $ c) (fromJust s)
+    return $ undefined -- seriesToDyn c (fromJust s)
     where
     catchConduit :: HttpException -> IO (Status, [ByteString])
     catchConduit e = throw $ DBException $ "Influx problem: http exception = " ++ show e
@@ -221,6 +221,7 @@ getData db vHost (LastFun   c p) = do
           case T.splitOn ":" counter of
                vId:bucketTypeName:[] -> undefined
 
+         {--
 getData db vHost (ChangeFun c) = do
     let (pole, addition) = unCounter c
     r <- rawRequest db c $ "select " <> pole <> " from " <> vHost <> addition <> " limit 2"
@@ -252,24 +253,25 @@ getData db vHost (NoDataFun c p) = do
          Right _ -> return $ to False
          Left EmptyException -> return $ to True
          Left e -> throw e
+--}
 
 withAnd :: Text -> Text
 withAnd "" = ""
 withAnd x = " and " <> T.drop 6 x
 
 unCounter :: Counter -> (Text, Text)
-unCounter x = case T.splitOn ":" x of
+unCounter x = undefined {-- case T.splitOn ":" x of
                              [a] -> (a, T.empty)
                              [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
                              _ -> throw $ DBException "bad counter"
-
+--}
 pt :: Period Int -> Text
 pt x = (T.pack . show $ (fromIntegral $ un x :: Double)/1000000) <> "s"
 
 ptt :: Period Int -> Text
 ptt  = T.pack . show . un
 
-seriesToDyn :: Counter -> Series -> Dyn
+seriesToDyn :: Text -> Series -> Dyn
 seriesToDyn c s = let col = columns . seriesData $ s
                       poi = points . seriesData $ s
                       mapped = catMaybes $ map (\x -> lookup c (zip col x)) poi

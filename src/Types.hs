@@ -25,6 +25,7 @@ module Types
 , Cron(..)
 , Status(..)
 , Monitoring(..)
+, Prefix
 -- , Log(..)
 , routeCheck'
 , Database(..)

@@ -11,8 +11,8 @@ import           Data.Yaml           hiding (array)
 import           Data.Yaml.Builder
 import           Prelude             hiding (lookup, putStr)
 
-import           Types.Dynamic       (Complex, Counter, Dyn)
-import           Types.Shared        (Check (..))
+import           Types.Dynamic       (Complex, Dyn)
+import           Types.Shared        (Check (..), Prefix)
 import           Check.Snmp.Snmp (Rules(..))
 
 type Route = Map Text (Check -> IO Complex)
@@ -36,7 +36,7 @@ type CheckValue = Dyn -> Either String Dyn
 
 class Checkable a where
     route :: Rules -> a -> Route
-    describe :: a -> [(Counter, Required, CheckValue, Description)]
+    describe :: a -> [(Prefix, Required, CheckValue, Description)]
     routeCheck :: Rules -> a -> RouteCheck
 
     example :: [a] -> YamlBuilder
@@ -47,13 +47,13 @@ type Problem = String
 routeCheck' :: Checkable a => a -> Text -> RouteCheck
 routeCheck' x checkT = singleton checkT $! fun (describe x)
   where
-    fun :: [(Counter, Required, CheckValue, Description)] -> Check -> Either String Check
+    fun :: [(Prefix, Required, CheckValue, Description)] -> Check -> Either String Check
     fun desc check =
       let Object params = cparams check
           checking = map tryCheck desc
           eitherToMaybeProblem (Left y) = Just y
           eitherToMaybeProblem (Right _) = Nothing
-          tryCheck :: (Counter, Required, CheckValue, Description) -> Maybe Problem
+          tryCheck :: (Prefix, Required, CheckValue, Description) -> Maybe Problem
           tryCheck (field, isMustBe, cv, _) =
               case (HM.member field params, isMustBe)  of
                    (True, True) -> eitherToMaybeProblem $ cv (params HM.! field )

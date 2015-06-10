@@ -33,6 +33,8 @@ newtype GroupName = GroupName Text deriving (Eq, Show, Ord, Binary, NFData)
 instance IsString GroupName where
     fromString x = GroupName . pack $ x
 
+type Prefix = Text -- ctype in check
+
 instance Convert HostId Dyn where
     to (HostId x) = Number . fromIntegral $ x
     from (Number x) = case (floatingOrInteger x :: Either Double Int) of

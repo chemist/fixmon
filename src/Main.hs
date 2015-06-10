@@ -42,12 +42,13 @@ import           Types                (Check (..), CheckHost (..), CheckId,
                                        Complex, Convert (..), Counter,
                                        Cron (..), DBException (..), Database,
                                        Dyn, Env (..), Fun (..), HostId,
-                                       Hostname (..), Monitoring (..),
-                                       Period (..), Status (..), 
+                                       Hostname (..), Monitoring (..), Counter(..),
+                                       Period (..), Status (..), Prefix,
                                        Trigger (..), TriggerHost (..),
                                        TriggerId, chost, countersFromExp, ctype,
                                        eval, getData, saveData)
 
+import Debug.Trace
 -- PEN assigned for fixmon
 -- Prefix: iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
 -- PEN: 44729
@@ -80,7 +81,6 @@ newtype Fixmon a b = Fixmon { runFixmon :: ReaderT Monitoring (StateT a IO) b}
 run :: forall s a. Monitoring -> Effect (Fixmon s) a -> s -> IO a
 run m = evalStateT . (flip runReaderT m) . runFixmon . runEffect
 
-type Prefix = Counter -- ctype in check
 
 cron :: Producer CheckHost (Fixmon ()) ()
 cron = forever $ do
@@ -173,16 +173,12 @@ getHost (CheckHost (i, _)) = (\x -> hosts x ! from i) <$> ask
 getTrigger :: (Functor m, Monad m, MonadReader Monitoring m) => TriggerId -> m Trigger
 getTrigger i = (\x -> triggers x ! from i) <$> ask
 
-getCountersById :: (Functor m, Monad m, MonadReader Monitoring m) => Set TriggerId -> m (Map Dyn (Set Counter))
-getCountersById sti = do
-    tv <- triggers <$> ask
-    let a = Prelude.concat $ S.toList $ S.map (\x -> countersFromExp $ tresult $ tv ! from x) sti
-        counterToIdValue x = case T.splitOn ":" x of
-                                  [y] -> ((to T.empty), (S.singleton $ stripBaseInCounter y))
-                                  [d,y] -> ((to d), (S.singleton $ stripBaseInCounter y))
-                                  _ -> error "counteToIdValue"
-        stripBaseInCounter x = snd $ T.breakOnEnd "." x
-    return $ M.fromListWith S.union $ map counterToIdValue a
+getCountersById :: (MonadIO m, Functor m, Monad m, MonadReader Monitoring m) => Set TriggerId -> m IKeys
+getCountersById vSetTriggerId = do
+    vTriggers <- triggers <$> ask
+    let a = Prelude.concat $ S.map (\x -> countersFromExp (tresult (vTriggers ! from x))) vSetTriggerId
+        addId x = (fromMaybe "" (cId x), S.singleton x)
+    return $ M.fromListWith S.union $ map addId a
 
 shower :: MonadIO m => Consumer (TriggerHost, Status) m ()
 shower = forever $ do
@@ -227,7 +223,7 @@ work vComplex@(Object vComplexBody) = do
       eitherToStatus o (Right False) = Bad $ "trigger say problem\n" <> decodeUtf8 (toStrict $ P.encodePretty o)
 work _ = error "work: bad complex"
 
-type IKeys = Map Dyn (Set Counter)
+type IKeys = Map T.Text (Set Counter)
 
 toTriggerHost :: HostId -> [TriggerId] -> [Status] -> [(TriggerHost, Status)]
 toTriggerHost hid tids rs = map (\(t, r) -> (TriggerHost (hid, t), r)) $  zip tids rs
@@ -243,22 +239,22 @@ createEnv db t cash = Env (createEnv' t)
   createEnv' _ f  = getData db t f
 
 -- combined check when Check -> [Complex]
-isCombined :: Complex -> Set Dyn -> Bool
+isCombined :: Complex -> Set T.Text -> Bool
 isCombined (Object xs) ids =
     let id' = HM.lookup "id" xs
     in case id' of
-            Nothing -> False
-            Just id'' -> S.member id'' ids
+            Just (String id'') -> S.member id'' ids
+            _ -> False
 isCombined _ _ = error "bad complex in isCombined"
 
 makeCache :: Hostname -> IKeys -> Prefix -> Complex -> Cache
 makeCache vHost vIKeys vPrefix (Object vComplexBody) =
-    let vValue = fromJust $ HM.lookup "id" vComplexBody
+    let Just (String vValue) = HM.lookup "id" vComplexBody
         ikeys = fromJust . flip M.lookup vIKeys
-        addPrefix (x,y) = ((vHost, from vValue <> ":" <> vPrefix <> "." <> x), y)
+        addPrefix (x,y) = ((vHost, Counter (Just vValue) vPrefix x), y)
         filterOnlyUsed (x, _) = S.member x (ikeys vValue)
         asList = HM.toList vComplexBody
-    in M.fromList $ map addPrefix . filter filterOnlyUsed $  asList
+    in undefined  -- M.fromList $ map addPrefix . filter filterOnlyUsed $  asList
 makeCache _ _ _ _ = error "bad Complex in removeUnusedFromCombined"
 
 
