@@ -49,7 +49,7 @@ checkUrl' x = let url = from x
                     else Left "check url, it must be absolute uri, see RFC3986"
 
 doHttp :: Check -> IO Complex
-doHttp (Check (CheckName n) _ _ _ _ (Object p)) = do
+doHttp (Check (CheckName n) _ _ _ (Object p)) = do
     let Just url = from <$> HM.lookup "url" p
         unpackRedirects :: Dyn -> Int
         unpackRedirects x = from x
@@ -64,5 +64,5 @@ doHttp (Check (CheckName n) _ _ _ _ (Object p)) = do
         response <- http request manager
         return $ responseStatus response
     return $ object [("id", to n), ("status", to $ statusCode resp)] -- Complex $ fromList [ ("status" , Any $ Int $ resp ^. responseStatus . statusCode) ]
-doHttp (Check _ _ _ _ _ _) = error "something was wrong in doHttp"
+doHttp (Check _ _ _ _ _) = error "something was wrong in doHttp"
 

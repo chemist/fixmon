@@ -17,7 +17,7 @@ import           Network.Protocol.Snmp hiding (Value, oid)
 import           Network.Snmp.Client hiding (oid)
 import           Prelude               hiding (lookup)
 import           System.Cron
-import           Types
+import           Types hiding (config)
 import Data.Maybe
 import Check.Snmp.Snmp
 
@@ -37,12 +37,11 @@ instance Checkable Snmp where
     routeCheck _ a@(Snmp x) = routeCheck' a x
 
 doSnmp :: SnmpDefinition -> Check -> IO Complex
-doSnmp vSnmpDefinition (Check _ (Hostname vHostname) _ _ (Just vConf) _) = do
-    r <- bracket (client (vConf { hostname = unpack vHostname }))
+doSnmp vSnmpDefinition (Check _ (Hostname vHostname) _ _ _) = do
+    r <- bracket (client ((config vSnmpDefinition) { hostname = unpack vHostname }))
                 close
                 (flip bulkwalk [oid vSnmpDefinition])
     return $ complex vSnmpDefinition r
-doSnmp _ (Check _ _ _ _ _ _) = error "oops"
 
 complex :: SnmpDefinition -> Suite -> A.Value
 complex vSnmpDefinition (Suite vSuite) =
@@ -61,7 +60,7 @@ complex vSnmpDefinition (Suite vSuite) =
 
 
 testSnmp :: Check
-testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" (Just testConf)$ A.object []
+testSnmp = Check (CheckName "test") (Hostname "salt") (Cron daily) "snmp" $ A.object []
 
 testConf :: Config
 testConf = ConfigV3 {hostname = "salt", port = "161", timeout = 5000000, sequrityName = "aes", authPass = "helloallhello", privPass = "helloallhello", sequrityLevel = AuthPriv, context = "", authType = SHA, privType = AES}

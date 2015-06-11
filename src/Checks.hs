@@ -27,8 +27,8 @@ routes rs =
     in unions all'
 
 testHttp, testHttp1, testShell:: Check
-testHttp = Check (CheckName "web") (Hostname "ya.ru") (Cron daily) "http.simple" Nothing $ object [ ("url", (String "http://ya.ru")) ]
-testHttp1 = Check (CheckName "web") (Hostname "ubank.ru") (Cron daily) "http.status" Nothing $ object [("url", String "http://ubank.ru"), ("redirects", Number 2 )]
-testShell = Check (CheckName "shell") (Hostname "localhost") (Cron daily) "cmd.run" Nothing $ object [("abc", String "" ), ("command", String "uptime")]
+testHttp = Check (CheckName "web") (Hostname "ya.ru") (Cron daily) "http.simple" $ object [ ("url", (String "http://ya.ru")) ]
+testHttp1 = Check (CheckName "web") (Hostname "ubank.ru") (Cron daily) "http.status" $ object [("url", String "http://ubank.ru"), ("redirects", Number 2 )]
+testShell = Check (CheckName "shell") (Hostname "localhost") (Cron daily) "cmd.run" $ object [("abc", String "" ), ("command", String "uptime")]
 
 -- testSnmp = Check (CheckName "net") (Hostname "salt") (Cron daily) "snmp.network.interface" $ object [ ("community", String "helloall" ), ("host", String "salt" ) ]

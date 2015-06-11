@@ -1,12 +1,4 @@
 system:
-  snmp:
-    version: 3
-    sequrityName: aes
-    privType: AES
-    privAuth: AuthPriv
-    authType: SHA
-    authPass: helloallhello
-    privPass: helloallhello
   database:
     user: fixmon
     password: fixmon
@@ -37,14 +29,6 @@ groups:
 checks:
   - name: network
     period: '* * * * *'
-    snmp:
-      version: 3
-      sequrityName: aes
-      privType: AES
-      privAuth: AuthPriv
-      authType: SHA
-      authPass: helloallhello
-      privPass: helloallhello
     type: network.interface
   - name: disk
     period: '* * * * *'
@@ -52,7 +36,7 @@ checks:
   - name: ya
     period: '* * * * *'
     type: http.simple
-    url: http://yandex.ru
+    url: http://yandex.rua
     redirects: 3
   - name: rambler
     period: '* * * * *'
@@ -89,8 +73,4 @@ triggers:
       - rambler
     description: rambler status
     result: rambler:http.simple.status = 300
-
-
-
-
 

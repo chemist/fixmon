@@ -104,7 +104,6 @@ data Check = Check { cname   :: !CheckName
                    , chost   :: !Hostname
                    , cperiod :: !Cron
                    , ctype   :: !Text
-                   , csnmp   :: Maybe Config
                    , cparams :: !Value
                    } deriving (Show, Typeable, Generic, Eq, Ord)
 

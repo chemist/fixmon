@@ -15,9 +15,8 @@ import           Data.Monoid           ((<>))
 import           Data.Scientific
 import qualified Data.Set              as S
 import           Data.Text             (Text, concat, unpack)
-import           Data.Text.Encoding    (encodeUtf8)
-import           Data.Vector           (Vector, elemIndex, findIndex, foldl,
-                                        foldl', foldl1, map, mapM, (!))
+import           Data.Vector           (Vector, elemIndex, findIndex, 
+                                        mapM)
 import           Data.Vector.Binary    ()
 import           Data.Yaml             (FromJSON (..), Value (..),
                                         decodeFileEither, object, (.!=), (.:),
@@ -25,23 +24,22 @@ import           Data.Yaml             (FromJSON (..), Value (..),
 import           System.Cron.Parser    (cronSchedule)
 
 import           Checks
-import           Check.Snmp.Snmp (Rules, parseRules)
+import           Check.Snmp.Snmp (Rules)
 import           Prelude               hiding (concat, filter, foldl, foldl1,
                                         map)
 import qualified Prelude
 
 import           Configurator.Dsl      (parseTrigger)
-import qualified Network.Protocol.Snmp as Snmp
-import qualified Network.Snmp.Client   as Snmp
 import           Storage.InfluxDB      (InfluxDB (..))
-import           Types                 (Check (..), CheckHost (..), CheckId,
+import           Types                 (Check (..), CheckId,
                                         CheckName (..), Convert (..), Exp,
                                         Group (..), GroupName (..), HostId,
                                         Hostname (..), Monitoring (..),
-                                        Trigger (..), TriggerHost (..),
-                                        TriggerHostChecks (..), TriggerId,
-                                        TriggerName (..))
+                                        Trigger (..), 
+                                        TriggerId,
+                                        TriggerName (..), mkMonitoring)
 import           Types.Cron            (Cron (..))
+
 
 data ITrigger = ITrigger
   { itname        :: !Text
@@ -54,7 +52,6 @@ data ICheck = ICheck
   { icname   :: !Text
   , icperiod :: !Text
   , ictype   :: !Text
-  , icsnmp   :: Maybe Snmp.Config
   , icparams :: ![(Text, Value)]
   } deriving Show
 
@@ -66,8 +63,7 @@ data IGroup = IGroup
   } deriving Show
 
 data ISystem = ISystem
-  { isnmp :: Snmp.Config
-  , idb   :: InfluxDB
+  { idb   :: InfluxDB
   } deriving Show
 
 data Config = Config
@@ -89,9 +85,8 @@ instance FromJSON Config where
 
 instance FromJSON ISystem where
     parseJSON (Object v) = do
-        s <- v .: "snmp"
         d <-  v .: "database"
-        return $ ISystem s d
+        return $ ISystem d
     parseJSON _ = mzero
 
 instance FromJSON InfluxDB where
@@ -104,62 +99,6 @@ instance FromJSON InfluxDB where
         s <- v .:? "ssl" .!= False
         return $ InfluxDB b u p h port' s
     parseJSON _ = mzero
-
-instance FromJSON Snmp.Config where
-    parseJSON (Object v) = do
-        ver <- v .:? "version" .!= (3 :: Int)
-        case ver of
-             3 -> parseVersion3
-             2 -> parseVersion2
-             _ -> error "bad snmp version"
-        where
-            parseVersion3 = do
-                (sn :: Text) <- v .: "sequrityName"
-                pt <- v .:? "privType" .!= "DES"
-                pa <- v .:? "privAuth" .!= "AuthPriv"
-                at <- v .:? "authType" .!= "MD5"
-                p <-  v .:? "port"     .!= "161"
-                t <-  v .:? "timeout"  .!= (5 :: Int)
-                ap <- v .: "authPass"
-                pp <- v .:? "privPass" .!= ap
-                return $ Snmp.ConfigV3 ""
-                                       p
-                                       (t * 1000000)
-                                       (encodeUtf8 sn)
-                                       (encodeUtf8 ap)
-                                       (encodeUtf8 pp)
-                                       (encodePrivAuth pa)
-                                       ""
-                                       (encodeAuthType at)
-                                       (encodePrivType pt)
-            parseVersion2 = do
-                (sn :: Text) <- v .: "community" .!= "public"
-                p <-  v .:? "port"     .!= "161"
-                t <-  v .:? "timeout"  .!= (5 :: Int)
-                return $ Snmp.ConfigV2 "" p (t * 1000000) (Snmp.Community $ encodeUtf8 sn)
-
-    parseJSON _ = mzero
-
-
-encodePrivType :: Text -> Snmp.PrivType
-encodePrivType "AES" = Snmp.AES
-encodePrivType "DES" = Snmp.DES
-encodePrivType _ = error "bad priv type"
-
-encodeAuthType :: Text -> Snmp.AuthType
-encodeAuthType "MD" = Snmp.MD5
-encodeAuthType "MD5" = Snmp.MD5
-encodeAuthType "SHA" = Snmp.SHA
-encodeAuthType _ = error "bad priv type"
-
-encodePrivAuth :: Text -> Snmp.PrivAuth
-encodePrivAuth "NoAuthNoPriv" = Snmp.NoAuthNoPriv
-encodePrivAuth "AuthNoPriv" = Snmp.AuthNoPriv
-encodePrivAuth "AuthPriv" = Snmp.AuthPriv
-encodePrivAuth _ = error "bad priv auth"
-
-
-
 
 instance FromJSON ITrigger where
     parseJSON (Object v) = do
@@ -181,8 +120,7 @@ instance FromJSON ICheck where
         n <-  v .: "name"
         p <-  v .: "period"
         t <-  v .: "type"
-        c <-  v .:? "snmp"
-        return $ ICheck n p t c (clean $ toList v)
+        return $ ICheck n p t (clean $ toList v)
         where
         clean = Prelude.filter (\(x,_) -> x /= "name" && x /= "period" && x /= "type" && x /= "snmp")
     parseJSON _ = mzero
@@ -207,7 +145,6 @@ transformCheck rules ch = makeCheck =<< conv ("Problem with parse cron in check:
                                         , chost = Hostname ""
                                         , cperiod = Cron cr
                                         , ctype = ictype ch
-                                        , csnmp = icsnmp ch
                                         , cparams = convertCparams $ icparams ch
                                         }
 
@@ -274,75 +211,8 @@ transformGroup ch hs tr gr = do
                              return $ Group (GroupName $ igname gr) (S.fromList hh) (S.fromList tt) (S.fromList cc)
 
 --------------------------------------------------------------------------------------------------
-    -- _checkHosts
---------------------------------------------------------------------------------------------------
-checkHosts :: Vector Trigger -> Vector Group -> S.Set CheckHost
-checkHosts vtrigger vgroup = foldl1 S.union $
-    -- bad magic here, with trigger must be first!!! see Eq and Ord instance for CheckHost
-    map (checkHostsFromTrigger vtrigger) vgroup <> map checkHostsFromGroup vgroup
-
-checkHostsFromGroup :: Group -> S.Set CheckHost
-checkHostsFromGroup gr = S.fromList [ CheckHost (h, c)
-                                    | h <- S.toList $ ghosts gr
-                                    , c <- S.toList $ gchecks gr
-                                    ]
-
-checkHostsFromTrigger :: Vector Trigger -> Group -> S.Set CheckHost
-checkHostsFromTrigger vt vg =
-    S.fromList [ CheckHost (h, c)
-               | h <- S.toList $ ghosts vg
-               , t <- S.toList $ gtriggers vg
-               , c <- tcheck $ vt ! from t
-               ]
---------------------------------------------------------------------------------------------------
-    -- _periodMap
---------------------------------------------------------------------------------------------------
-
-type PeriodMap = M.Map Cron (S.Set CheckHost)
-
-cronChecks :: Vector Check -> Vector Trigger -> Vector Group -> PeriodMap
-cronChecks vc vt vg = M.fromSet fun cronSet
-  where checkHosts' = checkHosts vt vg
-        fun :: Cron -> S.Set CheckHost
-        fun c = S.filter (filterFun c) checkHosts'
-        filterFun :: Cron -> CheckHost -> Bool
-        filterFun c (CheckHost (_, i)) = c == cperiod (vc ! from i)
-        cronSet :: S.Set Cron
-        cronSet = foldl (\sc c -> S.insert (cperiod c) sc) S.empty vc
-
---------------------------------------------------------------------------------------------------
-    -- _thc
---------------------------------------------------------------------------------------------------
-
-getCheckFromTrigger :: Vector Trigger -> TriggerId -> [CheckId]
-getCheckFromTrigger vt ti = tcheck $ vt ! from ti
-
-triggerHostChecks :: Vector Group -> Vector Trigger -> S.Set TriggerHostChecks
-triggerHostChecks vg vt =
-    let sth :: S.Set TriggerHost
---        sth = M.keysSet . triggerHosts $ vg
-        sth = triggerHosts vg
-        fun (TriggerHost (h,t)) = TriggerHostChecks (h, t, getCheckFromTrigger vt t)
-    in S.map fun sth
-
-thcTohcM :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId)
-thcTohcM (TriggerHostChecks (h, th, chs)) = M.fromList $ Prelude.map (\x -> (CheckHost (h, x), S.singleton th)) chs
-
-triggersMap :: Vector Group -> Vector Trigger -> M.Map CheckHost (S.Set TriggerId)
-triggersMap vg vt =
-    let s = triggerHostChecks vg vt
-        fun :: TriggerHostChecks -> M.Map CheckHost (S.Set TriggerId) -> M.Map CheckHost (S.Set TriggerId)
-        fun x = M.unionWith S.union (thcTohcM x)
-    in S.fold fun M.empty s
-
-
---------------------------------------------------------------------------------------------------
     -- _status
 --------------------------------------------------------------------------------------------------
-triggerHosts:: Vector Group -> S.Set TriggerHost
-triggerHosts vg =
-    let ths g = S.fromList [ TriggerHost (a, b) | a <- S.toList (ghosts g), b <- S.toList (gtriggers g)]
-    in foldl' S.union S.empty $ map ths vg
 
 {--
 triggerHosts :: Vector Group -> M.Map TriggerHost Status
@@ -357,15 +227,12 @@ configToMonitoring r x = do
     ch <-  Data.Vector.mapM (transformCheck r) $ cchecks x
     tr <-  Data.Vector.mapM (transformTrigger ch) $ ctriggers x
     gg <- Data.Vector.mapM (transformGroup ch (chosts x) tr) $ cgroups x
-    let crch = cronChecks ch tr gg
-    -- let ths = triggerHosts gg
-    let trhcs = triggersMap gg tr
-    return $ Monitoring crch (chosts x) gg tr ch trhcs (isnmp $ csystem x) r (idb $ csystem x)
+    return $ mkMonitoring (chosts x) ch tr gg r (idb $ csystem x)
 
 parseConfig :: FilePath -> FilePath -> IO (Either String Monitoring)
 parseConfig file snmpConf = do
     f <-  decodeConf file
-    s <-  parseRules snmpConf
+    s <-  conv "cant parse snmp rules" <$> decodeFileEither snmpConf
     return $ do
        x <- s
        y <- f
