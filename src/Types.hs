@@ -25,6 +25,8 @@ module Types
 , Cron(..)
 , Status(..)
 , Monitoring(task, snmpRules, storage)
+, TaskResult(..)
+, ErrorMSG
 , mkMonitoring
 , Task(..)
 , Prefix
@@ -39,27 +41,27 @@ module Types
 , module Types.Dynamic
 ) where
 
-import           Data.Map.Strict     (Map)
-import           Data.Set            (Set)
-import qualified Data.Map.Strict as Map
-import qualified Data.Set        as Set
-import           Data.Vector         (Vector)
-import qualified Data.Vector as V
-import           Storage.InfluxDB    (InfluxDB)
-import qualified Storage.InfluxDB    as InfluxDB
+import           Check.Snmp.Snmp  (Rules)
+import           Data.Map.Strict  (Map)
+import qualified Data.Map.Strict  as Map
+import           Data.Monoid      ((<>))
+import           Data.Set         (Set)
+import qualified Data.Set         as Set
+import           Data.Text        (Text)
+import           Data.Time.Clock
+import           Data.Vector      (Vector)
+import qualified Data.Vector      as V
+import           Storage.InfluxDB (InfluxDB)
+import qualified Storage.InfluxDB as InfluxDB
+import           System.Cron
 import           Types.Check
 import           Types.Cron
-import           System.Cron
 import           Types.Dynamic
 import           Types.Shared
-import           Check.Snmp.Snmp (Rules)
-import Data.Text (Text)
-import           Data.Time.Clock
-import Data.Monoid ((<>))
 
 class Database db where
     getData :: db -> Text -> Fun -> IO Dyn
-    saveData :: db -> [Complex] -> IO ()
+    saveData :: db -> [TaskResult] -> IO ()
     config :: db
 
 data Monitoring = Monitoring
@@ -69,10 +71,10 @@ data Monitoring = Monitoring
  , _periodMap  :: !(Map Cron (Set CheckHost))
  , _triggerMap :: !(Map CheckHost (Set TriggerId))
  , _groups     :: !(Vector Group)
- , snmpRules  :: !Rules
- , storage    :: !InfluxDB
- , task       :: UTCTime -> Tasks
- } 
+ , snmpRules   :: !Rules
+ , storage     :: !InfluxDB
+ , task        :: UTCTime -> Tasks
+ }
 
 mkMonitoring :: Vector Hostname
               -> Vector Check
@@ -119,7 +121,7 @@ type PeriodMap = Map Cron (Set CheckHost)
 
 cronChecks :: Vector Check -> Vector Trigger -> Vector Group -> PeriodMap
 cronChecks vc vt vg = Map.fromSet fun cronSet
-  where 
+  where
     fun :: Cron -> Set.Set CheckHost
     fun c = Set.filter (filterFun c) checkHosts
     filterFun :: Cron -> CheckHost -> Bool
@@ -131,13 +133,13 @@ cronChecks vc vt vg = Map.fromSet fun cronSet
     checkHosts = foldl1 Set.union $
         -- bad magic here, with trigger must be first!!! see Eq and Ord instance for CheckHost
         V.map checkHostsFromTrigger vg <> V.map checkHostsFromGroup vg
-    
+
     checkHostsFromGroup :: Group -> Set.Set CheckHost
     checkHostsFromGroup gr = Set.fromList [ CheckHost (h, c)
                                           | h <- Set.toList $ ghosts gr
                                           , c <- Set.toList $ gchecks gr
                                           ]
-    
+
     checkHostsFromTrigger :: Group -> Set.Set CheckHost
     checkHostsFromTrigger g =
         Set.fromList [ CheckHost (h, c)
@@ -182,6 +184,7 @@ instance Database InfluxDB where
     getData = InfluxDB.getData
     saveData = InfluxDB.saveData
     config = InfluxDB.config
+
 
 
 

@@ -24,6 +24,9 @@ import           Data.Typeable
 import           GHC.Generics        (Generic)
 import           Network.Snmp.Client (Config)
 
+type ErrorMSG = String
+data TaskResult = TaskResult Hostname Check (Set Trigger) ErrorMSG Bool Complex deriving Show
+
 newtype HostId = HostId Int deriving (Show, Eq, Ord, Binary, Typeable, Read, NFData)
 newtype Hostname = Hostname Text deriving (Eq, Show, Ord, Binary, Typeable, NFData)
 

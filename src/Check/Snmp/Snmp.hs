@@ -1,62 +1,62 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Check.Snmp.Snmp where
 
-import qualified Data.Yaml as Y
-import Data.Yaml ((.:), (.!=), (.:?))
-import Control.Monad (mzero)
-import qualified Network.Protocol.Snmp as S
-import qualified Data.Map.Strict as M
-import Data.Map.Strict (Map)
-import Data.Text (Text)
-import qualified Data.HashMap.Strict as HM
-import qualified Data.Vector as V
-import Data.Scientific (coefficient)
-import Types.Dynamic
-import Data.Text.Encoding
-import Data.Monoid ((<>))
+import           Control.Monad         (mzero)
+import qualified Data.ByteString       as BS
+import           Data.Either           (rights)
+import qualified Data.HashMap.Strict   as HM
+import           Data.Map.Strict       (Map)
+import qualified Data.Map.Strict       as M
+import           Data.Monoid           ((<>))
+import           Data.Scientific       (coefficient)
+import           Data.Text             (Text)
 import           Data.Text             (chunksOf, pack)
-import qualified Data.ByteString as BS
-import           Numeric               (showHex)
-import qualified Data.Text.Read as T
-import qualified Data.Text as T
-import Data.Either (rights)
-import Network.Snmp.Client (Config)
+import qualified Data.Text             as T
+import           Data.Text.Encoding
+import qualified Data.Text.Read        as T
+import qualified Data.Vector           as V
+import           Data.Yaml             ((.!=), (.:), (.:?))
+import qualified Data.Yaml             as Y
+import qualified Network.Protocol.Snmp as S
 import qualified Network.Protocol.Snmp as Snmp
+import           Network.Snmp.Client   (Config)
 import qualified Network.Snmp.Client   as Snmp
+import           Numeric               (showHex)
+import           Types.Dynamic
 
 
 data SnmpDefinition = Bulk
-  { oid   :: S.OID
+  { oid    :: S.OID
   , config :: Config
   , bucket :: Text
   , tag    :: Text
-  , names :: Map Integer ConvertRule
+  , names  :: Map Integer ConvertRule
   } deriving Show
 
 data ConvertRule = Replace
-  { simple :: T.Text
-  , convertFun :: S.Value -> S.Value
+  { simple       :: T.Text
+  , convertFun   :: S.Value -> S.Value
   , replaceAlias :: S.Value -> S.Value
   , replaceTag   :: S.Value -> S.Value
   }
 instance Show ConvertRule where
-  show x = "ConvertRule: simple = " 
-        ++ show (simple x) 
+  show x = "ConvertRule: simple = "
+        ++ show (simple x)
 
 newtype Rules = Rules (Map Text SnmpDefinition) deriving (Show)
 
 instance Y.FromJSON Rules where
     parseJSON (Y.Object v) = do
-        Y.Object snmp <- v Y..: "snmp" 
+        Y.Object snmp <- v Y..: "snmp"
         let allNames = HM.keys snmp
         allRules <- mapM (getRule snmp) allNames
         return $ Rules $ M.fromList allRules
         where
           getRule :: HM.HashMap Text Y.Value -> Text -> Y.Parser (Text, SnmpDefinition)
           getRule snmp name = do
-              Y.Object rule <- snmp Y..: name 
+              Y.Object rule <- snmp Y..: name
               Y.String request <-  rule Y..: "request"
               Y.String oid' <- rule Y..: "oid"
               config' <- rule Y..: "config"

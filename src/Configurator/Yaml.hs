@@ -5,40 +5,37 @@
 module Configurator.Yaml
 (parseConfig) where
 
-import           Control.Monad         (mzero)
+import           Control.Monad        (mzero)
 
-import           Data.Attoparsec.Text  (parseOnly)
-import           Data.Either           (lefts, rights)
-import           Data.HashMap.Strict   (toList)
-import qualified Data.Map.Strict       as M
-import           Data.Monoid           ((<>))
+import           Data.Attoparsec.Text (parseOnly)
+import           Data.Either          (lefts, rights)
+import           Data.HashMap.Strict  (toList)
+import qualified Data.Map.Strict      as M
+import           Data.Monoid          ((<>))
 import           Data.Scientific
-import qualified Data.Set              as S
-import           Data.Text             (Text, concat, unpack)
-import           Data.Vector           (Vector, elemIndex, findIndex, 
-                                        mapM)
-import           Data.Vector.Binary    ()
-import           Data.Yaml             (FromJSON (..), Value (..),
-                                        decodeFileEither, object, (.!=), (.:),
-                                        (.:?))
-import           System.Cron.Parser    (cronSchedule)
+import qualified Data.Set             as S
+import           Data.Text            (Text, concat, unpack)
+import           Data.Vector          (Vector, elemIndex, findIndex, mapM)
+import           Data.Vector.Binary   ()
+import           Data.Yaml            (FromJSON (..), Value (..),
+                                       decodeFileEither, object, (.!=), (.:),
+                                       (.:?))
+import           System.Cron.Parser   (cronSchedule)
 
+import           Check.Snmp.Snmp      (Rules)
 import           Checks
-import           Check.Snmp.Snmp (Rules)
-import           Prelude               hiding (concat, filter, foldl, foldl1,
-                                        map)
+import           Prelude              hiding (concat, filter, foldl, foldl1,
+                                       map)
 import qualified Prelude
 
-import           Configurator.Dsl      (parseTrigger)
-import           Storage.InfluxDB      (InfluxDB (..))
-import           Types                 (Check (..), CheckId,
-                                        CheckName (..), Convert (..), Exp,
-                                        Group (..), GroupName (..), HostId,
-                                        Hostname (..), Monitoring (..),
-                                        Trigger (..), 
-                                        TriggerId,
-                                        TriggerName (..), mkMonitoring)
-import           Types.Cron            (Cron (..))
+import           Configurator.Dsl     (parseTrigger)
+import           Storage.InfluxDB     (InfluxDB (..))
+import           Types                (Check (..), CheckId, CheckName (..),
+                                       Convert (..), Exp, Group (..),
+                                       GroupName (..), HostId, Hostname (..),
+                                       Monitoring (..), Trigger (..), TriggerId,
+                                       TriggerName (..), mkMonitoring)
+import           Types.Cron           (Cron (..))
 
 
 data ITrigger = ITrigger
@@ -63,7 +60,7 @@ data IGroup = IGroup
   } deriving Show
 
 data ISystem = ISystem
-  { idb   :: InfluxDB
+  { idb :: InfluxDB
   } deriving Show
 
 data Config = Config

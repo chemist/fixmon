@@ -1,25 +1,25 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE FlexibleContexts      #-}
 module Check.Snmp where
 
+import           Check.Snmp.Snmp
 import           Control.Exception
 import           Data.ByteString       (ByteString)
 import           Data.List             hiding (lookup, stripPrefix)
-import           Data.Map.Strict       (lookup, singleton, keys, unions)
-import qualified Data.Map.Strict as Map
-import           Data.Text             (unpack, Text)
+import           Data.Map.Strict       (keys, lookup, singleton, unions)
+import qualified Data.Map.Strict       as Map
+import           Data.Maybe
+import           Data.Text             (Text, unpack)
 import qualified Data.Yaml             as A
 import           Network.Protocol.Snmp hiding (Value, oid)
-import           Network.Snmp.Client hiding (oid)
+import           Network.Snmp.Client   hiding (oid)
 import           Prelude               hiding (lookup)
 import           System.Cron
-import           Types hiding (config)
-import Data.Maybe
-import Check.Snmp.Snmp
+import           Types                 hiding (config)
 
 -- import Debug.Trace
 
@@ -47,7 +47,7 @@ complex :: SnmpDefinition -> Suite -> A.Value
 complex vSnmpDefinition (Suite vSuite) =
     let size = length (oid vSnmpDefinition)
         shorted = map rulesToObject $ splitByI $ map conv vSuite
-        splitByI = Map.elems . Map.fromListWith (\[x] y -> x:y) 
+        splitByI = Map.elems . Map.fromListWith (\[x] y -> x:y)
         convertAlias x = to . replaceAlias x . convertFun x
         rulesToObject ((Just vRule, vValue):xs) = (simple vRule A..= (convertAlias  vRule vValue :: A.Value)) : rulesToObject xs
         rulesToObject ((Nothing, _):xs) = rulesToObject xs
@@ -56,7 +56,7 @@ complex vSnmpDefinition (Suite vSuite) =
           let t:i:_ = drop size o
               convertRule = lookup t (names vSnmpDefinition)
           in (i, [(convertRule, v)])
-    in A.array $ map A.object shorted 
+    in A.array $ map A.object shorted
 
 
 testSnmp :: Check

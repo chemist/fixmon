@@ -3,16 +3,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Storage.InfluxDB where
 
-import           Control.Exception         (catch, throw, try)
+import           Control.Exception         (catch, throw)
 import           Control.Monad             (unless, when)
 import           Data.Aeson                (FromJSON (..), ToJSON (..),
                                             Value (..), decode, encode, object,
                                             (.:), (.=))
-import qualified Data.Aeson.Encode.Pretty as A
 import           Data.ByteString.Char8     (ByteString, pack)
-import           Data.ByteString.Lazy      (fromChunks, putStr)
+import           Data.ByteString.Lazy      (fromChunks)
 import           Data.Conduit              (($$+-))
 import           Data.Conduit.List         (consume)
+import qualified Data.HashMap.Strict       as HM
 import           Data.Maybe
 import           Data.Monoid               ((<>))
 import           Data.Scientific           (floatingOrInteger)
@@ -23,10 +23,10 @@ import qualified Data.Vector               as V
 import qualified Data.Yaml                 as A
 import           Network.HTTP.Conduit      hiding (host, port)
 import           Network.HTTP.Types.Status
+import           Prelude                   hiding (putStr)
 import           Types.Dynamic
--- import           Types.Shared              hiding (Status)
-import qualified Data.HashMap.Strict as HM
-import Prelude hiding (putStr)
+import           Types.Shared              (Check (ctype, cname),
+                                            TaskResult (..))
 -- import Debug.Trace
 
 
@@ -118,8 +118,8 @@ complexToSeriesData _prefixCounter _x = error "complexToSeriesData, not implemen
     in SeriesData columns' [p']
     --}
 
-rebuildComplex :: InfluxDB -> [Complex] -> Complex
-rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
+rebuildComplex :: InfluxDB -> [TaskResult] -> Complex
+rebuildComplex db cs = object
     [ "database" .= base db
     , "user"     .= user db
     , "password" .= pass db
@@ -127,42 +127,51 @@ rebuildComplex db cs = object -- Series n (complexToSeriesData prefixCounter c)
     ]
     where
       points = concatMap convert cs
-      convert :: Complex -> [Complex]
-      convert (Array a) = concatMap convert $ V.toList a
-      convert (Object c) =
-          let vName:vTag:_ = splitByPoint $ c HM.! "_check_prefix_"
-              splitByPoint (String xs) = map String $ T.splitOn "." xs
-              splitByPoint _ = error "rebuildComplex: splitByPoint, only String here"
-              vHostname = c HM.! "_host_name_"
-              vCheckStatus = case HM.lookupDefault Null "_success_" c of
-                                  Bool True -> String "true"
-                                  Bool False -> String "false"
-                                  _ -> Null
-              cleaned = HM.difference c cleanMap
+      convert :: TaskResult -> [Complex]
+      convert (TaskResult vHostname vCheck vTriggers vErrorMSG vCheckStatus (Array a)) =
+          concatMap (convert . TaskResult vHostname vCheck vTriggers vErrorMSG vCheckStatus) $ V.toList a
+      convert (TaskResult vHostname vCheck _ _ vCheckStatus (Object c)) =
+          let vName:vTag:_ = map String $ T.splitOn "." $ ctype vCheck
+              addition = HM.fromList
+                [ ("_check_name_", to $ cname vCheck)
+                , ("_check_type_", to $ ctype vCheck)
+                , ("_host_name_", to $ vHostname)
+                ]
               result = Object $ HM.fromList
                 [ ("name", vName)
-                , ("tags", object 
-                    [ "host" .= vHostname
-                    , "check_status" .= vCheckStatus
+                , ("tags", object
+                    [ "host" .= (to vHostname :: Dyn)
+                    , "check_status" .= (String $ T.pack $ show vCheckStatus)
                     , "type" .= vTag
                     ])
-                , ("fields", Object cleaned)
+                , ("fields", Object $ HM.union c addition)
                 ]
           in [result]
-      convert _ = error "bad object in rebuildComplex"
-            
+      convert (TaskResult vHostname vCheck _ vErrorMSG vCheckStatus Null) =
+          let vName:vTag:_ = map String $ T.splitOn "." $ ctype vCheck
+              -- TODO add id (see buildCache)
+              errorComplex = Object $ HM.fromList
+                [ ("_check_name_", to $ cname vCheck)
+                , ("_check_type_", to $ ctype vCheck)
+                , ("_host_name_", to $ vHostname)
+                , ("_error_", String $ T.pack $ show vErrorMSG)
+                ]
+              result = Object $ HM.fromList
+                [ ("name", vName)
+                , ("tags", object
+                    [ "host" .= (to vHostname :: Dyn)
+                    , "check_status" .= (String $ T.pack $ show vCheckStatus)
+                    , "type" .= vTag
+                    ])
+                , ("fields", errorComplex)
+                ]
+          in [result]
+      convert (TaskResult _ _ _ e s c) = error $ "\n\nbad object in rebuildComplex:\nobject: "
+        ++ show c
+        ++ "\nstatus: " ++ show s
+        ++ "\nerror: " ++ show e
 
-cleanMap :: HM.HashMap T.Text Value
-cleanMap = HM.fromList
-  [ ("_success_"      , Null)
-  , ("_check_id_"     , Null)
-  , ("_host_id_"      , Null)
-  , ("_check_subname_"      , Null)
-  ]
-
-    
-
-saveData :: InfluxDB -> [Complex] -> IO ()
+saveData :: InfluxDB -> [TaskResult] -> IO ()
 saveData db forSave = do
     request' <-  parseUrl $ influxUrl IWrite db
     let series = rebuildComplex db forSave
@@ -182,7 +191,7 @@ saveData db forSave = do
 
 -- 'http://fixmon:8086/query?pretty=true&db=fixmon' --data-urlencode "q=select * from payments limit 10"
 rawRequest :: InfluxDB -> Counter -> Text -> IO Dyn
-rawRequest db c raw = do
+rawRequest db _c raw = do
     request' <- parseUrl $ influxUrl IQuery db
     let addQueryStr = setQueryString [("db", Just (pack $ base db)), ("u", Just (pack $ user db)), ("p", Just (pack $ pass db)), ("q", Just $ encodeUtf8 raw)]
         request'' = request'
@@ -209,7 +218,6 @@ getData :: InfluxDB -> Text -> Fun -> IO Dyn
 -- get last value
 getData db vHost (LastFun   c p) = do
     let (pole, addition) = unCounter c
-    print "----------"
     print c
     print vHost
     xs <- rawRequest db c $ "select "<> pole <>" from " <> vHost <> addition <> " limit " <> ptt p
@@ -217,9 +225,10 @@ getData db vHost (LastFun   c p) = do
        --  Array xss -> return $ last xss
          y -> return y
     where
-      counterToIdAndWhere counter =
-          case T.splitOn ":" counter of
-               vId:bucketTypeName:[] -> undefined
+--      counterToIdAndWhere counter =
+--          case T.splitOn ":" counter of
+--               vId:bucketTypeName:[] -> undefined
+getData _ _ _ = error "getData not imlemented"
 
          {--
 getData db vHost (ChangeFun c) = do
@@ -260,7 +269,7 @@ withAnd "" = ""
 withAnd x = " and " <> T.drop 6 x
 
 unCounter :: Counter -> (Text, Text)
-unCounter x = undefined {-- case T.splitOn ":" x of
+unCounter _x = undefined {-- case T.splitOn ":" x of
                              [a] -> (a, T.empty)
                              [a, b] -> (b, " where " <> T.dropWhileEnd (/= '.') b <> "id = '" <> a <> "' ")
                              _ -> throw $ DBException "bad counter"

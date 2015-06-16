@@ -4,7 +4,7 @@
 module Configurator.Dsl
 where
 
-import           Control.Applicative                    hiding ((<|>), many)
+import           Control.Applicative                    hiding (many, (<|>))
 import           Control.Monad
 import           Data.Monoid                            ((<>))
 import           Data.Text                              (Text, pack, unpack)

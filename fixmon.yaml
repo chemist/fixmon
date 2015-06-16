@@ -11,20 +11,20 @@ hosts:
   - yandex.ru
 
 groups:
-  - name: salt
-    hosts:
-      - salt
-    triggers:
-      - disk
-    checks:
-      - disk
-      - network
   - name: external
     hosts:
       - yandex.ru
     triggers:
       - yandex
       - rambler
+  - name: salt
+    hosts:
+      - salt
+    triggers:
+      - disk_trigger
+    checks:
+      - disk
+      - network
 
 checks:
   - name: network
@@ -46,11 +46,16 @@ checks:
 
 
 triggers:
-  - name: disk
+  - name: rambler
+    checks:
+      - rambler
+    description: rambler status
+    result: rambler:http.simple.status = 300
+  - name: disk_trigger
     checks:
       - disk
     description: dist size here
-    result: root:system.disk.free > 35GB 
+    result: root:system.disk.free > 35GB || root:system.disk.used < 30GB
   - name: networkt
     checks:
       - network
@@ -68,9 +73,4 @@ triggers:
       - rambler
     description: yandex status
     result: ya:http.simple.status = 200 && rambler:http.simple.status = 200
-  - name: rambler
-    checks:
-      - rambler
-    description: rambler status
-    result: rambler:http.simple.status = 300
 
