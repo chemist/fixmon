@@ -47,7 +47,7 @@ executable fixmon
                      , unordered-containers
                      , network
                      , network-uri
-                     , snmp
+                     , snmp >=0.2.0.0
                      , attoparsec
                      , http-types
                      , http-conduit

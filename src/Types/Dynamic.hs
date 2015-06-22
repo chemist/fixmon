@@ -78,7 +78,7 @@ instance Convert S.Value (Rule -> Dyn) where
     to (S.Integer 6) AsStatus = String "notPresent"
     to (S.Integer 7) AsStatus = String "lowerLayerDown"
     to (S.Counter32 x) AsInt = Number . fromIntegral $ x
-    to (S.Gaude32 x) AsInt = Number . fromIntegral $ x
+    to (S.Gauge32 x) AsInt = Number . fromIntegral $ x
     to (S.TimeTicks x) AsInt = Number . fromIntegral $ x
     to (S.String x) AsText = String . decodeUtf8 $ x
     to (S.String x) AsLatinText = String . decodeLatin1 $ x
@@ -94,7 +94,7 @@ instance Convert S.Value (Rule -> Dyn) where
 instance Convert S.Value Dyn where
     to (S.Integer x) = Number . fromIntegral $ x
     to (S.Counter32 x) = Number . fromIntegral $ x
-    to (S.Gaude32 x) = Number . fromIntegral $ x
+    to (S.Gauge32 x) = Number . fromIntegral $ x
     to (S.TimeTicks x) = Number . fromIntegral $ x
     to (S.String x) = String . decodeUtf8 $ x
     to (S.OI x) = String . pack . foldr (\a b -> show a <> "." <> b) "" $ x
